@@ -1,88 +1,83 @@
-# Antiscam foundation
+# Antiscam run console
 
-An Android development prototype: **type in a selected app → capture its screen → run local ML Kit OCR → view extracted text**.
+An Android background capture service with a separate desktop dashboard and a saved record for each run.
 
-This version does not detect scams. It has no Jev integration, backend, voice agent, or warning notification.
+The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 
-## Projects
+## Start
 
-- `app`: **Antiscam Dev**, the accessibility service and OCR development screen.
-- `fixture`: **Antiscam Test Chat**, a separate app with synthetic messages and a reply field. No account is needed.
-
-## Requirements
-
-- Android Studio and JDK 21. This project's AGP and Gradle versions support JDK 17 through 23.
-- Android SDK Platform 36, Build Tools 35.0.0, Platform Tools, and Android Emulator.
-- Android 11/API 30 or later on a device or emulator. API 34+ supports target-window screenshots.
-- Gradle downloads dependencies on the first build. The wrapper pins Gradle 8.13.
-
-Open this folder in Android Studio. In **Settings > Build, Execution, Deployment > Build Tools > Gradle**, select JDK 21 as the Gradle JDK. Let the project sync.
-
-On this computer, JDK 21 is installed at `%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-21`.
-Studio's bundled Java 25 can run the IDE, but Gradle 8.13 cannot use it to run builds.
-The Android SDK is at `C:\Users\Jonat\Android\Sdk` (`%USERPROFILE%\Android\Sdk`). Select that directory when Studio asks for the Android SDK.
-
-From PowerShell, the helper uses `JAVA_HOME` when it points to Java. Otherwise, it checks the JDK 21 path before the standard Studio runtime paths.
-It rejects unsupported Java versions before starting Gradle.
-Both helpers use an explicit `ANDROID_HOME`. When it is unset, they prefer `%USERPROFILE%\Android\Sdk` if that directory exists.
-Otherwise, they use `%LOCALAPPDATA%\Android\Sdk`:
+1. Start the Android emulator or connect a debugging-enabled Android device.
+2. Build with `scripts\build.ps1`.
+3. Install Antiscam with `scripts\install.ps1`.
+4. Open **Antiscam Dev** once. Read the disclosure and allow local capture if needed.
+5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
+6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
+7. Select **Start run** in the desktop dashboard.
+8. Use any app in the emulator. Type, pause, tap, scroll, or switch apps.
+9. Read the full extracted text in the left column and the activity log in the right column.
+10. Select **Stop run**. The saved folder under `runs` contains the record for analysis.
+11. Select **Export ZIP** to share the saved run for analysis.
 
 ```powershell
 .\scripts\build.ps1
+.\scripts\install.ps1 -Serial emulator-5554
+.\scripts\dashboard.ps1 -Serial emulator-5554
 ```
 
-Or set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to your SDK, then run:
+## Requirements
 
-```powershell
-.\gradlew.bat :app:assembleDebug :fixture:assembleDebug :app:testDebugUnitTest :app:lintDebug :fixture:lintDebug
-```
+1. Android Studio, Android Platform 36, Build Tools 35.0.0, and Platform Tools.
+2. JDK 21 recommended. The pinned Gradle/AGP versions support JDK 17 through 23.
+3. Python 3.11 or later for the dashboard. It uses the standard library and needs no pip packages.
+4. A current desktop browser for the local dashboard.
+5. Android 11/API 30 or later. API 34+ provides target-window screenshots.
+6. Set `JAVA_HOME` and `ANDROID_HOME` when the helper scripts cannot find your tools.
+7. Select the supported JDK in Android Studio's Gradle settings. The IDE runtime can differ from the build runtime.
+8. The first Gradle build needs access to download dependencies.
 
-## First test
+## Capture rules
 
-1. Start an emulator in Android Studio's Device Manager, or connect a debugging-enabled phone.
-2. Run both `app` and `fixture` configurations once to install them. You can also use `scripts\install.ps1`.
-3. Open **Antiscam Dev**. Read the disclosure, select its checkbox, and choose **Allow local capture**.
-4. Keep **Test conversation** selected.
-5. Choose **Open Accessibility settings**. Enable **Antiscam typing capture** under installed/downloaded apps.
-6. Return to Antiscam Dev. Confirm the service is connected.
-7. Choose **Open selected app**. Type `parcel check 731` in the reply field.
-8. Stop typing for at least three seconds. The first OCR run can take longer.
-9. Choose **Return to AntiScam**. The result should include the visible parcel message and your reply.
+1. An active run, consent, enabled monitoring, and a connected accessibility service are required.
+2. Screenshot capture follows the foreground app. There is no app selector or app allowlist.
+3. Typing requests one initial screenshot and one after a one-second pause.
+4. Taps and scrolling request capture after 600 milliseconds without another relevant interaction.
+5. Repeated events reset timers instead of producing a screenshot for every character or scroll event.
+6. Capture attempts stay at least 1.5 seconds apart. Only one screenshot/OCR operation runs at a time.
+7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel pending work. A settled new foreground window requests a capture during a run.
+8. Password fields, Android-marked sensitive content, and secure windows prevent capture.
+9. When stopped, interactions update live status without creating capture requests or skipped-capture noise.
+10. See [all run rules](docs/run-rules.md) and [validation results](docs/run-validation.md).
 
-Only text changes trigger capture. Opening or reading a conversation does not trigger a capture.
+## Run records
 
-The service waits 700 ms after a typing burst and spaces capture attempts by at least 1.5 seconds. Results arrive only while the original eligible field/window is still active. If you return too soon, the pending result is discarded. Type again and wait longer.
-
-## Negative checks
-
-- Leave the fixture open without typing. No new OCR result should appear.
-- Pause capture. Type in the fixture. The result must not change.
-- Type and immediately switch apps. That pending result must not replace the previous result.
-- Enable **Password field** in the fixture and type. Capture must be skipped.
-- Enable **Block screenshots**, keep password mode off, and type. The app must report a capture failure or skip.
-- Select a different app in Antiscam Dev, then type in the fixture. The fixture must not trigger capture.
-- Withdraw consent. The previous text must clear, and capture must stop.
-
-Other target presets are available for later tests. Their presence does not mean their layouts or privacy behavior are verified.
+1. Each run has a unique ID, timestamps, status, counters, and a capture ID for each screenshot request.
+2. `events.jsonl` preserves the ordered event record.
+3. `ocr` contains the full text extracted from each completed capture.
+4. `summary.txt` and `run.json` describe the run and its outcome.
+5. **Export ZIP** packages the saved run for analysis.
+6. Events save as they arrive. A lost connection produces an interrupted record.
+7. Starting another run resets the dashboard's history. Earlier folders remain available under `runs`.
 
 ## Data boundary
 
-- Screenshots and OCR results stay in memory. This app does not save them to files or logs.
-- The app's own saved settings contain only consent, pause state, and the selected package. ML Kit can also store internal metadata.
-- The merged app manifest removes Internet and network-state permissions from library manifests.
-- The bundled Latin OCR model does not require a model download.
-- Password or Android-marked sensitive fields cause a skip. Unmarked private text can still appear in a screenshot.
-- Android secure windows remain protected. This app does not bypass them.
-- The service declares `isAccessibilityTool=false`. This development build has no Google Play approval.
+1. Starting a run records extracted text on the connected computer. That text can contain private screen content.
+2. Screenshot images remain in Android memory. The recorder does not save screenshot files.
+3. Run folders and dashboard runtime files are ignored by Git. Do not manually commit or publish them.
+4. OCR text never goes to Logcat or console diagnostics.
+5. Stop and consent withdrawal prevent future capture. They do not erase records already saved on the computer.
+6. ML Kit uses the bundled Latin model on the device. No cloud analysis is present.
+7. The Android manifest removes Internet and network-state permissions.
+8. The debug bridge uses an ADB-forwarded local socket. Release builds expose no dashboard socket.
+9. The desktop server binds only to this computer. Browser updates use a pushed event stream.
+10. Android does not expose every physical touch as an accessibility event. Unknown states must remain explicit.
+11. `isAccessibilityTool` remains false. This is not a Google Play approval claim.
 
-## Edit and run
+## Code
 
-Edit code, choose **Run**, open the fixture, type, wait, and return to inspect OCR. Service or manifest changes can require disabling and enabling the accessibility service again.
-
-The UI uses Kotlin and Compose. The fixture uses a native editable field to provide predictable accessibility events.
-
-## Build versions
-
-AGP 8.13.2, Gradle 8.13, Kotlin/Compose compiler 2.3.10, Compose BOM 2025.10.01, ML Kit text recognition 16.0.1, target/compile SDK 36, minimum SDK 30.
-
-See `docs/validation.md` for the tested configuration and limits.
+1. `app` contains the accessibility service, local OCR, event stream, and minimal consent/accessibility setup.
+2. `dashboard` contains the desktop server, recorder, and browser interface.
+3. `scripts` contains build, install, and dashboard launch helpers for Antiscam only.
+4. The default build creates the debug app and runs Android lint. It does not run unit tests under the current project instructions.
+5. Device checks use real apps. The demo app and its module were removed.
+6. AGP 8.13.2, Gradle 8.13, Kotlin/Compose compiler 2.3.10, ML Kit text recognition 16.0.1, target/compile SDK 36.
+7. Scam judgments, cloud analysis, warning notifications, and voice are outside this version.

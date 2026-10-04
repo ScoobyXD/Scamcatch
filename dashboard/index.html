@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Antiscam · Run console</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#text-scroll">Skip to extracted text</a>
+  <main class="app-shell">
+    <header class="toolbar">
+      <h1>Antiscam</h1>
+      <div class="run-actions">
+        <button id="start" class="button primary" disabled>Start run</button>
+        <button id="stop" class="button" disabled>Stop</button>
+        <button id="pause" class="button" disabled>Pause</button>
+        <a id="export" class="button disabled" aria-disabled="true" href="/api/export" download>Export ZIP</a>
+      </div>
+      <div class="run-progress"><span id="run-status" class="badge neutral">No run</span><span id="run-elapsed">00:00</span></div>
+      <div class="device-controls">
+        <label class="visually-hidden" for="device">Device</label>
+        <select id="device"><option value="">No device</option></select>
+        <button id="refresh" class="button icon-button" aria-label="Refresh devices" title="Refresh devices">↻</button>
+        <button id="connect" class="button" disabled>Connect</button>
+      </div>
+      <span id="connection" class="badge neutral">Connecting</span>
+    </header>
+    <section class="live-status" aria-label="Live device status">
+      <div class="current-app-stat"><span class="status-label">Current app</span><strong id="current-app">Waiting for device</strong><span id="current-package" class="package">—</span></div>
+      <div><span class="status-label">Interaction</span><strong id="interaction">Idle</strong><span id="typing" class="detail">Not typing</span></div>
+      <div><span class="status-label">Screenshot</span><strong id="capture-status">Ready</strong></div>
+      <div><span class="status-label">Text recognition</span><strong id="ocr-status">Ready</strong></div>
+    </section>
+    <section class="counter-strip" aria-label="Run totals">
+      <span><strong id="count-requests">0</strong> Requests</span>
+      <span><strong id="count-screenshots">0</strong> Screenshots</span>
+      <span><strong id="count-ocrCompleted">0</strong> OCR results</span>
+      <span><strong id="count-failed">0</strong> Capture failed</span>
+      <span><strong id="count-ocrFailed">0</strong> OCR failed</span>
+      <span><strong id="count-skipped">0</strong> Skipped</span>
+      <span id="run-id">No run yet</span>
+    </section>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <div class="content-grid">
+      <section class="pane results-panel" aria-labelledby="results-title">
+        <header class="pane-heading"><h2 id="results-title">Extracted text <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button">Latest ↓</button></header>
+        <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Extracted text history">
+          <p id="empty" class="empty-state">Start a run, then type, tap, or scroll in any app. Extracted text appears here.</p>
+          <ol id="results" class="results-list" role="list" aria-label="Captures in time order"></ol>
+        </div>
+        <footer class="save-footer"><span id="save-status">Runs save locally.</span><span id="save-folder"></span></footer>
+      </section>
+      <aside class="pane activity-panel" aria-labelledby="activity-title">
+        <header class="pane-heading"><h2 id="activity-title">Activity log <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button">Latest ↓</button></header>
+        <ul class="readiness" aria-label="Device readiness" role="list">
+          <li><span id="check-bridge" class="check">○</span> Device</li>
+          <li><span id="check-consent" class="check">○</span> Consent</li>
+          <li><span id="check-service" class="check">○</span> Accessibility</li>
+          <li><span id="check-monitoring" class="check">○</span> Capture</li>
+        </ul>
+        <div id="activity-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Run activity history">
+          <p id="activity-empty" class="empty-state">Run interactions and capture events appear here.</p>
+          <ol id="activity" class="activity-list" role="list" aria-label="Events in time order"></ol>
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>

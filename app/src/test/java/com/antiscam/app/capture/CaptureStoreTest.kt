@@ -2,7 +2,6 @@ package com.antiscam.app.capture
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,21 +41,6 @@ class CaptureStoreTest {
     }
 
     @Test
-    fun changingTargetRemovesTheOldAppsResultAndInvalidatesPendingWork() {
-        CaptureStore.result("Old app result", 1234L)
-        val revision = CaptureStore.state.value.revision
-
-        CaptureStore.setTargetPackage("com.google.android.gm")
-
-        val after = CaptureStore.state.value
-        assertEquals("com.google.android.gm", after.selectedPackage)
-        assertEquals("", after.latestText)
-        assertNull(after.lastCapturedAtMillis)
-        assertEquals(0, after.captureCount)
-        assertTrue(after.revision > revision)
-    }
-
-    @Test
     fun clearingResultInvalidatesPendingWorkWithoutChangingConsentOrMonitoring() {
         CaptureStore.setConsent(true)
         CaptureStore.setEnabled(true)
@@ -88,15 +72,4 @@ class CaptureStoreTest {
         assertTrue(after.revision > revision)
     }
 
-    @Test
-    fun ownAppCannotBecomeTheCaptureTarget() {
-        val before = CaptureStore.state.value
-
-        CaptureStore.setTargetPackage("com.antiscam.app")
-
-        val after = CaptureStore.state.value
-        assertEquals(before.selectedPackage, after.selectedPackage)
-        assertEquals(before.revision, after.revision)
-        assertNotNull(after.lastError)
-    }
 }

@@ -1,0 +1,29 @@
+Current task: background capture and real-app developer console
+User-approved scope: 4 October 2026
+
+1. Delete the entire demo/test app from the emulator and project. Remove its fixture module, sample conversations, test screens, password toggles, capture toggles, and install/launch references.
+2. Use real apps for all further device checks. Do not recreate or reopen a synthetic conversation app.
+3. Keep the Android app as background interaction, screenshot, OCR, and capture-logic infrastructure.
+4. Keep only accessibility status, an accessibility settings button, and required capture consent in the Android setup screen. Do not show run instructions, run controls, OCR text, capture results, or demo buttons there.
+5. Capture the current foreground app during a run. Do not require an app selector, selected-app filter, or allowlist.
+6. Update the current app when the user visits Home, Chrome, Photos, Facebook, Instagram, WhatsApp, or another app. Report unknown states explicitly.
+7. Respect Android secure windows, password fields, and Android-marked sensitive content.
+8. Drive capture from Android accessibility events. Do not poll the screen continuously.
+9. Request one capture when a typing burst starts and another after about one second without typing. Do not request a screenshot for every character.
+10. Request capture after taps and scrolling settle. Follow app changes and capture the new foreground window after it settles.
+11. Combine overlapping requests, respect Android capture intervals, and cancel stale work when the app/window or run changes.
+12. Run ML Kit OCR on the device. Associate each result with its capture number, timestamp, source app, and capture event.
+13. Keep the emulator, desktop dashboard, and Android Studio separate. Open the dashboard for run work.
+14. Give full extracted text most of the left column. Show captures in time order with their complete text and identifying metadata.
+15. Give the activity log a large right column. Show interactions, requests, screenshots, OCR, failures, cancellations, and reasons for skipped captures. Keep readiness indicators compact.
+16. Give each main dashboard column one scrollbar. Do not add nested scrolling or clip individual OCR results. Preserve the reading position when new events arrive.
+17. Put Start, Stop, Pause/Resume, Export ZIP, connection, and run status in a compact toolbar. Remove promotional text, large title sections, oversized cards, and wasted space.
+18. Keep compact live fields for current app, interaction, typing, screenshot state, OCR state, requests, completed screenshots, OCR results, failures, skips, connection, and run status.
+19. Start begins a new recording. Stop ends recording and keeps the results. Do not flood stopped runs with no-run capture-skipped messages.
+20. Save each run locally with timestamps, app changes, interactions, capture requests/outcomes, full OCR text, and errors. Link related events by capture ID.
+21. Preserve received records if a run is interrupted. Export the run as a ZIP for later analysis. Screenshot images remain in device memory; screenshot events and OCR text are saved.
+22. Keep private run data out of Git and console diagnostics. Do not send captured content to cloud services.
+23. Rebuild, install, check the real-app workflow, and open the dashboard. Leave recording stopped and ready for the user to select Start run.
+24. Do not create or run unit tests under the current project instructions.
+25. Cloud analysis, scam judgments, and voice remain outside this task.
+26. Use this file as the implementation and acceptance checklist. Later explicit user changes take precedence.

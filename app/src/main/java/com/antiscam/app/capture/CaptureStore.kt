@@ -10,20 +10,19 @@ import kotlinx.coroutines.flow.update
 data class CaptureState(
     val consentGranted: Boolean = false,
     val monitoringEnabled: Boolean = false,
-    val selectedPackage: String = DEFAULT_TARGET_PACKAGE,
     val serviceConnected: Boolean = false,
     val status: String = "Allow local capture to begin.",
     val latestText: String = "",
     val lastCapturedAtMillis: Long? = null,
     val captureCount: Int = 0,
     val lastError: String? = null,
+    // A run exists only while the developer dashboard owns the local connection.
+    val runId: String? = null,
     // Every change that invalidates a pending capture increments this value.
     val revision: Long = 0,
 )
 
-const val DEFAULT_TARGET_PACKAGE = "com.antiscam.fixture"
-
-/** Only settings persist. Screenshots, OCR text, and diagnostics stay in memory. */
+/** Only settings persist on Android. An explicit debug run can export OCR to the local dashboard. */
 object CaptureStore {
     private val mutableState = MutableStateFlow(CaptureState())
     val state: StateFlow<CaptureState> = mutableState.asStateFlow()
@@ -39,7 +38,6 @@ object CaptureStore {
         mutableState.value = CaptureState(
             consentGranted = consent,
             monitoringEnabled = enabled,
-            selectedPackage = prefs.getString("target", DEFAULT_TARGET_PACKAGE) ?: DEFAULT_TARGET_PACKAGE,
             status = if (enabled) "Waiting for the accessibility service." else "Monitoring is paused.",
         )
     }
@@ -69,28 +67,9 @@ object CaptureStore {
                     !it.consentGranted -> "Allow local capture before enabling monitoring."
                     !active -> "Monitoring is paused."
                     !it.serviceConnected -> "Enable Antiscam in Android accessibility settings."
-                    else -> "Ready. Type in the selected app."
+                    it.runId == null -> "Ready. Start a run in the desktop dashboard."
+                    else -> "Run active. Capture follows the current app."
                 },
-                lastError = null,
-                revision = it.revision + 1,
-            )
-        }
-        saveSettings()
-    }
-
-    fun setTargetPackage(packageName: String) {
-        val target = packageName.trim()
-        if (!Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+").matches(target) || target == "com.antiscam.app") {
-            report("The target package is invalid.", "Choose an app other than Antiscam.")
-            return
-        }
-        mutableState.update {
-            it.copy(
-                selectedPackage = target,
-                latestText = "",
-                lastCapturedAtMillis = null,
-                captureCount = 0,
-                status = "Selected app changed. Type in that app to test capture.",
                 lastError = null,
                 revision = it.revision + 1,
             )
@@ -105,7 +84,7 @@ object CaptureStore {
                 lastCapturedAtMillis = null,
                 captureCount = 0,
                 lastError = null,
-                status = "Result cleared. Only new typing can start another capture.",
+                status = "Local result cleared. Saved desktop run records are unchanged.",
                 revision = it.revision + 1,
             )
         }
@@ -122,12 +101,26 @@ object CaptureStore {
         mutableState.update {
             it.copy(
                 serviceConnected = connected,
+                revision = if (it.serviceConnected == connected) it.revision else it.revision + 1,
                 status = when {
                     !connected -> "Accessibility service is disconnected."
                     !it.consentGranted -> "Allow local capture to begin."
                     !it.monitoringEnabled -> "Monitoring is paused."
-                    else -> "Ready. Type in the selected app."
+                    it.runId == null -> "Ready. Start a run in the desktop dashboard."
+                    else -> "Run active. Capture follows the current app."
                 },
+            )
+        }
+    }
+
+    internal fun setRunId(runId: String?) {
+        mutableState.update {
+            if (it.runId == runId) it else it.copy(
+                runId = runId,
+                latestText = if (runId != null) "" else it.latestText,
+                lastCapturedAtMillis = if (runId != null) null else it.lastCapturedAtMillis,
+                captureCount = if (runId != null) 0 else it.captureCount,
+                revision = it.revision + 1,
             )
         }
     }
@@ -153,7 +146,7 @@ object CaptureStore {
         preferences?.edit()
             ?.putBoolean("consent", current.consentGranted)
             ?.putBoolean("enabled", current.monitoringEnabled)
-            ?.putString("target", current.selectedPackage)
+            ?.remove("target")
             ?.apply()
     }
 }

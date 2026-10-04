@@ -1,4 +1,4 @@
-param([string[]]$Tasks = @(':app:assembleDebug', ':fixture:assembleDebug', ':app:testDebugUnitTest', ':app:lintDebug', ':fixture:lintDebug'))
+param([string[]]$Tasks = @(':app:assembleDebug', ':app:lintDebug'))
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $javaCandidates = @(

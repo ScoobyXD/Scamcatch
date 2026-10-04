@@ -2,6 +2,9 @@ package com.antiscam.app.capture
 
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
@@ -28,95 +31,319 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Typing events are the only capture trigger. Window events only invalidate work. */
+/** Accessibility events drive observation, capture timers, and the run record. */
 class TypingCaptureService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var recognizer: TextRecognizer
-    private var pending: Runnable? = null
+    private var typingTimer: Runnable? = null
+    private var settleTimer: Runnable? = null
+    private var drainTimer: Runnable? = null
+    private var pending: Request? = null
     private var generation = 0L
     private var inFlight = false
     private var destroyed = false
-    private var lastAttemptAt = 0L
-    private var activeWindowId: Int? = null
+    private var lastAttemptAt: Long? = null
+    private var foregroundPackage: String? = null
+    private var foregroundWindowId: Int? = null
+    private var foregroundReported = false
+    private var typing = false
+    private var inputMethodPackages = emptySet<String>()
+    private val labels = mutableMapOf<String, String>()
+    private var diagnosticRunId: String? = null
+    private val diagnosticCounts = mutableMapOf<Int, Int>()
 
-    private data class Request(val generation: Long, val revision: Long, val target: String, val windowId: Int)
+    private data class Request(
+        val generation: Long,
+        val revision: Long,
+        val runId: String,
+        val target: String,
+        val windowId: Int,
+        val trigger: String,
+        val needsEditableFocus: Boolean,
+    )
 
     override fun onCreate() {
         super.onCreate()
         CaptureStore.initialize(this)
+        RunMonitor.initialize(this)
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        inputMethodPackages = getSystemService(InputMethodManager::class.java)
+            .inputMethodList.map { it.packageName }.toSet()
         scope.launch {
-            CaptureStore.state.map { it.revision }.distinctUntilChanged().collect { invalidate() }
+            CaptureStore.state.map { it.revision }.distinctUntilChanged().collect {
+                invalidate("Run or capture settings changed.")
+            }
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         CaptureStore.connected(true)
+        observeForeground()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || destroyed) return
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-            event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
-            val root = rootInActiveWindow
-            val stillSelected = root != null && root.packageName?.toString() == CaptureStore.state.value.selectedPackage &&
-                (activeWindowId == null || root.windowId == activeWindowId)
-            root?.recycleCompat()
-            if (!stillSelected) {
-                val wasWaiting = pending != null || (inFlight && activeWindowId != null)
-                invalidate()
-                if (wasWaiting) CaptureStore.report("Pending capture canceled. The selected app is no longer active.")
+        observeForeground()
+        reportEventMetadata(event)
+        val kind = when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> "typing"
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> "tap"
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> "scroll"
+            else -> return
+        }
+        val eventPackage = event.packageName?.toString() ?: return
+        // Keyboard events do not make the keyboard the current app.
+        if (eventPackage in inputMethodPackages) return
+        // Background and stale-window events must not replace the visible app's interaction.
+        if (eventPackage != foregroundPackage || event.windowId != foregroundWindowId) return
+        RunMonitor.emit("interaction", mapOf("kind" to kind, "packageName" to eventPackage))
+
+        val firstCharacter = kind == "typing" && !typing
+        if (kind == "typing") {
+            setTyping(true)
+            typingTimer?.let(handler::removeCallbacks)
+            settleTimer?.let(handler::removeCallbacks)
+            settleTimer = null
+            // A new character supersedes an unexecuted settled capture, not its initial capture.
+            if (pending?.trigger != "typing_start") cancelPending("Typing continued before the settled capture.")
+        }
+
+        val request = requestFor(event, kind)
+        if (kind == "typing") {
+            typingTimer = Runnable {
+                typingTimer = null
+                setTyping(false)
+                request?.let { queueCapture(it.copy(trigger = "typing_pause")) }
+            }.also { handler.postDelayed(it, TYPING_PAUSE_MS) }
+            if (firstCharacter && request != null) queueCapture(request.copy(trigger = "typing_start"))
+        } else if (request != null) {
+            settleTimer?.let(handler::removeCallbacks)
+            if (pending?.trigger != "typing_start") cancelPending("A newer interaction reset the settle time.")
+            settleTimer = Runnable {
+                settleTimer = null
+                // The typing-pause capture also covers taps and scrolls during the same burst.
+                if (!typing) queueCapture(request)
+            }.also { handler.postDelayed(it, INTERACTION_SETTLE_MS) }
+            RunMonitor.emit("capture_waiting", request.details(
+                "reason" to "Waiting for the interaction to settle.", "delayMs" to INTERACTION_SETTLE_MS,
+            ))
+        }
+    }
+
+    /** Bounded metadata distinguishes missing Android events from local event filtering. */
+    private fun reportEventMetadata(event: AccessibilityEvent) {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+        val runId = CaptureStore.state.value.runId ?: return
+        if (diagnosticRunId != runId) {
+            diagnosticRunId = runId
+            diagnosticCounts.clear()
+        }
+        val count = diagnosticCounts[event.eventType] ?: 0
+        if (count >= MAX_EVENT_DIAGNOSTICS_PER_TYPE) return
+        diagnosticCounts[event.eventType] = count + 1
+        val data = mutableMapOf<String, Any?>(
+            "runId" to runId,
+            "eventType" to AccessibilityEvent.eventTypeToString(event.eventType),
+            "packageName" to event.packageName?.toString(),
+            "windowId" to event.windowId,
+            "foregroundPackage" to foregroundPackage,
+            "foregroundWindowId" to foregroundWindowId,
+            "contentChangeTypes" to event.contentChangeTypes,
+        )
+        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            val source = event.source
+            try {
+                data["sourceAvailable"] = source != null
+                data["sourceEditable"] = source?.isEditable
+                data["sourceFocused"] = source?.isFocused
+                data["sourceSensitive"] = source?.isSensitive()
+                data["passwordEvent"] = event.isPassword
+            } finally {
+                source?.recycleCompat()
             }
-            return
         }
-        if (event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
+        RunMonitor.emit("accessibility_event", data)
+    }
+
+    private fun requestFor(event: AccessibilityEvent, kind: String): Request? {
         val state = CaptureStore.state.value
-        if (!state.consentGranted || !state.monitoringEnabled) return
-        if (event.packageName?.toString() != state.selectedPackage || event.packageName?.toString() == packageName) return
-        val inputMethods = getSystemService(InputMethodManager::class.java).inputMethodList
-        if (inputMethods.any { it.packageName == state.selectedPackage }) return
-
-        // Never read or retain event.text or the typed characters.
+        // Keep observation live between runs, without generating capture work or skip events.
+        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) return null
+        val target = foregroundPackage ?: return null
+        val windowId = foregroundWindowId ?: return null
+        if (event.packageName?.toString() != target || event.windowId != windowId) return null
+        val trigger = if (kind == "typing") "typing_start" else "${kind}_settled"
+        // Never read or retain event.text, source.text, or the typed characters.
         val source = event.source
-        val acceptable = source != null && source.packageName?.toString() == state.selectedPackage &&
-            source.isFocused && source.isEditable && !event.isPassword && !source.isSensitive()
-        source?.recycleCompat()
-        if (!acceptable) {
-            invalidate()
-            CaptureStore.report("Skipped typing in a protected or unavailable field.")
+        val safeSource = try {
+            !event.isPassword && (source == null && kind != "typing" || source != null &&
+                source.packageName?.toString() == target && !source.isSensitive() &&
+                (kind != "typing" || source.isFocused && source.isEditable))
+        } finally {
+            source?.recycleCompat()
+        }
+        if (!safeSource) {
+            invalidate("The interaction is in a protected or unavailable field.")
+            CaptureStore.report("Capture skipped. The field is protected or unavailable.")
+            RunMonitor.emit("capture_skipped", mapOf("runId" to state.runId,
+                "reason" to "Protected or unavailable field.", "trigger" to trigger))
+            return null
+        }
+        return Request(generation, state.revision, state.runId, target,
+            windowId, trigger, kind == "typing")
+    }
+
+    private fun observeForeground() {
+        var observedPackage: String? = null
+        var observedWindowId: Int? = null
+        val root = rootInActiveWindow
+        try {
+            val rootPackage = root?.packageName?.toString()
+            if (root != null && rootPackage != null && rootPackage !in inputMethodPackages) {
+                observedPackage = rootPackage
+                observedWindowId = root.windowId
+            }
+        } finally {
+            root?.recycleCompat()
+        }
+        if (observedPackage == null) {
+            val allWindows = windows
+            try {
+                val window = allWindows.firstOrNull {
+                    it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD && it.isFocused
+                } ?: allWindows.firstOrNull {
+                    it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD && it.isActive
+                }
+                val windowRoot = window?.root
+                try {
+                    val candidate = windowRoot?.packageName?.toString()
+                    if (window != null && candidate != null && candidate !in inputMethodPackages) {
+                        observedPackage = candidate
+                        observedWindowId = window.id
+                    }
+                } finally {
+                    windowRoot?.recycleCompat()
+                }
+            } finally {
+                allWindows.forEach { it.recycleCompat() }
+            }
+        }
+        val windowChanged = observedPackage != foregroundPackage || observedWindowId != foregroundWindowId
+        if (windowChanged) {
+            invalidate("The active app or window changed.")
+        }
+        if (!foregroundReported || observedPackage != foregroundPackage) {
+            RunMonitor.emit("app_changed", mapOf(
+                "packageName" to observedPackage,
+                "appLabel" to (observedPackage?.let(::appLabel) ?: "Unknown"),
+            ))
+            foregroundReported = true
+        }
+        foregroundPackage = observedPackage
+        foregroundWindowId = observedWindowId
+        if (windowChanged && observedPackage != null && observedWindowId != null) {
+            val state = CaptureStore.state.value
+            val runId = state.runId
+            if (runId != null && state.consentGranted && state.monitoringEnabled) {
+                val request = Request(generation, state.revision, runId, observedPackage,
+                    observedWindowId, "app_settled", false)
+                settleTimer = Runnable {
+                    settleTimer = null
+                    if (!typing) queueCapture(request)
+                }.also { handler.postDelayed(it, INTERACTION_SETTLE_MS) }
+                RunMonitor.emit("capture_waiting", request.details(
+                    "reason" to "Waiting for the new app window to settle.", "delayMs" to INTERACTION_SETTLE_MS,
+                ))
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun appLabel(target: String): String = labels.getOrPut(target) {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homePackages = packageManager.queryIntentActivities(home, PackageManager.MATCH_DEFAULT_ONLY)
+            .map { it.activityInfo.packageName }
+        if (target in homePackages) "Home" else try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString()
+        } catch (_: PackageManager.NameNotFoundException) {
+            target
+        }
+    }
+
+    private fun setTyping(value: Boolean) {
+        if (typing == value) return
+        typing = value
+        RunMonitor.emit("typing_state", mapOf("value" to if (value) "typing" else "idle"))
+    }
+
+    private fun queueCapture(request: Request) {
+        if (!isCurrent(request)) return
+        if (pending != null) cancelPending("A newer capture request replaced the pending request.")
+        pending = request
+        drainPending()
+    }
+
+    /** Only a new event, one deadline, or completion can resume pending capture work. */
+    private fun drainPending() {
+        drainTimer?.let(handler::removeCallbacks)
+        drainTimer = null
+        val request = pending ?: return
+        if (!isCurrent(request)) {
+            cancelPending("The pending capture is no longer current.")
             return
         }
-        invalidate()
-        activeWindowId = event.windowId
-        val request = Request(generation, state.revision, state.selectedPackage, event.windowId)
-        CaptureStore.report("Typing detected. Waiting for a short pause.")
-        schedule(request, TYPING_PAUSE_MS)
-    }
-
-    private fun schedule(request: Request, delayMillis: Long) {
-        pending?.let(handler::removeCallbacks)
-        pending = Runnable {
-            pending = null
-            capture(request)
-        }.also { handler.postDelayed(it, delayMillis) }
-    }
-
-    private fun invalidate() {
-        generation++
-        pending?.let(handler::removeCallbacks)
+        if (inFlight) {
+            RunMonitor.emit("capture_waiting", request.details("reason" to "A screenshot or OCR task is still running."))
+            return
+        }
+        val remaining = lastAttemptAt?.let {
+            MIN_CAPTURE_INTERVAL_MS - (SystemClock.elapsedRealtime() - it)
+        } ?: 0L
+        if (remaining > 0L) {
+            RunMonitor.emit("capture_waiting", request.details(
+                "reason" to "Minimum screenshot interval.", "delayMs" to remaining,
+            ))
+            drainTimer = Runnable { drainTimer = null; drainPending() }
+                .also { handler.postDelayed(it, remaining) }
+            return
+        }
         pending = null
-        activeWindowId = null
+        capture(request)
+    }
+
+    private fun cancelPending(reason: String) {
+        val request = pending
+        pending = null
+        drainTimer?.let(handler::removeCallbacks)
+        drainTimer = null
+        if (request != null) RunMonitor.emit("pending_canceled", request.details("reason" to reason))
+    }
+
+    private fun invalidate(reason: String) {
+        generation++
+        cancelPending(reason)
+        val hadTimer = typingTimer != null || settleTimer != null
+        typingTimer?.let(handler::removeCallbacks)
+        settleTimer?.let(handler::removeCallbacks)
+        typingTimer = null
+        settleTimer = null
+        setTyping(false)
+        if (hadTimer) RunMonitor.emit("pending_canceled", mapOf(
+            "runId" to CaptureStore.state.value.runId, "reason" to reason,
+        ))
     }
 
     private fun isCurrent(request: Request): Boolean {
         val state = CaptureStore.state.value
         return !destroyed && request.generation == generation && request.revision == state.revision &&
-            state.consentGranted && state.monitoringEnabled && request.target == state.selectedPackage
+            request.runId == state.runId && state.consentGranted && state.monitoringEnabled &&
+            request.target == foregroundPackage && request.windowId == foregroundWindowId
     }
 
-    /** Recheck the app, focus, and sensitivity before capture and before publishing OCR. */
+    /** Recheck app, field sensitivity, and visible content before capture and OCR publication. */
     private fun targetBounds(request: Request): Rect? {
         if (!isCurrent(request)) return null
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
@@ -124,9 +351,13 @@ class TypingCaptureService : AccessibilityService() {
         val root = rootInActiveWindow ?: return null
         try {
             if (root.packageName?.toString() != request.target || root.windowId != request.windowId) return null
-            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return null
-            val safeFocus = focused.isEditable && !focused.isSensitive()
-            focused.recycleCompat()
+            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            val safeFocus = try {
+                if (request.needsEditableFocus) focused != null && focused.isEditable && !focused.isSensitive()
+                else focused == null || !focused.isSensitive()
+            } finally {
+                focused?.recycleCompat()
+            }
             if (!safeFocus || containsSensitiveContent(root)) return null
             val window = root.window ?: return null
             try {
@@ -146,36 +377,34 @@ class TypingCaptureService : AccessibilityService() {
 
     private fun capture(request: Request) {
         if (!isCurrent(request)) return
-        if (inFlight) {
-            schedule(request, 200L)
-            return
-        }
         val bounds = targetBounds(request)
         if (bounds == null) {
-            CaptureStore.report("Capture skipped. The selected app or safe text field is no longer active.")
-            return
-        }
-        val remaining = MIN_CAPTURE_INTERVAL_MS - (SystemClock.elapsedRealtime() - lastAttemptAt)
-        if (remaining > 0) {
-            schedule(request, remaining)
+            CaptureStore.report("Capture skipped. The app, field, or screen is unavailable or protected.")
+            RunMonitor.emit("capture_skipped", request.details("reason" to "The active window is unavailable or contains protected content."))
             return
         }
         val windowCapture = Build.VERSION.SDK_INT >= 34
         val crop = if (windowCapture) null else legacyCrop(request, bounds)
         if (!windowCapture && crop == null) {
-            CaptureStore.report("Capture skipped. Another window covers the selected app.")
+            CaptureStore.report("Capture skipped. Another window covers the current app.")
+            RunMonitor.emit("capture_skipped", request.details("reason" to "Another window covers the current app."))
             return
         }
         inFlight = true
         lastAttemptAt = SystemClock.elapsedRealtime()
-        CaptureStore.report("Capturing the selected app.")
+        val captureId = RunMonitor.nextCaptureId()
+        RunMonitor.emit("capture_requested", request.details("captureId" to captureId))
+        CaptureStore.report("Capturing screenshot #$captureId.")
         val callback = object : TakeScreenshotCallback {
             override fun onSuccess(screenshot: ScreenshotResult) {
                 val buffer = screenshot.hardwareBuffer
                 var hardwareBitmap: Bitmap? = null
                 var softwareBitmap: Bitmap? = null
                 try {
+                    RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
                     if (targetBounds(request) != bounds || (!windowCapture && legacyCrop(request, bounds) != crop)) {
+                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                            "reason" to "The run, app, window, or protected content changed before screenshot processing."))
                         finishCapture()
                         return
                     }
@@ -189,9 +418,9 @@ class TypingCaptureService : AccessibilityService() {
                     }
                     if (image !== bitmap) bitmap.recycle()
                     softwareBitmap = null // OCR owns the bitmap until its task completes.
-                    recognize(request, image, System.currentTimeMillis())
+                    recognize(request, captureId, image, System.currentTimeMillis())
                 } catch (_: Exception) {
-                    if (isCurrent(request)) CaptureStore.report("Capture failed.", "Android could not prepare the screenshot for OCR.")
+                    captureFailed(request, captureId, "Android could not prepare the screenshot for OCR.")
                     finishCapture()
                 } finally {
                     softwareBitmap?.recycle()
@@ -201,7 +430,7 @@ class TypingCaptureService : AccessibilityService() {
             }
 
             override fun onFailure(errorCode: Int) {
-                if (isCurrent(request)) CaptureStore.report("Capture failed.", screenshotError(errorCode))
+                captureFailed(request, captureId, screenshotError(errorCode))
                 finishCapture()
             }
         }
@@ -209,20 +438,34 @@ class TypingCaptureService : AccessibilityService() {
             if (Build.VERSION.SDK_INT >= 34) takeScreenshotOfWindow(request.windowId, mainExecutor, callback)
             else takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
         } catch (_: Exception) {
-            if (isCurrent(request)) CaptureStore.report("Capture failed.", "Android rejected the screenshot request. Check accessibility access.")
+            captureFailed(request, captureId, "Android rejected the screenshot request. Check accessibility access.")
             finishCapture()
         }
     }
 
-    private fun recognize(request: Request, bitmap: Bitmap, capturedAt: Long) {
-        CaptureStore.report("Reading screenshot text on this device.")
+    private fun captureFailed(request: Request, captureId: Int, reason: String) {
+        RunMonitor.emit("capture_failed", request.details("captureId" to captureId, "reason" to reason))
+        if (isCurrent(request)) CaptureStore.report("Capture failed.", reason)
+    }
+
+    private fun recognize(request: Request, captureId: Int, bitmap: Bitmap, capturedAt: Long) {
+        val startedAt = SystemClock.elapsedRealtime()
+        CaptureStore.report("Reading text from screenshot #$captureId on this device.")
+        RunMonitor.emit("ocr_started", request.details("captureId" to captureId))
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    if (targetBounds(request) != null) CaptureStore.result(text.text, capturedAt)
+                    if (targetBounds(request) != null) {
+                        CaptureStore.result(text.text, capturedAt)
+                        RunMonitor.emit("ocr_completed", request.details("captureId" to captureId,
+                            "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt))
+                    } else {
+                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                            "reason" to "The run, app, window, or protected content changed before OCR completed."))
+                    }
                 }
                 .addOnFailureListener(mainExecutor) {
-                    if (isCurrent(request)) CaptureStore.report("OCR failed.", "The local text model could not read this screenshot. Type again to retry.")
+                    ocrFailed(request, captureId, "The local text model could not read this screenshot.")
                 }
                 .addOnCompleteListener(mainExecutor) {
                     bitmap.recycle()
@@ -230,10 +473,19 @@ class TypingCaptureService : AccessibilityService() {
                 }
         } catch (_: Exception) {
             bitmap.recycle()
-            if (isCurrent(request)) CaptureStore.report("OCR failed.", "The local text model could not start.")
+            ocrFailed(request, captureId, "The local text model could not start.")
             finishCapture()
         }
     }
+
+    private fun ocrFailed(request: Request, captureId: Int, reason: String) {
+        RunMonitor.emit("ocr_failed", request.details("captureId" to captureId, "reason" to reason))
+        if (isCurrent(request)) CaptureStore.report("OCR failed.", reason)
+    }
+
+    private fun Request.details(vararg values: Pair<String, Any?>): Map<String, Any?> =
+        mapOf("runId" to runId, "trigger" to trigger, "packageName" to target,
+            "appLabel" to appLabel(target), "windowId" to windowId) + values
 
     /** API 30-33 capture the display. Keep only the target region and exclude the keyboard. */
     private fun legacyCrop(request: Request, bounds: Rect): Rect? {
@@ -291,17 +543,17 @@ class TypingCaptureService : AccessibilityService() {
 
     private fun finishCapture() {
         inFlight = false
-        if (destroyed) recognizer.close()
+        if (destroyed) recognizer.close() else drainPending()
     }
 
     override fun onInterrupt() {
-        invalidate()
+        invalidate("Android interrupted the accessibility service.")
         CaptureStore.report("Android interrupted the accessibility service.")
     }
 
     override fun onDestroy() {
         destroyed = true
-        invalidate()
+        invalidate("The accessibility service stopped.")
         scope.cancel()
         if (!inFlight) recognizer.close()
         CaptureStore.connected(false)
@@ -309,7 +561,7 @@ class TypingCaptureService : AccessibilityService() {
     }
 
     private fun screenshotError(code: Int): String = when (code) {
-        ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "Android needs more time between screenshots. Type again to retry."
+        ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT -> "Android needs more time between screenshots."
         ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "Screenshot access is unavailable. Check Android accessibility settings."
         ERROR_TAKE_SCREENSHOT_INVALID_DISPLAY -> "The display is unavailable."
         ERROR_TAKE_SCREENSHOT_INVALID_WINDOW -> "The target window is no longer available."
@@ -328,8 +580,10 @@ class TypingCaptureService : AccessibilityService() {
     }
 
     private companion object {
-        const val TYPING_PAUSE_MS = 700L
+        const val TYPING_PAUSE_MS = 1000L
+        const val INTERACTION_SETTLE_MS = 600L
         const val MIN_CAPTURE_INTERVAL_MS = 1500L
         const val MAX_INSPECTED_NODES = 1000
+        const val MAX_EVENT_DIAGNOSTICS_PER_TYPE = 20
     }
 }

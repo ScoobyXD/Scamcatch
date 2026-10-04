@@ -9,6 +9,9 @@ local.properties
 .DS_Store
 captures/
 test-artifacts/
+runs/
+.dashboard/
+__pycache__/
 *.log
 .env
 .env.*

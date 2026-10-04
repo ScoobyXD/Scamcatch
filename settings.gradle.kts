@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "antiscam"
-include(":app", ":fixture")
+include(":app")
