@@ -10,14 +10,14 @@ User-approved scope: 4 October 2026
 7. Respect Android secure windows, password fields, and Android-marked sensitive content.
 8. Drive capture from Android accessibility events. Do not poll the screen continuously.
 9. Request one capture when a typing burst starts and another after about one second without typing. Do not request a screenshot for every character.
-10. Request capture after taps and scrolling settle. Follow app changes and capture the new foreground window after it settles.
+10. Request capture after supported interactions and screen changes settle, including taps, long presses, scrolling, focus/selection changes, text edits, app changes, and screen-content updates. Keep typing debounce and Android screenshot limits. Do not depend on physical touches that Android does not report.
 11. Combine overlapping requests, respect Android capture intervals, and cancel stale work when the app/window or run changes.
 12. Run ML Kit OCR on the device. Associate each result with its capture number, timestamp, source app, and capture event.
 13. Keep the emulator, desktop dashboard, and Android Studio separate. Open the dashboard for run work.
-14. Give full extracted text most of the left column. Show captures in time order with their complete text and identifying metadata.
-15. Give the activity log a large right column. Show interactions, requests, screenshots, OCR, failures, cancellations, and reasons for skipped captures. Keep readiness indicators compact.
+14. Give full extracted text most of the left column. Show the newest capture at the top and the oldest at the bottom, with complete text and identifying metadata.
+15. Give the activity log a large right column. Show the newest entry at the top and the oldest at the bottom. Include interactions, requests, screenshots, OCR, failures, cancellations, and reasons for skipped captures. Keep readiness indicators compact.
 16. Give each main dashboard column one scrollbar. Do not add nested scrolling or clip individual OCR results. Preserve the reading position when new events arrive.
-17. Put Start, Stop, Pause/Resume, Export ZIP, connection, and run status in a compact toolbar. Remove promotional text, large title sections, oversized cards, and wasted space.
+17. Use a dark charcoal theme with orange accents. Put Start, Stop, Pause/Resume, Export ZIP, connection, and run status in a compact toolbar. Remove promotional text, large title sections, oversized cards, and wasted space.
 18. Keep compact live fields for current app, interaction, typing, screenshot state, OCR state, requests, completed screenshots, OCR results, failures, skips, connection, and run status.
 19. Start begins a new recording. Stop ends recording and keeps the results. Do not flood stopped runs with no-run capture-skipped messages.
 20. Save each run locally with timestamps, app changes, interactions, capture requests/outcomes, full OCR text, and errors. Link related events by capture ID.

@@ -3,10 +3,10 @@ package com.antiscam.app.capture
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +14,8 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.text.InputType
 import android.view.Display
+import android.view.WindowInsets
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -34,10 +36,19 @@ import kotlinx.coroutines.launch
 /** Accessibility events drive observation, capture timers, and the run record. */
 class TypingCaptureService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
+    private val captureWindowManager by lazy {
+        val display = getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+            ?: return@lazy null
+        createDisplayContext(display)
+            .createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
+            .getSystemService(WindowManager::class.java)
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var recognizer: TextRecognizer
     private var typingTimer: Runnable? = null
     private var settleTimer: Runnable? = null
+    private var settling: Request? = null
+    private var settleStartedAt: Long? = null
     private var drainTimer: Runnable? = null
     private var pending: Request? = null
     private var generation = 0L
@@ -50,8 +61,11 @@ class TypingCaptureService : AccessibilityService() {
     private var typing = false
     private var inputMethodPackages = emptySet<String>()
     private val labels = mutableMapOf<String, String>()
-    private var diagnosticRunId: String? = null
-    private val diagnosticCounts = mutableMapOf<Int, Int>()
+    private var focusedInput: InputFingerprint? = null
+    private var passiveCaptureBlocked = false
+
+    // Only a transient fingerprint is retained. Field text never enters events or logs.
+    private data class InputFingerprint(val node: Int, val length: Int, val hash: Long)
 
     private data class Request(
         val generation: Long,
@@ -86,31 +100,43 @@ class TypingCaptureService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || destroyed) return
         observeForeground()
-        reportEventMetadata(event)
-        val kind = when (event.eventType) {
+        val eventPackage = event.packageName?.toString()
+        // Keyboard and background events do not replace the visible app's interaction.
+        if (eventPackage != null && eventPackage in inputMethodPackages) return
+        val windowEvent = event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        if (!windowEvent && (eventPackage != foregroundPackage || event.windowId != foregroundWindowId)) return
+        val inferredEdit = observeFocusedInput(event)
+        val kind = if (inferredEdit) "typing" else when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> "typing"
             AccessibilityEvent.TYPE_VIEW_CLICKED -> "tap"
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> "long_press"
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> "scroll"
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> "focus"
+            AccessibilityEvent.TYPE_VIEW_SELECTED -> "selection"
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> "text_selection"
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> "window"
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "content"
             else -> return
         }
-        val eventPackage = event.packageName?.toString() ?: return
-        // Keyboard events do not make the keyboard the current app.
-        if (eventPackage in inputMethodPackages) return
-        // Background and stale-window events must not replace the visible app's interaction.
-        if (eventPackage != foregroundPackage || event.windowId != foregroundWindowId) return
-        RunMonitor.emit("interaction", mapOf("kind" to kind, "packageName" to eventPackage))
+        if (kind != "content" && kind != "window") passiveCaptureBlocked = false
+        if (kind != "content") RunMonitor.emit("interaction", mapOf(
+            "kind" to kind, "packageName" to foregroundPackage,
+            "eventType" to AccessibilityEvent.eventTypeToString(event.eventType),
+        ))
 
         val firstCharacter = kind == "typing" && !typing
         if (kind == "typing") {
             setTyping(true)
             typingTimer?.let(handler::removeCallbacks)
-            settleTimer?.let(handler::removeCallbacks)
-            settleTimer = null
+            clearSettling()
             // A new character supersedes an unexecuted settled capture, not its initial capture.
             if (pending?.trigger != "typing_start") cancelPending("Typing continued before the settled capture.")
         }
 
-        val request = requestFor(event, kind)
+        // A typing burst owns its trailing capture, including suggestion and selection updates.
+        if (typing && kind != "typing") return
+        val request = requestFor(event, kind, inferredEdit)
         if (kind == "typing") {
             typingTimer = Runnable {
                 typingTimer = null
@@ -119,81 +145,117 @@ class TypingCaptureService : AccessibilityService() {
             }.also { handler.postDelayed(it, TYPING_PAUSE_MS) }
             if (firstCharacter && request != null) queueCapture(request.copy(trigger = "typing_start"))
         } else if (request != null) {
-            settleTimer?.let(handler::removeCallbacks)
-            if (pending?.trigger != "typing_start") cancelPending("A newer interaction reset the settle time.")
-            settleTimer = Runnable {
-                settleTimer = null
-                // The typing-pause capture also covers taps and scrolls during the same burst.
-                if (!typing) queueCapture(request)
-            }.also { handler.postDelayed(it, INTERACTION_SETTLE_MS) }
-            RunMonitor.emit("capture_waiting", request.details(
-                "reason" to "Waiting for the interaction to settle.", "delayMs" to INTERACTION_SETTLE_MS,
-            ))
+            scheduleSettled(request)
         }
     }
 
-    /** Bounded metadata distinguishes missing Android events from local event filtering. */
-    private fun reportEventMetadata(event: AccessibilityEvent) {
-        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
-        val runId = CaptureStore.state.value.runId ?: return
-        if (diagnosticRunId != runId) {
-            diagnosticRunId = runId
-            diagnosticCounts.clear()
+    /** Some apps report edits as parent content changes instead of text-change events. */
+    private fun observeFocusedInput(event: AccessibilityEvent): Boolean {
+        val state = CaptureStore.state.value
+        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled || event.isSensitive()) {
+            focusedInput = null
+            return false
         }
-        val count = diagnosticCounts[event.eventType] ?: 0
-        if (count >= MAX_EVENT_DIAGNOSTICS_PER_TYPE) return
-        diagnosticCounts[event.eventType] = count + 1
-        val data = mutableMapOf<String, Any?>(
-            "runId" to runId,
-            "eventType" to AccessibilityEvent.eventTypeToString(event.eventType),
-            "packageName" to event.packageName?.toString(),
-            "windowId" to event.windowId,
-            "foregroundPackage" to foregroundPackage,
-            "foregroundWindowId" to foregroundWindowId,
-            "contentChangeTypes" to event.contentChangeTypes,
-        )
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED ||
-            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            val source = event.source
+        if (event.eventType !in INPUT_OBSERVATION_EVENTS) return false
+        val root = rootInActiveWindow ?: return false
+        try {
+            if (root.packageName?.toString() != foregroundPackage || root.windowId != foregroundWindowId ||
+                root.isSensitive()) return false
+            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             try {
-                data["sourceAvailable"] = source != null
-                data["sourceEditable"] = source?.isEditable
-                data["sourceFocused"] = source?.isFocused
-                data["sourceSensitive"] = source?.isSensitive()
-                data["passwordEvent"] = event.isPassword
+                if (focused == null || !focused.isFocused || !focused.isEditable || focused.isSensitive()) {
+                    focusedInput = null
+                    return false
+                }
+                val content = focused.text ?: return false
+                // Hash characters directly. Do not allocate or retain a copy of field text.
+                var hash = -3750763034362895579L
+                for (index in 0 until content.length) hash = (hash xor content[index].code.toLong()) * 1099511628211L
+                val current = InputFingerprint(focused.hashCode(), content.length, hash)
+                val previous = focusedInput
+                focusedInput = current
+                if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) return false
+                val changed = previous != null && previous.node == current.node && previous != current
+                val firstTextSignal = previous == null &&
+                    event.contentChangeTypes and AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT != 0
+                return changed || firstTextSignal
             } finally {
-                source?.recycleCompat()
+                focused?.recycleCompat()
             }
+        } finally {
+            root.recycleCompat()
         }
-        RunMonitor.emit("accessibility_event", data)
     }
 
-    private fun requestFor(event: AccessibilityEvent, kind: String): Request? {
+    private fun requestFor(event: AccessibilityEvent, kind: String, inferredEdit: Boolean): Request? {
         val state = CaptureStore.state.value
         // Keep observation live between runs, without generating capture work or skip events.
         if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) return null
         val target = foregroundPackage ?: return null
         val windowId = foregroundWindowId ?: return null
-        if (event.packageName?.toString() != target || event.windowId != windowId) return null
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
+            (event.packageName?.toString() != target || event.windowId != windowId)) return null
         val trigger = if (kind == "typing") "typing_start" else "${kind}_settled"
-        // Never read or retain event.text, source.text, or the typed characters.
+        val request = Request(generation, state.revision, state.runId, target,
+            windowId, trigger, kind == "typing")
+        if (kind == "content" && passiveCaptureBlocked) {
+            // A new content event can resume capture once the window becomes eligible.
+            // An unchanged blocked window must not restart waiting and skipped records.
+            val bounds = targetBounds(request) ?: return null
+            if (Build.VERSION.SDK_INT < 34 && legacyCrop(request, bounds) == null) return null
+        }
+        // Event text is never read. Inferred edits already checked the actual focused input.
         val source = event.source
         val safeSource = try {
-            !event.isPassword && (source == null && kind != "typing" || source != null &&
+            !event.isSensitive() && (source == null && (kind != "typing" || inferredEdit) || source != null &&
                 source.packageName?.toString() == target && !source.isSensitive() &&
-                (kind != "typing" || source.isFocused && source.isEditable))
+                (kind != "typing" || inferredEdit || source.isFocused && source.isEditable))
         } finally {
             source?.recycleCompat()
         }
         if (!safeSource) {
+            if (kind == "content" && passiveCaptureBlocked) return null
             invalidate("The interaction is in a protected or unavailable field.")
+            passiveCaptureBlocked = true
             CaptureStore.report("Capture skipped. The field is protected or unavailable.")
             RunMonitor.emit("capture_skipped", mapOf("runId" to state.runId,
                 "reason" to "Protected or unavailable field.", "trigger" to trigger))
             return null
         }
-        return Request(generation, state.revision, state.runId, target,
-            windowId, trigger, kind == "typing")
+        return request
+    }
+
+    private fun scheduleSettled(request: Request) {
+        if (!isCurrent(request) || typing) return
+        val previous = settling
+        val first = previous == null
+        // Retain the action that started a screen update while its loading events arrive.
+        settling = if (request.trigger == "content_settled" && previous != null) {
+            request.copy(trigger = previous.trigger)
+        } else request
+        val now = SystemClock.elapsedRealtime()
+        val startedAt = settleStartedAt ?: now.also { settleStartedAt = it }
+        val delay = minOf(INTERACTION_SETTLE_MS, (startedAt + MAX_SETTLE_WAIT_MS - now).coerceAtLeast(0L))
+        settleTimer?.let(handler::removeCallbacks)
+        if (first && pending?.trigger != "typing_start") cancelPending("A newer interaction reset the settle time.")
+        settleTimer = Runnable {
+            val latest = settling
+            clearSettling()
+            if (!typing && latest != null) queueCapture(latest)
+        }.also { handler.postDelayed(it, delay) }
+        if (first) {
+            if (request.trigger == "content_settled") RunMonitor.emit("interaction", request.details("kind" to "content"))
+            RunMonitor.emit("capture_waiting", request.details(
+                "reason" to "Waiting for the screen to settle.", "delayMs" to delay,
+            ))
+        }
+    }
+
+    private fun clearSettling() {
+        settleTimer?.let(handler::removeCallbacks)
+        settleTimer = null
+        settling = null
+        settleStartedAt = null
     }
 
     private fun observeForeground() {
@@ -250,26 +312,24 @@ class TypingCaptureService : AccessibilityService() {
             if (runId != null && state.consentGranted && state.monitoringEnabled) {
                 val request = Request(generation, state.revision, runId, observedPackage,
                     observedWindowId, "app_settled", false)
-                settleTimer = Runnable {
-                    settleTimer = null
-                    if (!typing) queueCapture(request)
-                }.also { handler.postDelayed(it, INTERACTION_SETTLE_MS) }
-                RunMonitor.emit("capture_waiting", request.details(
-                    "reason" to "Waiting for the new app window to settle.", "delayMs" to INTERACTION_SETTLE_MS,
-                ))
+                scheduleSettled(request)
             }
         }
     }
 
     @Suppress("DEPRECATION")
-    private fun appLabel(target: String): String = labels.getOrPut(target) {
+    private fun appLabel(target: String): String {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        val homePackages = packageManager.queryIntentActivities(home, PackageManager.MATCH_DEFAULT_ONLY)
-            .map { it.activityInfo.packageName }
-        if (target in homePackages) "Home" else try {
-            packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString()
-        } catch (_: PackageManager.NameNotFoundException) {
-            target
+        val homePackage = packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+        // Other packages can declare fallback HOME activities without being the launcher.
+        if (target == homePackage && homePackage != "android") return "Home"
+        return labels.getOrPut(target) {
+            try {
+                packageManager.getApplicationLabel(packageManager.getApplicationInfo(target, 0)).toString()
+            } catch (_: PackageManager.NameNotFoundException) {
+                target
+            }
         }
     }
 
@@ -299,8 +359,9 @@ class TypingCaptureService : AccessibilityService() {
             RunMonitor.emit("capture_waiting", request.details("reason" to "A screenshot or OCR task is still running."))
             return
         }
+        val interval = if (request.trigger == "content_settled") MIN_CONTENT_CAPTURE_INTERVAL_MS else MIN_CAPTURE_INTERVAL_MS
         val remaining = lastAttemptAt?.let {
-            MIN_CAPTURE_INTERVAL_MS - (SystemClock.elapsedRealtime() - it)
+            interval - (SystemClock.elapsedRealtime() - it)
         } ?: 0L
         if (remaining > 0L) {
             RunMonitor.emit("capture_waiting", request.details(
@@ -327,9 +388,10 @@ class TypingCaptureService : AccessibilityService() {
         cancelPending(reason)
         val hadTimer = typingTimer != null || settleTimer != null
         typingTimer?.let(handler::removeCallbacks)
-        settleTimer?.let(handler::removeCallbacks)
         typingTimer = null
-        settleTimer = null
+        clearSettling()
+        focusedInput = null
+        passiveCaptureBlocked = false
         setTyping(false)
         if (hadTimer) RunMonitor.emit("pending_canceled", mapOf(
             "runId" to CaptureStore.state.value.runId, "reason" to reason,
@@ -377,8 +439,11 @@ class TypingCaptureService : AccessibilityService() {
 
     private fun capture(request: Request) {
         if (!isCurrent(request)) return
+        // Failed eligibility checks are attempts too and must respect capture spacing.
+        lastAttemptAt = SystemClock.elapsedRealtime()
         val bounds = targetBounds(request)
         if (bounds == null) {
+            passiveCaptureBlocked = true
             CaptureStore.report("Capture skipped. The app, field, or screen is unavailable or protected.")
             RunMonitor.emit("capture_skipped", request.details("reason" to "The active window is unavailable or contains protected content."))
             return
@@ -386,10 +451,12 @@ class TypingCaptureService : AccessibilityService() {
         val windowCapture = Build.VERSION.SDK_INT >= 34
         val crop = if (windowCapture) null else legacyCrop(request, bounds)
         if (!windowCapture && crop == null) {
+            passiveCaptureBlocked = true
             CaptureStore.report("Capture skipped. Another window covers the current app.")
             RunMonitor.emit("capture_skipped", request.details("reason" to "Another window covers the current app."))
             return
         }
+        passiveCaptureBlocked = false
         inFlight = true
         lastAttemptAt = SystemClock.elapsedRealtime()
         val captureId = RunMonitor.nextCaptureId()
@@ -487,12 +554,23 @@ class TypingCaptureService : AccessibilityService() {
         mapOf("runId" to runId, "trigger" to trigger, "packageName" to target,
             "appLabel" to appLabel(target), "windowId" to windowId) + values
 
-    /** API 30-33 capture the display. Keep only the target region and exclude the keyboard. */
+    /** API 30-33 capture the display. Exclude system bars, cutouts, and the keyboard. */
     private fun legacyCrop(request: Request, bounds: Rect): Rect? {
         val allWindows = windows
         try {
             val targetLayer = allWindows.firstOrNull { it.id == request.windowId }?.layer ?: return null
             val crop = Rect(bounds)
+            val metrics = captureWindowManager?.maximumWindowMetrics ?: return null
+            val insets = metrics.windowInsets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+            val displayContent = Rect(metrics.bounds).apply {
+                left += insets.left
+                top += insets.top
+                right -= insets.right
+                bottom -= insets.bottom
+            }
+            if (!crop.intersect(displayContent)) return null
             for (window in allWindows) {
                 if (window.id == request.windowId || window.layer <= targetLayer) continue
                 val other = Rect().also(window::getBoundsInScreen)
@@ -502,6 +580,8 @@ class TypingCaptureService : AccessibilityService() {
                 } else return null
             }
             return crop.takeUnless { it.isEmpty }
+        } catch (_: RuntimeException) {
+            return null
         } finally {
             allWindows.forEach { it.recycleCompat() }
         }
@@ -540,6 +620,9 @@ class TypingCaptureService : AccessibilityService() {
         )) || (kind == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
         return isPassword || passwordInput || (Build.VERSION.SDK_INT >= 34 && isAccessibilityDataSensitive)
     }
+
+    private fun AccessibilityEvent.isSensitive(): Boolean =
+        isPassword || (Build.VERSION.SDK_INT >= 34 && isAccessibilityDataSensitive)
 
     private fun finishCapture() {
         inFlight = false
@@ -582,8 +665,15 @@ class TypingCaptureService : AccessibilityService() {
     private companion object {
         const val TYPING_PAUSE_MS = 1000L
         const val INTERACTION_SETTLE_MS = 600L
+        const val MAX_SETTLE_WAIT_MS = 3000L
         const val MIN_CAPTURE_INTERVAL_MS = 1500L
+        const val MIN_CONTENT_CAPTURE_INTERVAL_MS = 5000L
         const val MAX_INSPECTED_NODES = 1000
-        const val MAX_EVENT_DIAGNOSTICS_PER_TYPE = 20
+        val INPUT_OBSERVATION_EVENTS = setOf(
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+        )
     }
 }

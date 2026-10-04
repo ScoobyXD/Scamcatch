@@ -2,7 +2,8 @@ param(
     [string]$Serial,
     [ValidateRange(1024, 65535)][int]$Port = 8765,
     [switch]$Foreground,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [string]$RunsDirectory
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -19,17 +20,28 @@ $pythonExecutable = $pythonCommand.Source
 if ($LASTEXITCODE -ne 0) { throw 'This dashboard requires Python 3.11 or later.' }
 
 $dashboardUrl = "http://127.0.0.1:$Port/"
+$existing = $null
 try {
     $existing = Invoke-RestMethod -Uri "${dashboardUrl}api/session" -TimeoutSec 2
-    if ($existing.token) {
-        if (-not $NoBrowser) { & $pythonExecutable @pythonArguments $serverScript --port $Port --open-only }
-        Write-Output "Antiscam run console is already available: $dashboardUrl"
-        return
-    }
 } catch { }
+if ($existing.token) {
+    if ($Serial -and ($existing.selectedDevice -ne $Serial -or $existing.connection -eq 'disconnected')) {
+        if ($existing.run.status -in @('starting', 'active', 'stopping')) {
+            throw 'Stop the current run before changing devices.'
+        }
+        $requestHeaders = @{ Origin = $dashboardUrl.TrimEnd('/'); 'X-Antiscam-Token' = $existing.token }
+        $null = Invoke-RestMethod -Method Post -Uri "${dashboardUrl}api/devices" -Headers $requestHeaders -ContentType 'application/json' -Body '{}'
+        $connectBody = @{ serial = $Serial } | ConvertTo-Json -Compress
+        $null = Invoke-RestMethod -Method Post -Uri "${dashboardUrl}api/connect" -Headers $requestHeaders -ContentType 'application/json' -Body $connectBody -TimeoutSec 45
+    }
+    if (-not $NoBrowser) { & $pythonExecutable @pythonArguments $serverScript --port $Port --open-only }
+    Write-Output "Antiscam run console is already available: $dashboardUrl"
+    return
+}
 
 $arguments = $pythonArguments + @($serverScript, '--port', [string]$Port)
 if ($Serial) { $arguments += @('--serial', $Serial) }
+if ($RunsDirectory) { $arguments += @('--runs-directory', $RunsDirectory) }
 if ($NoBrowser) { $arguments += '--no-browser' }
 if ($Foreground) {
     & $pythonExecutable @arguments

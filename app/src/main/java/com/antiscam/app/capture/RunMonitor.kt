@@ -256,6 +256,5 @@ object RunMonitor {
     private val CAPTURE_EVENTS = setOf(
         "capture_requested", "screenshot_received", "capture_failed", "capture_discarded",
         "ocr_started", "ocr_completed", "ocr_failed", "capture_skipped", "capture_waiting", "pending_canceled",
-        "accessibility_event",
     )
 }

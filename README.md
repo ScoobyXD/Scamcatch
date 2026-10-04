@@ -12,9 +12,9 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 4. Open **Antiscam Dev** once. Read the disclosure and allow local capture if needed.
 5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
-7. Select **Start run** in the desktop dashboard.
-8. Use any app in the emulator. Type, pause, tap, scroll, or switch apps.
-9. Read the full extracted text in the left column and the activity log in the right column.
+7. Select the device, choose **Connect** or **Switch device**, then select **Start run**.
+8. Use any app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
+9. Read the full extracted text on the left and activity on the right. Both lists show the newest entry first.
 10. Select **Stop run**. The saved folder under `runs` contains the record for analysis.
 11. Select **Export ZIP** to share the saved run for analysis.
 
@@ -23,6 +23,16 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 .\scripts\install.ps1 -Serial emulator-5554
 .\scripts\dashboard.ps1 -Serial emulator-5554
 ```
+
+## Connected phone
+
+1. Connect the configured Galaxy S10+ by USB and accept the USB debugging prompt.
+2. Open **Start Phone Dashboard.cmd** to connect the original console at `http://127.0.0.1:8765/` to the phone.
+3. To change devices in that console, stop the run, select **Device**, choose the target, and select **Switch device**.
+4. Both shortcuts reuse one console. New phone and emulator runs save under `runs`, with the selected device recorded in each run.
+5. Earlier phone records remain under `runs/phone-R58N83XN7BE`.
+6. Stop the current run before building and installing an app update with the existing scripts.
+7. The launcher connects the console. It does not watch source files or install app updates.
 
 ## Requirements
 
@@ -40,9 +50,9 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 1. An active run, consent, enabled monitoring, and a connected accessibility service are required.
 2. Screenshot capture follows the foreground app. There is no app selector or app allowlist.
 3. Typing requests one initial screenshot and one after a one-second pause.
-4. Taps and scrolling request capture after 600 milliseconds without another relevant interaction.
+4. Taps, long presses, scrolling, focus, selection, and screen changes request capture after 600 milliseconds of settling, with a three-second maximum wait.
 5. Repeated events reset timers instead of producing a screenshot for every character or scroll event.
-6. Capture attempts stay at least 1.5 seconds apart. Only one screenshot/OCR operation runs at a time.
+6. Direct-action capture attempts stay at least 1.5 seconds apart. Passive content changes use a five-second minimum interval. Only one screenshot/OCR operation runs at a time.
 7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel pending work. A settled new foreground window requests a capture during a run.
 8. Password fields, Android-marked sensitive content, and secure windows prevent capture.
 9. When stopped, interactions update live status without creating capture requests or skipped-capture noise.

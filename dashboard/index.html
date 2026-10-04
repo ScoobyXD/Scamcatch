@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#17191c">
   <title>Antiscam · Run console</title>
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
@@ -46,24 +47,24 @@
     <div id="notice" class="notice" role="status" hidden></div>
     <div class="content-grid">
       <section class="pane results-panel" aria-labelledby="results-title">
-        <header class="pane-heading"><h2 id="results-title">Extracted text <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button">Latest ↓</button></header>
-        <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Extracted text history">
+        <header class="pane-heading"><h2 id="results-title">Extracted text <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button" aria-label="Go to the latest extracted text">Latest ↑</button></header>
+        <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Extracted text, newest first">
           <p id="empty" class="empty-state">Start a run, then type, tap, or scroll in any app. Extracted text appears here.</p>
-          <ol id="results" class="results-list" role="list" aria-label="Captures in time order"></ol>
+          <ol id="results" class="results-list" role="list" aria-label="Captures, newest to oldest"></ol>
         </div>
         <footer class="save-footer"><span id="save-status">Runs save locally.</span><span id="save-folder"></span></footer>
       </section>
       <aside class="pane activity-panel" aria-labelledby="activity-title">
-        <header class="pane-heading"><h2 id="activity-title">Activity log <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button">Latest ↓</button></header>
+        <header class="pane-heading"><h2 id="activity-title">Activity log <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button" aria-label="Go to the latest activity">Latest ↑</button></header>
         <ul class="readiness" aria-label="Device readiness" role="list">
           <li><span id="check-bridge" class="check">○</span> Device</li>
           <li><span id="check-consent" class="check">○</span> Consent</li>
           <li><span id="check-service" class="check">○</span> Accessibility</li>
           <li><span id="check-monitoring" class="check">○</span> Capture</li>
         </ul>
-        <div id="activity-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Run activity history">
+        <div id="activity-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Run activity, newest first">
           <p id="activity-empty" class="empty-state">Run interactions and capture events appear here.</p>
-          <ol id="activity" class="activity-list" role="list" aria-label="Events in time order"></ol>
+          <ol id="activity" class="activity-list" role="list" aria-label="Events, newest to oldest"></ol>
         </div>
       </aside>
     </div>

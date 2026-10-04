@@ -67,7 +67,7 @@ class Console:
         self.devices = []
         self.selected_device = None
         self.connection = "disconnected"
-        self.message = "Start an emulator, then select Refresh devices."
+        self.message = "Connect a phone or start an emulator, then select Refresh devices."
         self.state = {}
         self.run = None
         self.ocr = []
@@ -78,6 +78,7 @@ class Console:
         self.bridge = None
         self.forward_port = None
         self.connector = None
+        self.connector_stop = threading.Event()
         self.closed = threading.Event()
         self.recording_error = None
         self.load_latest()
@@ -165,9 +166,9 @@ class Console:
             result = subprocess.run(command, capture_output=True, text=True, timeout=15,
                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except (OSError, subprocess.TimeoutExpired) as error:
-            raise RuntimeError("ADB did not respond. Check the emulator connection.") from error
+            raise RuntimeError("ADB did not respond. Check the device connection.") from error
         if result.returncode and not allow_nonzero:
-            raise RuntimeError("ADB could not complete the request. Check the emulator and its debugging permission.")
+            raise RuntimeError("ADB could not complete the request. Check the device and its debugging permission.")
         return result.stdout.strip()
 
     def refresh_devices(self, auto_connect=False):
@@ -181,7 +182,7 @@ class Console:
             with self.lock:
                 self.devices = devices
                 if self.connection != "connected":
-                    self.message = "Select a ready device and choose Connect." if devices else "No device found. Start an emulator, then select Refresh devices."
+                    self.message = "Select a ready device and choose Connect." if devices else "No device found. Connect a phone or start an emulator, then select Refresh devices."
                 self.publish()
             ready = [device for device in devices if device["status"] == "device"]
             if auto_connect and len(devices) == 1 and len(ready) == 1:
@@ -195,48 +196,87 @@ class Console:
         with self.lock:
             if self.run and self.run["status"] in ACTIVE:
                 raise ValueError("Stop the current run before changing devices.")
-            if self.connector and self.connector.is_alive():
+            if self.closed.is_set():
+                raise ValueError("The dashboard is closing.")
+            if self.connection in {"connecting", "switching"}:
                 raise ValueError("A connection attempt is already in progress.")
             if not any(device["serial"] == serial and device["status"] == "device" for device in self.devices):
-                raise ValueError("Choose an available device. Refresh the list if the emulator just started.")
+                raise ValueError("Choose an available device. Refresh the device list if needed.")
+            if self.connection == "connected" and self.selected_device == serial:
+                return
+            if self.connection == "connected" and self.state.get("runId"):
+                raise ValueError("Wait for the current device to confirm Stop before changing devices.")
+            previous_connector = self.connector
+            self.connector_stop.set()
+            self.connection = "switching"
+            self.message = "Closing the previous device connection…"
             if self.bridge:
-                raise ValueError("The dashboard is already connected. Disconnect the emulator before changing devices.")
+                try:
+                    self.bridge.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
+                    self.bridge.close()
+                except OSError:
+                    pass
+                self.bridge = None
+            self.state = {}
+            self.publish()
+        # Let the old worker remove its forward before another worker can start.
+        if previous_connector:
+            previous_connector.join(timeout=35)
+        with self.lock:
+            if previous_connector and previous_connector.is_alive():
+                self.connection = "disconnected"
+                self.message = "The previous connection is still closing. Choose Connect again shortly."
+                self.publish()
+                raise ValueError(self.message)
+            if self.closed.is_set():
+                return
             self.selected_device = serial
             self.recording_error = None
             self.connection = "connecting"
             self.message = "Connecting to Antiscam Dev…"
-            self.state = {}
             self.publish()
-            self.connector = threading.Thread(target=self.bridge_loop, args=(serial,), daemon=True)
+            self.connector_stop = threading.Event()
+            self.connector = threading.Thread(target=self.bridge_loop, args=(serial, self.connector_stop), daemon=True)
             self.connector.start()
 
-    def bridge_loop(self, serial):
+    def bridge_loop(self, serial, stopped):
         # Retry only a failed connection. No device or application state polling.
         started_app = False
         failures = 0
-        while not self.closed.is_set() and failures < 8:
+        while not self.closed.is_set() and not stopped.is_set() and failures < 8:
             sock = None
             port = None
             try:
                 if not started_app:
                     # Avoid moving the app to the front when its process is already alive.
                     process = self.adb_call("shell", "pidof", "com.antiscam.app", serial=serial, allow_nonzero=True)
+                    if stopped.is_set() or self.closed.is_set():
+                        return
                     if not process:
                         self.adb_call("shell", "am", "start", "-n", "com.antiscam.app/.MainActivity", serial=serial)
                     started_app = True
+                if stopped.is_set() or self.closed.is_set():
+                    return
                 port = int(self.adb_call("forward", "tcp:0", "localabstract:antiscam_run", serial=serial))
+                if stopped.is_set() or self.closed.is_set():
+                    return
                 sock = socket.create_connection(("127.0.0.1", port), timeout=5)
                 sock.settimeout(None)
                 connected_at = time.monotonic()
                 with self.lock:
+                    if stopped.is_set() or self.closed.is_set():
+                        return
                     self.bridge = sock
                     self.forward_port = port
                     self.connection = "connecting"
                     self.message = "Waiting for the Antiscam state…"
                     self.publish()
-                self.send_command({"command": "snapshot"})
+                    self.send_command({"command": "snapshot"})
                 with sock.makefile("rb") as stream:
-                    while not self.closed.is_set():
+                    while not self.closed.is_set() and not stopped.is_set():
                         line = stream.readline(16 * 1024 * 1024 + 1)
                         if not line:
                             raise ConnectionError("The device stream closed.")
@@ -247,14 +287,17 @@ class Console:
                             raise ValueError("The installed app uses an unsupported run protocol.")
                         if time.monotonic() - connected_at >= 15:
                             failures = 0
-                        try:
-                            self.receive(event)
-                        except OSError:
-                            self.recording_failed()
-                            return
+                        with self.lock:
+                            if stopped.is_set() or self.closed.is_set():
+                                return
+                            try:
+                                self.receive(event)
+                            except OSError:
+                                self.recording_failed()
+                                return
             except (OSError, RuntimeError, ValueError) as error:
                 with self.lock:
-                    if self.recording_error:
+                    if stopped.is_set() or self.closed.is_set() or self.recording_error:
                         return
                     self.bridge = None
                     self.connection = "disconnected"
@@ -280,15 +323,17 @@ class Console:
                 with self.lock:
                     self.forward_port = None
             failures += 1
-            if self.closed.wait(min(0.5 * (2 ** (failures - 1)), 5)):
+            if stopped.wait(min(0.5 * (2 ** (failures - 1)), 5)):
                 return
         with self.lock:
+            if stopped.is_set() or self.closed.is_set():
+                return
             self.connection = "disconnected"
             self.message = "Connection stopped after repeated failures. Check Antiscam Dev, then choose Connect."
             self.publish()
 
     def send_command(self, value):
-        with self.send_lock:
+        with self.lock, self.send_lock:
             if not self.bridge:
                 raise ValueError("The device is not connected.")
             try:
@@ -515,6 +560,7 @@ class Console:
 
     def close(self):
         self.closed.set()
+        self.connector_stop.set()
         with self.lock:
             if self.run and self.run["status"] in ACTIVE:
                 try:
@@ -689,13 +735,14 @@ def main():
     parser = argparse.ArgumentParser(description="Antiscam local run console")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--serial")
+    parser.add_argument("--runs-directory", type=Path, default=ROOT / "runs", help="Directory for saved run records.")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--open-only", action="store_true", help="Open an existing dashboard in its own browser window.")
     args = parser.parse_args()
     if args.open_only:
         open_browser(f"http://127.0.0.1:{args.port}/")
         return
-    console = Console(ROOT / "runs")
+    console = Console(args.runs_directory)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     server.daemon_threads = True
     server.console = console
