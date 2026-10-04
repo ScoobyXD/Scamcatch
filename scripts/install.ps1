@@ -1,7 +1,14 @@
 param([string]$Serial)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$sdkDirectory = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "$env:LOCALAPPDATA\Android\Sdk" }
+$userSdkDirectory = Join-Path $env:USERPROFILE 'Android\Sdk'
+$sdkDirectory = if ($env:ANDROID_HOME) {
+    $env:ANDROID_HOME
+} elseif (Test-Path -LiteralPath $userSdkDirectory -PathType Container) {
+    $userSdkDirectory
+} else {
+    "$env:LOCALAPPDATA\Android\Sdk"
+}
 $adbPath = Join-Path $sdkDirectory 'platform-tools\adb.exe'
 if (-not (Test-Path -LiteralPath $adbPath)) { throw 'Install Android SDK Platform Tools.' }
 $deviceArguments = if ($Serial) { @('-s', $Serial) } else { @() }

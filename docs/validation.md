@@ -57,8 +57,11 @@ ADB installed and exercised the two debug apps. The emulator's accessibility ser
 
 Android Studio 2026.2.1.8 is installed at `%LOCALAPPDATA%\Programs\Android Studio`. Its executable has a valid Google signature.
 
-The SDK is at `%LOCALAPPDATA%\Android\Sdk`. The emulator, Platform 36, Build Tools 35.0.0, Platform Tools, and command-line tools are installed.
+The SDK is at `%USERPROFILE%\Android\Sdk` (`C:\Users\Jonat\Android\Sdk` on this computer). The emulator, Platform 36, Build Tools 35.0.0, Platform Tools, and command-line tools are installed.
 
 Studio's bundled Java 25 runs the IDE. The project uses the separate Java 21 installation for Gradle. The local `.gradle/config.properties` points to that runtime and is not committed.
 
-At this report's creation, Studio's first-run SDK path dialog still needed the SDK directory. The command-line build and emulator tests already passed. IDE sync was not yet verified.
+Windows MSIX redirected the original AppData SDK path into Codex's private cache. File-handle checks confirmed the physical cache path. Studio could not see that SDK through the original path.
+
+The SDK now uses the directory outside AppData listed above. Java 21 remains at `%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-21`, which resolves to its normal physical location.
+After relocation, the build, unit-test task, and lint tasks passed. Unchanged test results were reused by Gradle. Studio accepted the new SDK path and enabled OK. IDE sync still needs that dialog completed. The earlier OCR results precede the relocation.

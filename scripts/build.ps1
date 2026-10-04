@@ -23,7 +23,14 @@ $javaMajorVersion = [int]$Matches['major']
 if ($javaMajorVersion -lt 17 -or $javaMajorVersion -gt 23) {
     throw "Java $javaMajorVersion is unsupported by this build. AGP 8.13.2 and Gradle 8.13 require JDK 17 through 23. Set JAVA_HOME to JDK 21."
 }
-if (-not $env:ANDROID_HOME) { $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk" }
+if (-not $env:ANDROID_HOME) {
+    $userSdkDirectory = Join-Path $env:USERPROFILE 'Android\Sdk'
+    $env:ANDROID_HOME = if (Test-Path -LiteralPath $userSdkDirectory -PathType Container) {
+        $userSdkDirectory
+    } else {
+        "$env:LOCALAPPDATA\Android\Sdk"
+    }
+}
 if (-not (Test-Path -LiteralPath $env:ANDROID_HOME)) { throw 'Install the Android SDK or set ANDROID_HOME.' }
 Push-Location $projectRoot
 try {

@@ -20,9 +20,12 @@ Open this folder in Android Studio. In **Settings > Build, Execution, Deployment
 
 On this computer, JDK 21 is installed at `%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-21`.
 Studio's bundled Java 25 can run the IDE, but Gradle 8.13 cannot use it to run builds.
+The Android SDK is at `C:\Users\Jonat\Android\Sdk` (`%USERPROFILE%\Android\Sdk`). Select that directory when Studio asks for the Android SDK.
 
 From PowerShell, the helper uses `JAVA_HOME` when it points to Java. Otherwise, it checks the JDK 21 path before the standard Studio runtime paths.
-It rejects unsupported Java versions before starting Gradle. When `ANDROID_HOME` is unset, it uses `%LOCALAPPDATA%\Android\Sdk`:
+It rejects unsupported Java versions before starting Gradle.
+Both helpers use an explicit `ANDROID_HOME`. When it is unset, they prefer `%USERPROFILE%\Android\Sdk` if that directory exists.
+Otherwise, they use `%LOCALAPPDATA%\Android\Sdk`:
 
 ```powershell
 .\scripts\build.ps1
