@@ -1,0 +1,8 @@
+<resources>
+    <string name="capture_service_description">Development prototype. After you consent and enable capture, typing in your selected app triggers a screenshot and local text recognition. View the extracted text in Antiscam Dev. Images and text stay on this device. This version does not detect scams.</string>
+    <style name="Theme.Antiscam" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">#155E75</item>
+    </style>
+</resources>
