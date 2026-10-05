@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 import webbrowser
 import zipfile
 
+import credential_store
+
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -84,6 +86,7 @@ class Console:
         self.connector_stop = threading.Event()
         self.closed = threading.Event()
         self.recording_error = None
+        self.key_storage = {"available": credential_store.AVAILABLE, "saved": {}, "error": None}
         self.load_latest()
 
     def load_latest(self):
@@ -144,6 +147,7 @@ class Console:
                 "devices": self.devices, "selectedDevice": self.selected_device,
                 "state": self.state, "run": self.run, "ocr": self.ocr,
                 "activity": self.activity,
+                "keyStorage": self.key_storage,
             }
 
     def publish(self, kind="status", data=None):
@@ -151,7 +155,7 @@ class Console:
             if data is None:
                 data = {"connection": self.connection, "message": self.message,
                         "devices": self.devices, "selectedDevice": self.selected_device,
-                        "state": self.state, "run": self.run}
+                        "state": self.state, "run": self.run, "keyStorage": self.key_storage}
             # Freeze each update before the mutable run receives another event.
             message = encode({"kind": kind, "data": data})
             for subscriber in tuple(self.subscribers):
@@ -245,6 +249,7 @@ class Console:
             if self.closed.is_set():
                 return
             self.selected_device = serial
+            self.refresh_saved_keys()
             self.recording_error = None
             self.connection = "connecting"
             self.message = "Connecting to Antiscam Dev…"
@@ -352,15 +357,84 @@ class Console:
             except OSError as error:
                 raise ValueError("The device connection closed. The run remains incomplete until its status is confirmed.") from error
 
+    def refresh_saved_keys(self):
+        self.key_storage["saved"] = {}
+        self.key_storage["error"] = None
+        if not credential_store.AVAILABLE or not self.selected_device:
+            return
+        try:
+            for command in KEY_COMMANDS.values():
+                provider = command.removesuffix("_key")
+                self.key_storage["saved"][provider] = credential_store.saved(self.selected_device, provider)
+        except credential_store.CredentialStoreError:
+            self.key_storage["error"] = "Windows could not check saved keys."
+
+    def restore_saved_keys(self):
+        # Called once per bridge connection. Never repeatedly retry a key rejected by the phone.
+        self.refresh_saved_keys()
+        for command in KEY_COMMANDS.values():
+            provider = command.removesuffix("_key")
+            ready = "jevReady" if provider == "jev" else "voiceReady"
+            if self.state.get(ready) or not self.key_storage["saved"].get(provider):
+                continue
+            api_key = None
+            try:
+                api_key = credential_store.read(self.selected_device, provider)
+                if api_key is not None:
+                    self.send_command({"command": command, "apiKey": api_key})
+            except (credential_store.CredentialStoreError, ValueError):
+                self.key_storage["error"] = "A saved key could not be restored. Open its key dialog to try again."
+            finally:
+                del api_key
+
+    def set_key(self, command, body):
+        # Hold the device selection stable through storage and delivery.
+        with self.lock:
+            if self.connection != "connected" or not self.bridge:
+                raise ValueError("Connect the selected phone before changing a key.")
+            if body.get("serial") != self.selected_device:
+                raise ValueError("The selected phone changed. Reopen the key dialog and try again.")
+            provider = command.removesuffix("_key")
+            use_saved = body.get("useSaved", False)
+            remember = body.get("remember", False)
+            if not isinstance(use_saved, bool) or not isinstance(remember, bool):
+                raise ValueError("Choose whether to remember this key on this PC.")
+            api_key = body.pop("apiKey", None)
+            try:
+                if use_saved:
+                    if api_key is not None:
+                        raise ValueError("Send a new key or use the saved key, not both.")
+                    api_key = credential_store.read(self.selected_device, provider)
+                    if api_key is None:
+                        raise ValueError("No key is saved for this phone. Enter a key first.")
+                else:
+                    if not isinstance(api_key, str) or (api_key and not re.fullmatch(r"[\x21-\x7e]{1,2048}", api_key)):
+                        raise ValueError("Use an API key of at most 2048 ASCII characters without spaces, or leave it empty to clear.")
+                    if api_key and remember:
+                        credential_store.save(self.selected_device, provider, api_key)
+                    elif credential_store.AVAILABLE:
+                        # A memory-only replacement must not restore an older saved key later.
+                        credential_store.delete(self.selected_device, provider)
+                self.send_command({"command": command, "apiKey": api_key})
+            except credential_store.CredentialStoreError as error:
+                raise ValueError(str(error)) from None
+            finally:
+                del api_key
+                self.refresh_saved_keys()
+                self.publish()
+
     def receive(self, event):
         with self.lock:
             if self.recording_error:
                 return
             state = event.get("state")
             if isinstance(state, dict):
+                reconnected = self.connection != "connected"
                 self.state = state
                 self.connection = "connected"
                 self.message = "Device connected. Start a run when the setup checks are complete."
+                if reconnected:
+                    self.restore_saved_keys()
             kind = event.get("type", "event")
             data = event.get("data") or {}
             if not isinstance(data, dict):
@@ -778,14 +852,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/connect":
                 self.console.connect_device(body.get("serial"))
             elif path in KEY_COMMANDS:
-                api_key = body.pop("apiKey", None)
-                if not isinstance(api_key, str) or (api_key and not re.fullmatch(r"[\x21-\x7e]{1,2048}", api_key)):
-                    raise ValueError("Use an API key of at most 2048 ASCII characters without spaces, or leave it empty to clear.")
-                # Deliver once. Never retain the key in recorder state or events.
-                try:
-                    self.console.send_command({"command": KEY_COMMANDS[path], "apiKey": api_key})
-                finally:
-                    del api_key
+                self.console.set_key(KEY_COMMANDS[path], body)
             elif path == "/api/command":
                 command = body.get("command")
                 if command == "start":

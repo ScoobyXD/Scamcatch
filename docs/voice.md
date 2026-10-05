@@ -5,7 +5,7 @@
 1. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) is the single source for all Jev questions and voice prompts.
 2. It contains the voice system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary. It also defines model settings and the Jev threshold.
 3. The debug build compiles this Kotlin file directly. It uses no runtime parser or generated instruction copy.
-4. Stop the run after edits. Build, install, and restart Antiscam. Reconnect the dashboard and enter the API keys again. Edits do not reload live.
+4. Stop the run after edits. Build, install, and restart Antiscam. Reconnect the dashboard. Windows restores saved keys for that phone. Enter unsaved keys again. Edits do not reload live.
 5. Ask the user to audit any new Jev question before adding it.
 
 ## Behavior and connection rules
@@ -17,7 +17,7 @@
 5. Animate the entrance with a 420-millisecond fade and scale. Vibrate twice with 65-millisecond pulses and a 120-millisecond gap.
 6. Show an AI face with blinking eyes. Animate its mouth from remote WebRTC audio levels, sampled every 100 milliseconds.
 7. Require capture/cloud consent, separate automatic voice consent, microphone permission, and an OpenAI key before starting voice.
-8. Enter the OpenAI key in the desktop console. Forward it through the existing local server and ADB bridge to phone memory.
+8. Enter the OpenAI key in the desktop console. Forward it through the local server and ADB bridge to phone memory. Windows can save it in Credential Manager.
 9. Key readiness confirms that a key is loaded. It does not confirm authentication, billing, or model access.
 10. Start voice automatically when the warning opens and setup is complete. Permit one connection attempt per warning.
 11. The assistant speaks first. It explains the supplied evidence, preserves uncertainty, and asks the user to pause before sending money or sensitive information.
@@ -36,10 +36,11 @@
 24. Missing setup and voice failures keep the warning open and capture paused. Keep a failure visible until the warning closes.
 25. Stop, capture consent withdrawal, or service disconnection closes the warning. Capture can resume only when its normal prerequisites hold.
 26. Start a five-second warning cooldown after dismissal finishes. Resume capture immediately when allowed. Suppress new warnings during the cooldown without queuing them.
-27. Send flagged text, detection context, and microphone audio directly to OpenAI. Do not save API keys, voice audio, or transcripts locally.
+27. Send flagged text, detection context, and microphone audio directly to OpenAI. Do not save voice audio or transcripts. Save keys only under the [saved-key rules](../README.md#saved-key-rules).
 28. Record startup timings, safe error identifiers, and numeric WebRTC audio metrics. Never record raw provider messages, SDP, network addresses, or complete WebRTC stats.
 29. Retain `voice_audio_summary` for the original run when cleanup finishes after Stop. Remote audio energy does not prove that the user heard sound.
 30. Keep direct OpenAI voice limited to the development build. The release `LiveVoice` implementation remains unavailable.
 31. Active voice costs $0.05 per minute, billed per second. WebRTC initialization bills 15 seconds, credited against the session duration. See [OpenAI's WebRTC guide](https://developers.openai.com/api/docs/guides/voice-webrtc#understand-the-connection-sequence).
 32. Builds and lint do not verify live voice. Check speech, interruption, closing, backgrounding, and capture resumption on the phone.
 33. Update this document when voice behavior changes. Keep each rule consistent with `LiveVoice`, `ScamIntervention`, and `ScamWarningActivity`.
+34. Windows restores a saved OpenAI key after reconnect or reinstall only when the selected phone reports that its OpenAI key is missing.

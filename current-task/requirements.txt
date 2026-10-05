@@ -36,7 +36,7 @@ User-approved scope: 4 October 2026
 33. Pin jev-1.13.0 and question-set version financial-topics-v3 in app/ai-instructions/AIInstructions.kt.
 34. Set Probably scam only after a completed response has at least one probability greater than or equal to 0.7.
 35. A flag is an experiment result, not proof of fraud. Values below 0.7 do not prove safety.
-36. Enter the TypeSafe key in the desktop Jev key dialog. Forward it once through the local server and ADB bridge to phone memory. Never save it in preferences, source, APK resources, browser storage, run files, or diagnostics.
+36. Enter the TypeSafe key in the desktop Jev key dialog. Forward it through the local server and ADB bridge to phone memory. Windows can save a copy under rules 75–81. Never save it in preferences, source, APK resources, browser storage, run files, or diagnostics.
 37. Require new consent that explains cloud text transfer. Keep the Jev integration limited to the development build.
 38. Associate Jev events with the matching run and capture. Preserve pending, completed, failed, skipped, and canceled states. Do not replace failures with zero probabilities.
 39. Save exact question definitions, probabilities, model, question-set version, threshold, duration, and reasons when available. Include them in snapshots, capture JSON, and ZIP exports.
@@ -59,7 +59,7 @@ User-approved scope: 4 October 2026
 56. Home or backgrounding stops voice. Keep the warning and capture pause until dismissal. Returning must not start a second voice session.
 57. Missing keys, consent, or microphone permission and all voice errors keep the warning open. Capture remains paused until dismissal.
 58. Stop, capture consent withdrawal, and service disconnection close the warning. Capture can resume only when its normal prerequisites hold.
-59. Forward the OpenAI key once through the same local server and ADB path as the Jev key. Keep both keys only in memory.
+59. Forward the OpenAI key through the same local server and ADB path as the Jev key. Keep both keys only in phone process memory. Windows can save credentials under rules 75–81.
 60. Never save API keys, voice audio, or voice transcripts in app storage, browser storage, run files, exports, or diagnostics.
 61. Expose voiceReady as key-loaded state, voiceConsentGranted as consent state, voiceStatus as session state, and warningActive as capture pause state.
 62. Keep live voice limited to the development build. The release LiveVoice implementation remains unavailable.
@@ -74,4 +74,11 @@ User-approved scope: 4 October 2026
 71. Use app/ai-instructions/AIInstructions.kt as the single source for Jev questions and settings, voice model/name, system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary.
 72. Keep the instruction folder directly inside app/. Compile its Kotlin file directly into the debug app. Do not add a runtime parser or duplicate instruction files.
 73. Preserve all existing question and prompt wording during the source move. Do not add Jev questions without the user's audit.
-74. After instruction edits, stop the run, build, install, and restart Antiscam. Reconnect the dashboard and enter the API keys again. Do not claim live reload.
+74. After instruction edits, stop the run, build, install, and restart Antiscam. Reconnect the dashboard. Windows restores saved keys for that phone. Enter unsaved keys again. Do not claim live reload.
+75. On Windows, select Remember on this PC by default in the shared masked key dialog. Save submitted keys only in Windows Credential Manager.
+76. Store Jev and OpenAI credentials separately for each phone serial and Windows user. Use CRED_PERSIST_LOCAL_MACHINE for persistence on this PC.
+77. After reconnect or reinstall, restore saved keys only for the selected phone and only when Android reports that the provider key is missing.
+78. Use saved key manually loads the provider's saved key into the selected phone. Forget saved key deletes that credential and clears the phone key.
+79. Sending a key with Remember on this PC cleared deletes the previous saved copy. Load the new key into phone process memory only.
+80. Return saved-key availability without key values. Never return saved secrets to the browser, snapshots, events, logs, or exports. Keep server key values only briefly during delivery.
+81. Other operating systems retain manual entry and memory-only delivery. Keep this developer BYOK flow outside cloud vaults and public-release credential distribution.

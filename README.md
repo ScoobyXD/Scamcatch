@@ -8,7 +8,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 
 1. Edit [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt). It is the single source for all Jev questions and voice prompts.
 2. The file also defines both models, the Jev question-set version and threshold, and the voice name. The debug build compiles it directly.
-3. After an edit, stop the run, build, install, and restart Antiscam. Reconnect the dashboard and enter the API keys again. Edits do not reload live.
+3. After an edit, stop the run, build, install, and restart Antiscam. Reconnect the dashboard. Saved keys restore automatically on Windows. Enter unsaved keys again. Edits do not reload live.
 4. Ask the user to audit any new Jev question before adding it.
 
 ## Start
@@ -20,8 +20,8 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
 7. Select the device and choose **Connect** or **Switch device**.
-8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key and send it to the phone.
-9. Select **OpenAI key** and send the OpenAI API key. Key indicators confirm loading only. They do not confirm valid credentials or permissions.
+8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key and send it to the phone. Windows selects **Remember on this PC** by default.
+9. Select **OpenAI key** and send the OpenAI API key. Saved keys restore on reconnect. Key indicators confirm loading only, not valid credentials or permissions.
 10. In Android setup, allow automatic voice warnings and microphone access. Then select **Start run** in the dashboard.
 11. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
 12. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
@@ -102,13 +102,25 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 12. A completed flagged check from the active run opens the centered scam warning. Old Jev results cannot reopen a dismissed warning.
 13. If Android blocks the warning launch, a notification can reopen it. Android 13 and later require notification permission for this fallback.
 14. Stopping a run clears the phone warning. Checks continue, and late results remain attached to the stopped run.
-15. The local dashboard forwards the key once through the ADB debug bridge to phone memory. It does not save or echo the key.
+15. The local dashboard forwards the key through the ADB debug bridge to phone memory. Windows can retain a copy under the saved-key rules below.
 16. The phone's Jev readiness state confirms a loaded key. It does not validate credentials.
 17. Clearing the key prevents new Jev submissions. Already submitted requests continue with their original key. Ending the phone process ends in-memory work.
 
 ## Voice warning rules
 
 Voice setup, warning behavior, WebRTC connections, shutdown, and data handling are documented in [docs/voice.md](docs/voice.md).
+
+## Saved-key rules
+
+1. On Windows, **Remember on this PC** saves the submitted key in Windows Credential Manager. The checkbox starts selected.
+2. Save Jev and OpenAI credentials separately for each phone serial and Windows user. Use `CRED_PERSIST_LOCAL_MACHINE` to retain them on this PC.
+3. Reconnects and reinstalls restore saved keys for the selected phone only when Android reports that the provider key is missing.
+4. **Use saved key** manually loads that provider's saved key into the selected phone.
+5. **Forget saved key** deletes that provider's saved credential and clears its key from the selected phone.
+6. Sending a key with **Remember on this PC** cleared deletes any previous saved copy. The phone keeps the new key only in process memory.
+7. Saved keys remain outside this repository, browser storage, phone storage, logs, and exports. The desktop server holds keys briefly in memory during delivery.
+8. The browser receives saved-key availability only. It never receives a saved key value through responses, snapshots, or events.
+9. Other operating systems retain manual key entry and memory-only delivery. No cloud vault or credentials bundled in APKs are part of this development feature.
 
 ## Data boundary
 
@@ -123,7 +135,7 @@ Voice setup, warning behavior, WebRTC connections, shutdown, and data handling a
 9. The desktop server binds only to this computer. Browser updates use a pushed event stream.
 10. Android does not expose every physical touch as an accessibility event. Unknown states must remain explicit.
 11. `isAccessibilityTool` remains false. This is not a Google Play approval claim.
-12. After delivery, API keys remain only in phone process memory. Browser and server memory hold them briefly during delivery.
+12. The phone keeps API keys only in process memory. Browser and server memory hold submitted keys briefly during delivery. Windows can retain saved credentials.
 13. Do not store API keys in preferences, source files, APK resources, run files, browser storage, or diagnostics.
 14. Enter API keys in the dashboard beside the chat. Do not send them in chat messages or scripts.
 15. The phone uses each key only with its provider. The recorder never includes keys in events or exports.
