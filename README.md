@@ -54,7 +54,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 4. Taps, long presses, scrolling, focus, selection, and screen changes request capture after 600 milliseconds of settling, with a three-second maximum wait.
 5. Repeated events reset timers instead of producing a screenshot for every character or scroll event.
 6. Direct-action capture attempts stay at least 1.5 seconds apart. Passive content changes use a five-second minimum interval. Only one screenshot/OCR operation runs at a time.
-7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel pending work. A settled new foreground window requests a capture during a run.
+7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel only screenshots that have not started. Captured work continues through OCR and Jev.
 8. Keyboard windows are masked before OCR. Other regions remain unmasked, including password fields, sensitive regions, overlays, and the lock screen. Android capture restrictions still apply.
 9. When stopped, interactions update live status without creating capture requests or skipped-capture noise.
 10. Overlapping windows do not automatically cancel capture. The app no longer traverses nodes to inspect sensitive content.
@@ -72,7 +72,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 6. Events save as they arrive. A lost connection produces an interrupted record.
 7. Starting another run resets the dashboard's history. Earlier folders remain available under `runs`.
 8. Jev records retain the exact questions, answers, model, question-set version, and threshold supplied by Android.
-9. Stop or interruption marks unresolved analysis canceled. Completed, failed, and skipped results remain unchanged.
+9. Stop does not cancel analysis. Late OCR and Jev results save to their original run while the recording connection remains available.
 10. Older runs without Jev records remain readable and exportable.
 
 ## Jev experiment rules
@@ -82,18 +82,18 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 3. The experiment pins `jev-1.13.0` and identifies the question set as `financial-topics-v2`.
 4. A completed response triggers **Probably scam** when any answer is at least `0.7`.
 5. This flag is an experiment result, not proof of fraud. Answers below the threshold do not prove safety.
-6. Missing keys, empty text, failed requests, and canceled work remain explicit. They never become successful checks with zero probabilities.
-7. Results must match the run and capture that produced their OCR text. Stale results must not warn for a different capture.
+6. Missing keys, empty text, and failed requests remain explicit. They never become successful checks with zero probabilities.
+7. Analyze each captured text even after typing, scrolling, screen updates, app changes, or newer captures. Save results with their original run and capture.
 8. Each dashboard column has one scrollbar. New records preserve that column's reading position.
 9. Enter the key in the desktop **Jev key** dialog. Its masked input clears after submission or dismissal.
 10. This development path needs no AWS service, OVH server, or managed database.
 11. Any new Jev question requires the user's audit before implementation.
-12. A flag for the current capture shows a silent **Probably scam** notification. It contains no OCR text.
+12. A completed flagged check from the active run shows a silent **Probably scam** notification with its original capture number. It contains no OCR text.
 13. Android 13 and later need notification permission. Enable it from Android setup if phone warnings are wanted.
-14. Stopping or invalidating analysis clears the phone warning. Dashboard results remain available in the saved run.
+14. Stopping a run clears the phone warning. Checks continue, and late results remain attached to the stopped run.
 15. The local dashboard forwards the key once through the ADB debug bridge to phone memory. It does not save or echo the key.
 16. Successful delivery is not confirmation that Jev is ready. The phone's readiness state confirms key setup.
-17. Clearing the key sends an empty value. Ending the phone's app process also clears the retained key.
+17. Clearing the key prevents new Jev submissions. Already submitted requests continue with their original key. Ending the phone process ends in-memory work.
 
 ## Data boundary
 

@@ -48,7 +48,6 @@ object CaptureStore {
     }
 
     fun setConsent(granted: Boolean) {
-        if (!granted) JevAnalysis.cancel("Capture consent was withdrawn.")
         mutableState.update {
             it.copy(
                 consentGranted = granted,
@@ -65,7 +64,6 @@ object CaptureStore {
     }
 
     fun setEnabled(enabled: Boolean) {
-        if (!enabled) JevAnalysis.cancel("Monitoring was paused.")
         mutableState.update {
             val active = enabled && it.consentGranted
             it.copy(
@@ -85,7 +83,6 @@ object CaptureStore {
     }
 
     fun clearResult() {
-        JevAnalysis.cancel("The capture result was cleared.")
         mutableState.update {
             it.copy(
                 latestText = "",
@@ -93,6 +90,9 @@ object CaptureStore {
                 captureCount = 0,
                 lastError = null,
                 status = "Local result cleared. Saved desktop run records are unchanged.",
+                jevStatus = "idle",
+                jevCaptureId = null,
+                jevFlagged = null,
                 revision = it.revision + 1,
             )
         }
@@ -126,6 +126,9 @@ object CaptureStore {
         mutableState.update {
             if (it.runId == runId) it else it.copy(
                 runId = runId,
+                jevStatus = "idle",
+                jevCaptureId = null,
+                jevFlagged = null,
                 latestText = if (runId != null) "" else it.latestText,
                 lastCapturedAtMillis = if (runId != null) null else it.lastCapturedAtMillis,
                 captureCount = if (runId != null) 0 else it.captureCount,

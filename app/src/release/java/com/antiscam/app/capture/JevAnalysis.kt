@@ -10,8 +10,5 @@ object JevAnalysis {
     fun clearKey() = Unit
 
     @Suppress("UNUSED_PARAMETER")
-    fun evaluate(text: String, captureId: Int, runId: String, isCurrent: () -> Boolean) = Unit
-
-    @Suppress("UNUSED_PARAMETER")
-    fun cancel(reason: String) = Unit
+    fun evaluate(text: String, captureId: Int, runId: String) = Unit
 }

@@ -165,7 +165,6 @@ class TypingCaptureService : AccessibilityService() {
         // A typing burst owns its trailing capture, including suggestion and selection updates.
         if (typing && kind != "typing") return
         val request = requestFor(event, kind)
-        if (request != null) JevAnalysis.cancel("A newer interaction replaced this analysis.")
         if (kind == "typing") {
             typingTimer = Runnable {
                 typingTimer = null
@@ -393,7 +392,6 @@ class TypingCaptureService : AccessibilityService() {
     }
 
     private fun invalidate(reason: String) {
-        JevAnalysis.cancel(reason)
         generation++
         cancelPending(reason)
         val hadTimer = typingTimer != null || settleTimer != null
@@ -428,7 +426,6 @@ class TypingCaptureService : AccessibilityService() {
             return
         }
         passiveCaptureBlocked = false
-        JevAnalysis.cancel("A newer capture replaced this analysis.")
         inFlight = true
         lastAttemptAt = SystemClock.elapsedRealtime()
         val captureId = RunMonitor.nextCaptureId()
@@ -442,19 +439,8 @@ class TypingCaptureService : AccessibilityService() {
                 var softwareBitmap: Bitmap? = null
                 try {
                     RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
-                    if (!isCurrent(request)) {
-                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "The run, app, or window changed before screenshot processing."))
-                        finishCapture()
-                        return
-                    }
                     val currentPlan = displayPlan(request)
-                    if (currentPlan?.maskedRegions != plan.maskedRegions) {
-                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "The keyboard region changed before screenshot processing."))
-                        finishCapture()
-                        return
-                    }
+                    val masks = (plan.maskedRegions + currentPlan?.maskedRegions.orEmpty()).distinct()
                     hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                     softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, true)
                     val bitmap = softwareBitmap ?: error("Screenshot conversion failed")
@@ -463,9 +449,11 @@ class TypingCaptureService : AccessibilityService() {
                         bitmap.width == plan.bounds.width() && bitmap.height == plan.bounds.height())
                     val canvas = Canvas(bitmap)
                     val paint = Paint().apply { color = Color.BLACK }
-                    plan.maskedRegions.forEach { canvas.drawRect(it.bounds, paint) }
+                    masks.forEach { canvas.drawRect(it.bounds, paint) }
                     // Other metadata changes affect attribution only.
-                    val sourcePlan = if (currentPlan == plan) plan else plan.copy(windows = emptyList())
+                    val sourcePlan = if (currentPlan == plan) plan else plan.copy(
+                        windows = emptyList(), maskedRegions = masks,
+                    )
                     softwareBitmap = null // OCR owns the bitmap until its task completes.
                     recognize(request, captureId, bitmap, System.currentTimeMillis(), sourcePlan)
                 } catch (_: Exception) {
@@ -498,40 +486,37 @@ class TypingCaptureService : AccessibilityService() {
 
     private fun recognize(request: Request, captureId: Int, bitmap: Bitmap, capturedAt: Long, plan: DisplayPlan) {
         val startedAt = SystemClock.elapsedRealtime()
-        CaptureStore.report("Reading text from screenshot #$captureId on this device.")
+        if (CaptureStore.state.value.runId == request.runId) {
+            CaptureStore.report("Reading text from screenshot #$captureId on this device.")
+        }
         RunMonitor.emit("ocr_started", request.details("captureId" to captureId,
             "maskedRegions" to plan.maskedRegions.map { it.details() }))
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    val currentPlan = displayPlan(request)
-                    if (isCurrent(request) && currentPlan?.maskedRegions == plan.maskedRegions) {
-                        val sourcePlan = if (currentPlan == plan) plan else plan.copy(windows = emptyList())
-                        val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
-                            textRegion(line.text, line.boundingBox, sourcePlan)
-                        } }
-                        val uncertain = regions.isEmpty() || regions.any { it["sourceAttribution"] == "uncertain" }
-                        val distinctWindows = regions.mapNotNull { it["windowId"] as? Int }.distinct()
-                        val attribution = when {
-                            uncertain -> "uncertain"
-                            distinctWindows.size == 1 -> "single_window"
-                            else -> "mixed"
-                        }
-                        val sourceLabel = when (attribution) {
-                            "single_window" -> "${regions.first()["appLabel"] ?: "Unknown"} (window estimate)"
-                            "mixed" -> "Visible screen: multiple windows (window estimates)"
-                            else -> "Visible screen: source uncertain"
-                        }
-                        CaptureStore.result(text.text, capturedAt)
-                        RunMonitor.emit("ocr_completed", request.details("captureId" to captureId,
-                            "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt,
-                            "sourceAttribution" to attribution, "sourceLabel" to sourceLabel,
-                            "textRegions" to regions, "maskedRegions" to plan.maskedRegions.map { it.details() }))
-                        JevAnalysis.evaluate(text.text, captureId, request.runId) { isCurrent(request) }
-                    } else {
-                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "The run, app, window, or keyboard region changed before OCR completed."))
+                    val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
+                        textRegion(line.text, line.boundingBox, plan)
+                    } }
+                    val uncertain = regions.isEmpty() || regions.any { it["sourceAttribution"] == "uncertain" }
+                    val distinctWindows = regions.mapNotNull { it["windowId"] as? Int }.distinct()
+                    val attribution = when {
+                        uncertain -> "uncertain"
+                        distinctWindows.size == 1 -> "single_window"
+                        else -> "mixed"
                     }
+                    val sourceLabel = when (attribution) {
+                        "single_window" -> "${regions.first()["appLabel"] ?: "Unknown"} (window estimate)"
+                        "mixed" -> "Visible screen: multiple windows (window estimates)"
+                        else -> "Visible screen: source uncertain"
+                    }
+                    if (CaptureStore.state.value.runId == request.runId) {
+                        CaptureStore.result(text.text, capturedAt)
+                    }
+                    RunMonitor.emit("ocr_completed", request.details("captureId" to captureId,
+                        "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt,
+                        "sourceAttribution" to attribution, "sourceLabel" to sourceLabel,
+                        "textRegions" to regions, "maskedRegions" to plan.maskedRegions.map { it.details() }))
+                    JevAnalysis.evaluate(text.text, captureId, request.runId)
                 }
                 .addOnFailureListener(mainExecutor) {
                     ocrFailed(request, captureId, "The local text model could not read this screenshot.")
@@ -560,7 +545,7 @@ class TypingCaptureService : AccessibilityService() {
 
     /** Only keyboard windows are masked. Other window metadata estimates text sources. */
     private fun displayPlan(request: Request): DisplayPlan? {
-        if (!isCurrent(request) || !getSystemService(PowerManager::class.java).isInteractive) return null
+        if (!getSystemService(PowerManager::class.java).isInteractive) return null
         val display: Rect
         val rotation: Int
         try {

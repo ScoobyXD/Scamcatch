@@ -23,7 +23,7 @@ object RunMonitor {
     private var sequence = 0L
     private var captureId = 0
     private var session: RunSession? = null
-    private var activeCapture: ActiveCapture? = null
+    private val sessions = mutableMapOf<String, RunSession>()
     private var currentApp = "Unknown"
     private var currentPackage: String? = null
     private var lastExternalApp = "Unknown"
@@ -34,7 +34,6 @@ object RunMonitor {
     private val counters = linkedMapOf("requests" to 0, "screenshots" to 0, "failed" to 0, "ocrCompleted" to 0, "ocrFailed" to 0, "skipped" to 0)
 
     private data class RunSession(val id: String, val startedAt: Long)
-    private data class ActiveCapture(val id: Int, val phase: String, val attribution: Map<String, Any?>)
 
     fun initialize(context: Context) {
         CaptureStore.initialize(context)
@@ -71,13 +70,21 @@ object RunMonitor {
         }
     }
 
-    /** Capture callbacks must include their request runId. It is a guard, not event payload. */
+    /** Capture callbacks retain their original run after capture scheduling stops. */
     fun emit(type: String, details: Map<String, Any?> = emptyMap()) {
         onMain {
             val guard = details["runId"]
-            if (guard != null && guard != session?.id) return@onMain
-            if (type in CAPTURE_EVENTS && (session == null || guard != session?.id)) return@onMain
+            val eventSession = when (guard) {
+                null -> session
+                is String -> sessions[guard] ?: return@onMain
+                else -> return@onMain
+            }
+            if (type in CAPTURE_EVENTS && (eventSession == null || guard != eventSession.id)) return@onMain
             val payload = details - "runId"
+            if (eventSession !== session) {
+                if (type in CAPTURE_RESULT_EVENTS) emitNow(type, payload, eventSession)
+                return@onMain
+            }
             when (type) {
                 "app_changed" -> {
                     currentPackage = payload["packageName"] as? String
@@ -89,44 +96,35 @@ object RunMonitor {
                 "capture_waiting" -> captureStatus = "waiting"
                 "capture_requested" -> {
                     captureStatus = "requested"
-                    activeCapture = (payload["captureId"] as? Number)?.let {
-                        ActiveCapture(it.toInt(), "screenshot_requested", payload)
-                    }
                     increment("requests")
                 }
                 "screenshot_received" -> {
                     captureStatus = "received"
-                    updateActiveCapture(payload, "screenshot_received")
                     increment("screenshots")
                 }
                 "capture_failed" -> {
                     captureStatus = "failed"
-                    updateActiveCapture(payload, null)
                     increment("failed")
                 }
                 "capture_skipped" -> { captureStatus = "skipped"; if (session != null) increment("skipped") }
                 "capture_discarded" -> {
                     captureStatus = "discarded"
                     if (ocrStatus == "processing") ocrStatus = "discarded"
-                    updateActiveCapture(payload, null)
                 }
                 "pending_canceled" -> captureStatus = "canceled"
                 "ocr_started" -> {
                     ocrStatus = "processing"
-                    updateActiveCapture(payload, "ocr_processing")
                 }
                 "ocr_completed" -> {
                     ocrStatus = "completed"
-                    updateActiveCapture(payload, null)
                     increment("ocrCompleted")
                 }
                 "ocr_failed" -> {
                     ocrStatus = "failed"
-                    updateActiveCapture(payload, null)
                     increment("ocrFailed")
                 }
             }
-            emitNow(type, payload)
+            emitNow(type, payload, eventSession)
         }
     }
 
@@ -174,6 +172,7 @@ object RunMonitor {
         val reason = when {
             session != null -> "run_already_active"
             !RUN_ID.matches(id) -> "invalid_run_id"
+            id in sessions -> "run_id_already_used"
             message.opt("recordOcr") != true -> "ocr_recording_acknowledgment_required"
             !state.consentGranted -> "consent_required"
             !state.monitoringEnabled -> "capture_paused"
@@ -185,36 +184,24 @@ object RunMonitor {
             return
         }
         captureId = 0
-        activeCapture = null
         counters.keys.forEach { counters[it] = 0 }
         typing = "idle"
         lastInteraction = "none"
         captureStatus = "idle"
         ocrStatus = "idle"
-        session = RunSession(id, SystemClock.elapsedRealtime())
+        session = RunSession(id, SystemClock.elapsedRealtime()).also { sessions[id] = it }
         CaptureStore.setRunId(id)
         emitNow("run_started", mapOf("recordOcr" to true))
     }
 
     private fun stop(reason: String) {
         val finished = session ?: return
-        // Publish the terminal Jev event while this run still owns the event envelope.
-        JevAnalysis.cancel(reason)
-        activeCapture?.let { capture ->
-            emit("capture_discarded", capture.attribution + mapOf(
-                "runId" to finished.id,
-                "captureId" to capture.id,
-                "reason" to reason,
-                "phase" to capture.phase,
-                "screenshotOutcome" to if (capture.phase == "screenshot_requested") "unknown" else "received",
-            ))
-        }
-        // The revision change below invalidates screenshot and OCR callbacks immediately.
+        // Stop new capture scheduling. Existing callbacks retain this run's event envelope.
         session = null
         CaptureStore.setRunId(null)
         typing = "idle"
         captureStatus = "stopped"
-        ocrStatus = if (ocrStatus == "processing") "canceled" else ocrStatus
+        ocrStatus = "idle"
         emitNow("pending_canceled", mapOf("reason" to reason), finished)
         emitNow("run_stopped", mapOf("reason" to reason), finished)
     }
@@ -260,20 +247,17 @@ object RunMonitor {
 
     private fun increment(name: String) { counters[name] = counters.getValue(name) + 1 }
 
-    private fun updateActiveCapture(details: Map<String, Any?>, phase: String?) {
-        val capture = activeCapture ?: return
-        if (capture.id != (details["captureId"] as? Number)?.toInt()) return
-        activeCapture = phase?.let { capture.copy(phase = it) }
-    }
-
     private inline fun onMain(crossinline block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else handler.post { block() }
     }
 
     private val RUN_ID = Regex("[A-Za-z0-9_-]{1,96}")
-    private val CAPTURE_EVENTS = setOf(
-        "capture_requested", "screenshot_received", "capture_failed", "capture_discarded",
-        "ocr_started", "ocr_completed", "ocr_failed", "capture_skipped", "capture_waiting", "pending_canceled",
+    private val CAPTURE_RESULT_EVENTS = setOf(
+        "screenshot_received", "capture_failed", "capture_discarded",
+        "ocr_started", "ocr_completed", "ocr_failed",
         "jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled",
+    )
+    private val CAPTURE_EVENTS = CAPTURE_RESULT_EVENTS + setOf(
+        "capture_requested", "capture_skipped", "capture_waiting", "pending_canceled",
     )
 }

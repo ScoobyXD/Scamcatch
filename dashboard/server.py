@@ -26,6 +26,7 @@ ROOT = HERE.parent
 ACTIVE = {"starting", "active", "stopping"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
+CAPTURE_RESULTS = {"screenshot_received", "capture_failed", "capture_discarded", "ocr_started", "ocr_completed", "ocr_failed"} | JEV_EVENTS
 
 
 def utc_now():
@@ -363,22 +364,35 @@ class Console:
             data = event.get("data") or {}
             if not isinstance(data, dict):
                 raise ValueError("The device sent invalid event data.")
-            matching = self.run and event.get("runId") == self.run["id"] and self.run["status"] in ACTIVE
-            if matching:
-                self.append_event(event)
+            # Captured work can finish after Stop or after another run starts.
+            matching = self.run and event.get("runId") == self.run["id"] and (
+                self.run["status"] in ACTIVE or kind in CAPTURE_RESULTS)
+            run = self.run if matching else None
+            if run is None and kind in CAPTURE_RESULTS:
+                run = self.saved_run(event.get("runId"))
+            if run:
+                active = run is self.run and run["status"] in ACTIVE
+                self.append_event(event, run)
                 if kind == "run_started":
-                    self.run["status"] = "active"
+                    run["status"] = "active"
                 if kind == "ocr_completed":
-                    self.save_ocr(event)
+                    self.save_ocr(event, run)
                 if kind in JEV_EVENTS:
-                    self.save_jev(event)
+                    self.save_jev(event, run=run)
                 if kind == "run_stopped":
                     self.finish("stopped", data.get("reason") or "Stop confirmed by the device.")
                 else:
-                    self.run["counters"] = self.state.get("counters", {})
-                    self.persist_run()
-                    if kind in JEV_EVENTS:
-                        self.write_summary()
+                    if active:
+                        run["counters"] = self.state.get("counters", {})
+                    else:
+                        counter = {"screenshot_received": "screenshots", "capture_failed": "failed",
+                                   "ocr_completed": "ocrCompleted", "ocr_failed": "ocrFailed"}.get(kind)
+                        if counter:
+                            counters = run.setdefault("counters", {})
+                            counters[counter] = counters.get(counter, 0) + 1
+                    self.persist_run(run)
+                    if kind in JEV_EVENTS or not active:
+                        self.write_summary(run)
             if kind == "command_error":
                 self.message = str(data.get("reason") or "The device rejected the command.")
                 if self.run and self.run["status"] == "starting":
@@ -456,23 +470,45 @@ class Console:
                 self.publish()
                 raise
 
-    def append_event(self, event):
-        if self.event_file:
-            self.event_file.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
-            self.event_file.flush()
-            self.run["eventCount"] += 1
+    def saved_run(self, run_id):
+        if not isinstance(run_id, str) or not SAFE_ID.fullmatch(run_id):
+            return None
+        folder = self.runs / run_id
+        path = folder / "run.json"
+        if folder.is_symlink() or folder.resolve().parent != self.runs or path.is_symlink() or not path.is_file():
+            return None
+        ocr_folder = folder / "ocr"
+        if ocr_folder.is_symlink() or ocr_folder.resolve().parent != folder.resolve():
+            return None
+        run = json.loads(path.read_text(encoding="utf-8"))
+        return run if isinstance(run, dict) and run.get("id") == run_id else None
 
-    def save_ocr(self, event):
+    def append_event(self, event, run=None):
+        run = self.run if run is None else run
+        line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+        if run is self.run and self.event_file:
+            self.event_file.write(line)
+            self.event_file.flush()
+        else:
+            path = self.runs / run["id"] / "events.jsonl"
+            if path.is_symlink():
+                raise OSError("The run event file is a symbolic link.")
+            with path.open("a", encoding="utf-8", newline="\n") as output:
+                output.write(line)
+        run["eventCount"] += 1
+
+    def save_ocr(self, event, run=None):
+        run = self.run if run is None else run
         data = event["data"]
-        capture_id = str(data.get("captureId", event.get("seq", len(self.ocr) + 1)))
+        capture_id = str(data.get("captureId", event.get("seq", len(run["ocr"]) + 1)))
         safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", capture_id)[:80] or "capture"
         filename = f"ocr/{safe_id}.txt"
-        if any(item["file"] == filename for item in self.run["ocr"]):
-            filename = f"ocr/{safe_id}-{len(self.ocr) + 1}.txt"
+        if any(item["file"] == filename for item in run["ocr"]):
+            filename = f"ocr/{safe_id}-{len(run['ocr']) + 1}.txt"
         text = data.get("text", "")
         if not isinstance(text, str):
             raise ValueError("OCR text is not a string.")
-        (self.runs / self.run["id"] / filename).write_text(text, encoding="utf-8", newline="")
+        (self.runs / run["id"] / filename).write_text(text, encoding="utf-8", newline="")
         item = {"captureId": capture_id, "file": filename, "timestampMs": event.get("timestampMs"),
                 "elapsedMs": event.get("elapsedMs"), "durationMs": data.get("durationMs"),
                 "packageName": data.get("packageName"), "appLabel": data.get("appLabel"),
@@ -481,27 +517,39 @@ class Console:
         for key in ("captureScope", "sourceAttribution", "sourceLabel", "textRegions", "maskedRegions"):
             if key in data:
                 item[key] = data[key]
-        self.run["ocr"].append(item)
-        self.ocr.append({**item, "text": text})
-        self.write_ocr_record(self.ocr[-1])
-        self.publish("ocr", self.ocr[-1])
+        run["ocr"].append(item)
+        record = {**item, "text": text}
+        self.write_ocr_record(record, run)
+        if run is self.run:
+            self.ocr.append(record)
+            self.publish("ocr", record)
 
-    def write_ocr_record(self, record):
-        path = (self.runs / self.run["id"] / record["file"]).with_suffix(".json")
+    def write_ocr_record(self, record, run=None):
+        run = self.run if run is None else run
+        path = (self.runs / run["id"] / record["file"]).with_suffix(".json")
         write_json(path, record)
 
-    def save_jev(self, event, persist=True):
-        if not self.run or event.get("runId") != self.run["id"]:
+    def save_jev(self, event, persist=True, run=None):
+        run = self.run if run is None else run
+        if not run or event.get("runId") != run["id"]:
             return
         data = event["data"]
         capture_id = str(data.get("captureId", ""))
-        item = next((item for item in self.run["ocr"] if item["captureId"] == capture_id), None)
+        item = next((item for item in run["ocr"] if item["captureId"] == capture_id), None)
         if item is None:
             return
         previous = item.get("jev")
-        if previous and previous.get("status") != "pending":
+        if previous and previous.get("status") not in {"pending", "canceled"}:
             return
-        record = next((record for record in self.ocr if record["file"] == item["file"]), None)
+        if run is self.run:
+            record = next((record for record in self.ocr if record["file"] == item["file"]), None)
+        else:
+            folder = self.runs / run["id"]
+            relative = Path(item["file"])
+            path = folder / relative
+            if relative.parent != Path("ocr") or path.is_symlink() or path.resolve().parent != (folder / "ocr").resolve():
+                return
+            record = {**item, "text": path.read_text(encoding="utf-8")}
         if record is None:
             return
         # Android owns the questions, model, probabilities, and decision rule.
@@ -509,35 +557,19 @@ class Console:
         item["jev"] = jev
         record["jev"] = jev
         if persist:
-            self.write_ocr_record(record)
-        self.publish("jev", {"captureId": capture_id, "jev": jev})
+            self.write_ocr_record(record, run)
+        if run is self.run:
+            self.publish("jev", {"captureId": capture_id, "jev": jev})
 
-    def cancel_unresolved_jev(self, reason, persist=True):
-        for item in self.run.get("ocr", []):
-            jev = item.get("jev")
-            if jev and jev.get("status") != "pending":
-                continue
-            if jev is None and not self.run.get("jevExpected"):
-                continue
-            event = {"protocol": 1, "type": "jev_canceled", "runId": self.run["id"],
-                     "timestampMs": int(time.time() * 1000),
-                     "data": {**(jev or {}), "captureId": item["captureId"],
-                              "status": "canceled", "reason": reason}}
-            if persist:
-                self.append_event(event)
-            self.save_jev(event, persist=persist)
-            entry = self.activity_entry(event)
-            self.activity.append(entry)
-            self.publish("activity", entry)
+    def persist_run(self, run=None):
+        run = self.run if run is None else run
+        if run:
+            write_json(self.runs / run["id"] / "run.json", run)
 
-    def persist_run(self):
-        if self.run:
-            write_json(self.runs / self.run["id"] / "run.json", self.run)
-
-    def write_summary(self):
-        if not self.run:
+    def write_summary(self, run=None):
+        run = self.run if run is None else run
+        if not run:
             return
-        run = self.run
         counters = run.get("counters", {})
         scope = {"foreground": "Current foreground app", "display": "Visible default display"}.get(
             run.get("captureScope"), run.get("targetPackage") or "Unknown")
@@ -564,7 +596,6 @@ class Console:
         temporary.replace(summary)
 
     def finish(self, status, reason):
-        self.cancel_unresolved_jev(reason)
         self.run["status"] = status
         self.run["endedAt"] = utc_now()
         self.run["reason"] = reason
@@ -599,7 +630,6 @@ class Console:
                     pass
                 self.bridge = None
             if self.run and self.recording_run:
-                self.cancel_unresolved_jev(self.recording_error, persist=False)
                 self.run["status"] = "interrupted"
                 self.run["endedAt"] = utc_now()
                 self.run["reason"] = self.recording_error

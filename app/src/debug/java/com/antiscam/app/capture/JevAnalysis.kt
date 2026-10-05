@@ -44,14 +44,11 @@ object JevAnalysis {
         .retryOnConnectionFailure(false)
         .build()
     private var apiKey: String? = null
-    private var active: Pending? = null
 
     private class Pending(
         val captureId: Int,
         val runId: String,
-        val isCurrent: () -> Boolean,
         val startedAt: Long = SystemClock.elapsedRealtime(),
-        var call: Call? = null,
     )
 
     private sealed interface Result {
@@ -64,7 +61,6 @@ object JevAnalysis {
         val candidate = value.trim()
         if (value.length > 2048 || value.any { it.code !in 32..126 } ||
             candidate.isEmpty() || candidate.any { it.code !in 33..126 }) return false
-        cancel("The development API key changed.")
         apiKey = candidate
         CaptureStore.setJevReady(true)
         return true
@@ -72,17 +68,13 @@ object JevAnalysis {
 
     fun clearKey() {
         checkMainThread()
-        cancel("The development API key was cleared.")
         apiKey = null
         CaptureStore.setJevReady(false)
     }
 
-    fun evaluate(text: String, captureId: Int, runId: String, isCurrent: () -> Boolean) {
+    fun evaluate(text: String, captureId: Int, runId: String) {
         checkMainThread()
-        val pending = Pending(captureId, runId, isCurrent)
-        // A late OCR callback must not cancel or change a newer screen's analysis.
-        if (!isEligible(pending)) return
-        cancel("A newer OCR result replaced this request.")
+        val pending = Pending(captureId, runId)
         val key = apiKey
         val reason = when {
             key == null -> "No development API key is loaded."
@@ -106,8 +98,6 @@ object JevAnalysis {
             .post(body)
             .build()
         val call = client.newCall(request)
-        pending.call = call
-        active = pending
         publish(pending, "pending")
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -128,36 +118,12 @@ object JevAnalysis {
         })
     }
 
-    fun cancel(reason: String) {
-        checkMainThread()
-        val pending = active
-        active = null
-        if (pending != null) {
-            pending.call?.cancel()
-            publish(pending, "canceled", reason = reason)
-        } else {
-            CaptureStore.setJevResult("idle", null)
-        }
-    }
-
     private fun finish(pending: Pending, result: Result) {
         checkMainThread()
-        if (active !== pending) return
-        active = null
-        if (!isEligible(pending)) {
-            publish(pending, "canceled", reason = "The run or screen changed before Jev completed.")
-            return
-        }
         when (result) {
             is Result.Completed -> publish(pending, "completed", answers = result.answers)
             is Result.Failed -> publish(pending, "failed", reason = result.reason)
         }
-    }
-
-    private fun isEligible(pending: Pending): Boolean {
-        val state = CaptureStore.state.value
-        return state.consentGranted && state.monitoringEnabled && state.serviceConnected &&
-            state.runId == pending.runId && pending.isCurrent()
     }
 
     private fun readResponse(response: Response): Result {
@@ -200,7 +166,9 @@ object JevAnalysis {
         reason: String? = null,
     ) {
         val flagged = answers?.values?.any { (it.getValue("noul") as Double) >= THRESHOLD }
-        CaptureStore.setJevResult(status, pending.captureId, flagged)
+        if (CaptureStore.state.value.runId == pending.runId) {
+            CaptureStore.setJevResult(status, pending.captureId, flagged)
+        }
         val data = linkedMapOf<String, Any?>(
             "runId" to pending.runId,
             "captureId" to pending.captureId,

@@ -11,7 +11,7 @@ User-approved scope: 4 October 2026
 8. Drive capture from Android accessibility events. Do not poll the screen continuously.
 9. Request one capture when a typing burst starts and another after about one second without typing. Do not request a screenshot for every character.
 10. Request capture after supported interactions and screen changes settle, including taps, long presses, scrolling, focus/selection changes, text edits, app changes, and screen-content updates. Keep typing debounce and Android screenshot limits. Do not depend on physical touches that Android does not report.
-11. Combine overlapping requests, respect Android capture intervals, and cancel stale work when the app/window or run changes.
+11. Combine overlapping screenshot requests and respect Android capture intervals. App/window or run changes cancel only screenshots that have not started.
 12. Run ML Kit OCR on the device. Associate results with capture numbers, timestamps, source estimates, and capture events. Mark ambiguous sources uncertain.
 13. Keep the emulator, desktop dashboard, and Android Studio separate. Open the dashboard for run work.
 14. Use three dashboard columns: Jev results on the left, full OCR text in the middle, and activity on the right. Show newest records first with capture IDs and complete text.
@@ -40,11 +40,11 @@ User-approved scope: 4 October 2026
 37. Require new consent that explains cloud text transfer. Keep the Jev integration limited to the development build.
 38. Associate Jev events with the matching run and capture. Preserve pending, completed, failed, skipped, and canceled states. Do not replace failures with zero probabilities.
 39. Save exact question definitions, probabilities, model, question-set version, threshold, duration, and reasons when available. Include them in snapshots, capture JSON, and ZIP exports.
-40. Stop and interruption cancel unresolved analysis. Preserve terminal results and older records without Jev data.
-41. Keep capture and the dashboard responsive while Jev requests run. Reject stale results before they can change the current phone warning.
+40. Stop and interruption do not cancel captured work. Save late OCR and Jev results to their original run while the recording connection remains available.
+41. Keep capture and the dashboard responsive while Jev requests run. Analyze each captured text regardless of later interactions, screen changes, or newer captures.
 42. Do not create AWS, OVH, or database services for this direct development integration.
 43. Ask the user to audit any new Jev question before implementing it.
-44. Show a silent Probably scam notification only for the current flagged capture. Include no OCR text. Clear it when analysis is invalidated or stopped.
+44. Show a silent Probably scam notification for a completed flagged check from the active run. Include its original capture number and no OCR text. Clear it when the run stops.
 45. Offer the Android 13+ notification permission control in Android setup. Keep run controls in the desktop dashboard.
 46. Protect POST /api/jev-key with the existing local Origin and command-token checks. Accept at most 2048 ASCII characters without whitespace. An empty key clears phone memory.
 47. Clear the masked browser input after submission or dismissal. Report delivery separately from the phone's Jev readiness acknowledgment. Never echo the key in replies, events, or errors.
