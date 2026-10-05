@@ -32,8 +32,8 @@ User-approved scope: 4 October 2026
 29. Save text-region attribution and keyboard masks with OCR metadata. The triggering app does not automatically own all display text. Preserve historical mask metadata in saved records.
 30. Remove the obsolete sensitive-node inspection without a replacement scan or a larger node budget. Keep current event timing, sampling, retries, and workers unchanged.
 31. Keep the strict masking rules in docs/masking-rules.md. Update that numbered list whenever masking behavior changes.
-32. Send all six approved Noul questions together in one Jev request. Keep their definitions only in app/ai-instructions/AIInstructions.kt.
-33. Pin the Jev model and question-set version in app/ai-instructions/AIInstructions.kt. Preserve jev-1.13.0 and financial-topics-v2 during this source move.
+32. Send all five approved Noul questions together in one Jev request. Keep their definitions only in app/ai-instructions/AIInstructions.kt.
+33. Pin jev-1.13.0 and question-set version financial-topics-v3 in app/ai-instructions/AIInstructions.kt.
 34. Set Probably scam only after a completed response has at least one probability greater than or equal to 0.7.
 35. A flag is an experiment result, not proof of fraud. Values below 0.7 do not prove safety.
 36. Enter the TypeSafe key in the desktop Jev key dialog. Forward it once through the local server and ADB bridge to phone memory. Never save it in preferences, source, APK resources, browser storage, run files, or diagnostics.

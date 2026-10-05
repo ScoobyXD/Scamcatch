@@ -2,14 +2,14 @@ package com.antiscam.app.capture
 
 /**
  * 1. Edit all Jev questions and voice prompts here. The debug app compiles this file directly.
- * 2. Keep question IDs stable. Update JEV_QUESTION_SET_VERSION when question wording changes.
+ * 2. Keep question IDs stable. Update JEV_QUESTION_SET_VERSION when questions change.
  * 3. Rebuild and install the app after editing. Running sessions do not reload this file.
  * 4. Keep API keys out of this file.
  */
 object AIInstructions {
     // JEV: pinned model, decision threshold, and approved questions.
     const val JEV_MODEL = "jev-1.13.0"
-    const val JEV_QUESTION_SET_VERSION = "financial-topics-v2"
+    const val JEV_QUESTION_SET_VERSION = "financial-topics-v3"
     const val JEV_THRESHOLD = 0.7
 
     val jevQuestions = linkedMapOf(
@@ -18,7 +18,6 @@ object AIInstructions {
         "crypto_investing" to "Is there talk of investing into crypto",
         "moving_money_for_another_person" to "Is there talk of moving money for another person",
         "bank_account_login" to "Is there talk of logging into a checking account/bank account",
-        "scam_attempt" to "Is someone trying to commit a scam",
     ).mapValues { (_, instructions) -> mapOf("type" to "noul", "instructions" to instructions) }
 
     // VOICE: pinned model and voice.

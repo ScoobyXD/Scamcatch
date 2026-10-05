@@ -270,7 +270,7 @@ private fun JevStatusCard(state: CaptureState) {
                 color = if (state.jevFlagged == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text("Any of the six checks at 0.7 or higher flags the capture. Read the questions and results in the console.")
+            Text("Any of the five checks at 0.7 or higher flags the capture. Read the questions and results in the console.")
             OutlinedButton(onClick = {
                 if (Build.VERSION.SDK_INT >= 33 && !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

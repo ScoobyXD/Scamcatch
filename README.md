@@ -89,7 +89,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 ## Jev experiment rules
 
 1. Android sends OCR text directly to the TypeSafe HTTPS API. The desktop recorder does not call Jev.
-2. Send the six approved Noul questions from [AIInstructions.kt](app/ai-instructions/AIInstructions.kt) together in one request.
+2. Send the five approved Noul questions from [AIInstructions.kt](app/ai-instructions/AIInstructions.kt) together in one request.
 3. The shared instruction file pins the Jev model, question-set version, and threshold.
 4. A completed response triggers **Probably scam** when any answer reaches the configured threshold.
 5. This flag is an experiment result, not proof of fraud. Answers below the threshold do not prove safety.
