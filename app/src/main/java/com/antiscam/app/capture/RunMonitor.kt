@@ -51,7 +51,8 @@ object RunMonitor {
             )
             scope.launch {
                 CaptureStore.state.map {
-                    listOf(it.consentGranted, it.monitoringEnabled, it.serviceConnected, it.revision)
+                    listOf(it.consentGranted, it.monitoringEnabled, it.serviceConnected, it.revision,
+                        it.jevReady, it.jevStatus, it.jevFlagged, it.jevCaptureId)
                 }.distinctUntilChanged().collect {
                     val state = CaptureStore.state.value
                     session?.let { active ->
@@ -141,6 +142,17 @@ object RunMonitor {
             return@onMain
         }
         when (message.optString("command")) {
+            "jev_key" -> {
+                val key = message.opt("apiKey") as? String
+                when {
+                    !JevAnalysis.available -> emitNow("command_error", mapOf("reason" to "jev_unavailable"))
+                    key == null -> emitNow("command_error", mapOf("reason" to "invalid_jev_key"))
+                    key.isEmpty() -> JevAnalysis.clearKey()
+                    !JevAnalysis.setKey(key) -> emitNow("command_error", mapOf("reason" to "invalid_jev_key"))
+                }
+                // Only readiness enters the event stream. Never include the received command.
+                emitNow("state_changed", emptyMap())
+            }
             "start" -> start(message)
             "stop" -> if (session == null) emitNow("command_error", mapOf("reason" to "no_active_run")) else stop("user_stopped")
             "snapshot" -> emitNow("snapshot", emptyMap())
@@ -186,6 +198,8 @@ object RunMonitor {
 
     private fun stop(reason: String) {
         val finished = session ?: return
+        // Publish the terminal Jev event while this run still owns the event envelope.
+        JevAnalysis.cancel(reason)
         activeCapture?.let { capture ->
             emit("capture_discarded", capture.attribution + mapOf(
                 "runId" to finished.id,
@@ -216,6 +230,10 @@ object RunMonitor {
             put("lastInteraction", lastInteraction)
             put("captureStatus", captureStatus)
             put("ocrStatus", ocrStatus)
+            put("jevReady", config.jevReady)
+            put("jevStatus", config.jevStatus)
+            put("jevFlagged", config.jevFlagged ?: JSONObject.NULL)
+            put("jevCaptureId", config.jevCaptureId ?: JSONObject.NULL)
             put("counters", JSONObject(counters.toMap()))
             put("captureScope", "display")
             put("consentGranted", config.consentGranted)
@@ -256,5 +274,6 @@ object RunMonitor {
     private val CAPTURE_EVENTS = setOf(
         "capture_requested", "screenshot_received", "capture_failed", "capture_discarded",
         "ocr_started", "ocr_completed", "ocr_failed", "capture_skipped", "capture_waiting", "pending_canceled",
+        "jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled",
     )
 }

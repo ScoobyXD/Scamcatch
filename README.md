@@ -1,6 +1,6 @@
 # Antiscam run console
 
-An Android background capture service with a separate desktop dashboard and a saved record for each run.
+An Android capture service with direct Jev analysis, a separate desktop dashboard, and saved run records.
 
 The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 
@@ -9,14 +9,15 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 1. Start the Android emulator or connect a debugging-enabled Android device.
 2. Build with `scripts\build.ps1`.
 3. Install Antiscam with `scripts\install.ps1`.
-4. Open **Antiscam Dev** once. Read the disclosure and allow local capture if needed.
+4. Open **Antiscam Dev**. Read the updated disclosure and allow capture and cloud text analysis.
 5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
-7. Select the device, choose **Connect** or **Switch device**, then select **Start run**.
-8. Use any app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
-9. Read the full extracted text on the left and activity on the right. Both lists show the newest entry first.
-10. Select **Stop run**. The saved folder under `runs` contains the record for analysis.
-11. Select **Export ZIP** to share the saved run for analysis.
+7. Select the device and choose **Connect** or **Switch device**.
+8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key, send it, and wait for Jev readiness before **Start run**.
+9. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
+10. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
+11. Select **Stop run**. The saved folder under `runs` contains the record for analysis.
+12. Select **Export ZIP** to share the saved run for analysis.
 
 ```powershell
 .\scripts\build.ps1
@@ -54,43 +55,70 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 5. Repeated events reset timers instead of producing a screenshot for every character or scroll event.
 6. Direct-action capture attempts stay at least 1.5 seconds apart. Passive content changes use a five-second minimum interval. Only one screenshot/OCR operation runs at a time.
 7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel pending work. A settled new foreground window requests a capture during a run.
-8. Keyboard windows and sensitive regions are masked before OCR. Reported windows with unavailable privacy information are masked. Android secure-content restrictions remain enforced.
+8. Keyboard windows are masked before OCR. Other regions remain unmasked, including password fields, sensitive regions, overlays, and the lock screen. Android capture restrictions still apply.
 9. When stopped, interactions update live status without creating capture requests or skipped-capture noise.
-10. Overlapping windows do not automatically cancel capture. The inspection ceiling remains 1,000 nodes across the reported windows in each inspection.
+10. Overlapping windows do not automatically cancel capture. The app no longer traverses nodes to inspect sensitive content.
 11. Source labels use window estimates where possible. Ambiguous sources remain uncertain. The triggering app is recorded separately as context.
-12. Android reports interactive windows, so accessibility metadata does not guarantee identification of every visible overlay.
-13. See [the current requirements](current-task/requirements.txt).
+12. Android reports interactive windows, so accessibility metadata does not guarantee identification of every visible overlay. Missing privacy metadata does not add masks or block capture.
+13. Keep detailed masking behavior in [docs/masking-rules.md](docs/masking-rules.md). See [the current requirements](current-task/requirements.txt) for the full task scope.
 
 ## Run records
 
 1. Each run has a unique ID, timestamps, status, counters, and a capture ID for each screenshot request.
 2. `events.jsonl` preserves the ordered event record.
-3. `ocr` contains the full text extracted from each completed capture.
-4. `summary.txt` and `run.json` describe the run and its outcome.
+3. `ocr` contains extracted text files and capture JSON files with OCR metadata and available Jev analysis.
+4. `summary.txt` and `run.json` describe the run and its outcome. OCR records retain keyboard masks and historical mask metadata.
 5. **Export ZIP** packages the saved run for analysis.
 6. Events save as they arrive. A lost connection produces an interrupted record.
 7. Starting another run resets the dashboard's history. Earlier folders remain available under `runs`.
+8. Jev records retain the exact questions, answers, model, question-set version, and threshold supplied by Android.
+9. Stop or interruption marks unresolved analysis canceled. Completed, failed, and skipped results remain unchanged.
+10. Older runs without Jev records remain readable and exportable.
+
+## Jev experiment rules
+
+1. Android sends OCR text directly to the TypeSafe HTTPS API. The desktop recorder does not call Jev.
+2. The approved six Noul questions are sent together in one request. Android defines the questions once. Topics cover crypto, private apps, crypto investment, moving another person's money, bank-account login, and scam attempts.
+3. The experiment pins `jev-1.13.0` and identifies the question set as `financial-topics-v2`.
+4. A completed response triggers **Probably scam** when any answer is at least `0.7`.
+5. This flag is an experiment result, not proof of fraud. Answers below the threshold do not prove safety.
+6. Missing keys, empty text, failed requests, and canceled work remain explicit. They never become successful checks with zero probabilities.
+7. Results must match the run and capture that produced their OCR text. Stale results must not warn for a different capture.
+8. Each dashboard column has one scrollbar. New records preserve that column's reading position.
+9. Enter the key in the desktop **Jev key** dialog. Its masked input clears after submission or dismissal.
+10. This development path needs no AWS service, OVH server, or managed database.
+11. Any new Jev question requires the user's audit before implementation.
+12. A flag for the current capture shows a silent **Probably scam** notification. It contains no OCR text.
+13. Android 13 and later need notification permission. Enable it from Android setup if phone warnings are wanted.
+14. Stopping or invalidating analysis clears the phone warning. Dashboard results remain available in the saved run.
+15. The local dashboard forwards the key once through the ADB debug bridge to phone memory. It does not save or echo the key.
+16. Successful delivery is not confirmation that Jev is ready. The phone's readiness state confirms key setup.
+17. Clearing the key sends an empty value. Ending the phone's app process also clears the retained key.
 
 ## Data boundary
 
-1. Starting a run records extracted text on the connected computer. That text can contain private screen content.
+1. Starting a run records extracted text on the connected computer. That text can include private messages and visible passwords.
 2. Screenshot images remain in Android memory. The recorder does not save screenshot files.
 3. Run folders and dashboard runtime files are ignored by Git. Do not manually commit or publish them.
 4. OCR text never goes to Logcat or console diagnostics.
 5. Stop and consent withdrawal prevent future capture. They do not erase records already saved on the computer.
-6. ML Kit uses the bundled Latin model on the device. No cloud analysis is present.
-7. The Android manifest removes Internet and network-state permissions.
+6. ML Kit runs OCR on the device. With consent and a configured key, the debug app sends extracted text to TypeSafe for Jev analysis.
+7. The debug app has Internet access for Jev. The updated disclosure requires consent to this cloud text transfer.
 8. The debug bridge uses an ADB-forwarded local socket. Release builds expose no dashboard socket.
 9. The desktop server binds only to this computer. Browser updates use a pushed event stream.
 10. Android does not expose every physical touch as an accessibility event. Unknown states must remain explicit.
 11. `isAccessibilityTool` remains false. This is not a Google Play approval claim.
+12. After delivery, the key remains only in phone process memory. Browser and server memory hold it briefly during delivery.
+13. Do not store the key in preferences, source files, APK resources, run files, browser storage, or diagnostics.
+14. Enter the key in the dashboard beside the chat. Do not send it in chat messages or scripts.
+15. The phone uses the key as the TypeSafe HTTPS authorization credential. The recorder never includes it in events or exports.
 
 ## Code
 
-1. `app` contains the accessibility service, local OCR, event stream, and minimal consent/accessibility setup.
+1. `app` contains the accessibility service, local OCR, direct debug Jev client, event stream, and consent/accessibility setup.
 2. `dashboard` contains the desktop server, recorder, and browser interface.
 3. `scripts` contains build, install, and dashboard launch helpers for Antiscam only.
 4. The default build creates the debug app and runs Android lint. It does not run unit tests under the current project instructions.
 5. Device checks use real apps. The demo app and its module were removed.
 6. AGP 8.13.2, Gradle 8.13, Kotlin/Compose compiler 2.3.10, ML Kit text recognition 16.0.1, target/compile SDK 36.
-7. Scam judgments, cloud analysis, warning notifications, and voice are outside this version.
+7. Voice and public-release credential distribution remain outside this development version.

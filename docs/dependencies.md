@@ -1,5 +1,7 @@
 Components:
 1. Google ML Kit OCR — extracts text from those images.
+2. TypeSafe Jev 1.13.0 — evaluates the six topic questions together in debug builds.
+3. OkHttp 4.12.0 — sends cancelable HTTPS requests from the Android debug app.
 
 Accessibility Methods:
 1. Android AccessibilityService — receives interactions and screen changes.

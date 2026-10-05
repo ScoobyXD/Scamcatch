@@ -1,7 +1,6 @@
 package com.antiscam.app.capture
 
 import android.accessibilityservice.AccessibilityService
-import android.app.KeyguardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -9,15 +8,12 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
-import android.graphics.Region
-import android.graphics.RegionIterator
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.text.InputType
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -78,9 +74,6 @@ class TypingCaptureService : AccessibilityService() {
         val target: String,
         val windowId: Int,
         val trigger: String,
-        val needsEditableFocus: Boolean,
-        val sensitiveInteraction: Boolean = false,
-        val sensitiveInteractionBounds: Rect? = null,
     )
 
     private data class WindowRegion(
@@ -100,13 +93,9 @@ class TypingCaptureService : AccessibilityService() {
     private data class DisplayPlan(
         val bounds: Rect,
         val rotation: Int,
-        val targetBounds: Rect,
         val windows: List<WindowRegion>,
         val maskedRegions: List<MaskedRegion>,
     )
-
-    private data class InspectionBudget(var remaining: Int = MAX_INSPECTED_NODES)
-    private data class NodeFrame(val node: AccessibilityNodeInfo, var childIndex: Int = -1)
 
     override fun onCreate() {
         super.onCreate()
@@ -118,6 +107,14 @@ class TypingCaptureService : AccessibilityService() {
         scope.launch {
             CaptureStore.state.map { it.revision }.distinctUntilChanged().collect {
                 invalidate("Run or capture settings changed.")
+            }
+        }
+        scope.launch {
+            CaptureStore.state.map {
+                if (it.consentGranted && it.monitoringEnabled && it.runId != null && it.jevFlagged == true)
+                    it.jevCaptureId else null
+            }.distinctUntilChanged().collect { captureId ->
+                JevWarning.update(this@TypingCaptureService, captureId)
             }
         }
     }
@@ -167,7 +164,8 @@ class TypingCaptureService : AccessibilityService() {
 
         // A typing burst owns its trailing capture, including suggestion and selection updates.
         if (typing && kind != "typing") return
-        val request = requestFor(event, kind, inferredEdit)
+        val request = requestFor(event, kind)
+        if (request != null) JevAnalysis.cancel("A newer interaction replaced this analysis.")
         if (kind == "typing") {
             typingTimer = Runnable {
                 typingTimer = null
@@ -183,18 +181,17 @@ class TypingCaptureService : AccessibilityService() {
     /** Some apps report edits as parent content changes instead of text-change events. */
     private fun observeFocusedInput(event: AccessibilityEvent): Boolean {
         val state = CaptureStore.state.value
-        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled || event.isSensitive()) {
+        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) {
             focusedInput = null
             return false
         }
         if (event.eventType !in INPUT_OBSERVATION_EVENTS) return false
         val root = rootInActiveWindow ?: return false
         try {
-            if (root.packageName?.toString() != foregroundPackage || root.windowId != foregroundWindowId ||
-                root.isSensitive()) return false
+            if (root.packageName?.toString() != foregroundPackage || root.windowId != foregroundWindowId) return false
             val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             try {
-                if (focused == null || !focused.isFocused || !focused.isEditable || focused.isSensitive()) {
+                if (focused == null || !focused.isFocused || !focused.isEditable) {
                     focusedInput = null
                     return false
                 }
@@ -218,7 +215,7 @@ class TypingCaptureService : AccessibilityService() {
         }
     }
 
-    private fun requestFor(event: AccessibilityEvent, kind: String, inferredEdit: Boolean): Request? {
+    private fun requestFor(event: AccessibilityEvent, kind: String): Request? {
         val state = CaptureStore.state.value
         // Keep observation live between runs, without generating capture work or skip events.
         if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) return null
@@ -228,38 +225,13 @@ class TypingCaptureService : AccessibilityService() {
             (event.packageName?.toString() != target || event.windowId != windowId)) return null
         val trigger = if (kind == "typing") "typing_start" else "${kind}_settled"
         val request = Request(generation, state.revision, state.runId, target,
-            windowId, trigger, kind == "typing")
+            windowId, trigger)
         if (kind == "content" && passiveCaptureBlocked) {
             // A new content event can resume capture once the window becomes eligible.
             // An unchanged blocked window must not restart waiting and skipped records.
-            if (targetBounds(request) == null) return null
+            if (displayPlan(request) == null) return null
         }
-        // Event text is never read. Inferred edits already checked the actual focused input.
-        val source = event.source
-        var sensitiveInteraction = event.isSensitive()
-        var sensitiveBounds: Rect? = null
-        val safeSource = try {
-            if (source != null && (sensitiveInteraction || source.isSensitive())) {
-                sensitiveInteraction = true
-                sensitiveBounds = Rect().also(source::getBoundsInScreen).takeUnless { it.isEmpty }
-            }
-            source == null && (kind != "typing" || inferredEdit) || source != null &&
-                source.packageName?.toString() == target &&
-                (kind != "typing" || inferredEdit || source.isFocused && source.isEditable)
-        } finally {
-            source?.recycleCompat()
-        }
-        if (!safeSource) {
-            if (kind == "content" && passiveCaptureBlocked) return null
-            invalidate("The interaction field is unavailable.")
-            passiveCaptureBlocked = true
-            CaptureStore.report("Capture skipped. The interaction field is unavailable.")
-            RunMonitor.emit("capture_skipped", mapOf("runId" to state.runId,
-                "reason" to "The interaction field is unavailable.", "trigger" to trigger))
-            return null
-        }
-        return request.copy(sensitiveInteraction = sensitiveInteraction,
-            sensitiveInteractionBounds = sensitiveBounds)
+        return request
     }
 
     private fun scheduleSettled(request: Request) {
@@ -348,7 +320,7 @@ class TypingCaptureService : AccessibilityService() {
             val runId = state.runId
             if (runId != null && state.consentGranted && state.monitoringEnabled) {
                 val request = Request(generation, state.revision, runId, observedPackage,
-                    observedWindowId, "app_settled", false)
+                    observedWindowId, "app_settled")
                 scheduleSettled(request)
             }
         }
@@ -421,6 +393,7 @@ class TypingCaptureService : AccessibilityService() {
     }
 
     private fun invalidate(reason: String) {
+        JevAnalysis.cancel(reason)
         generation++
         cancelPending(reason)
         val hadTimer = typingTimer != null || settleTimer != null
@@ -442,37 +415,6 @@ class TypingCaptureService : AccessibilityService() {
             request.target == foregroundPackage && request.windowId == foregroundWindowId
     }
 
-    /** Preserve run and interaction ownership. Privacy is checked across the display separately. */
-    private fun targetBounds(request: Request): Rect? {
-        if (!isCurrent(request)) return null
-        if (getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
-            !getSystemService(PowerManager::class.java).isInteractive) return null
-        val root = rootInActiveWindow ?: return null
-        try {
-            if (root.packageName?.toString() != request.target || root.windowId != request.windowId) return null
-            val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            val matchingFocus = try {
-                !request.needsEditableFocus || focused != null && focused.isEditable
-            } finally {
-                focused?.recycleCompat()
-            }
-            if (!matchingFocus) return null
-            val window = root.window ?: return null
-            try {
-                if (window.id != request.windowId ||
-                    (!window.isActive && !window.isFocused)) return null
-                val bounds = Rect().also(window::getBoundsInScreen)
-                return bounds.takeUnless { it.isEmpty }
-            } finally {
-                window.recycleCompat()
-            }
-        } catch (_: IllegalStateException) {
-            return null
-        } finally {
-            root.recycleCompat()
-        }
-    }
-
     private fun capture(request: Request) {
         if (!isCurrent(request)) return
         // Failed eligibility checks are attempts too and must respect capture spacing.
@@ -480,12 +422,13 @@ class TypingCaptureService : AccessibilityService() {
         val plan = displayPlan(request)
         if (plan == null) {
             passiveCaptureBlocked = true
-            CaptureStore.report("Capture skipped. The active app or display information is unavailable.")
+            CaptureStore.report("Capture skipped. The display is off or unavailable.")
             RunMonitor.emit("capture_skipped", request.details(
-                "reason" to "The active app or display information is unavailable."))
+                "reason" to "The display is off or unavailable."))
             return
         }
         passiveCaptureBlocked = false
+        JevAnalysis.cancel("A newer capture replaced this analysis.")
         inFlight = true
         lastAttemptAt = SystemClock.elapsedRealtime()
         val captureId = RunMonitor.nextCaptureId()
@@ -499,9 +442,16 @@ class TypingCaptureService : AccessibilityService() {
                 var softwareBitmap: Bitmap? = null
                 try {
                     RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
-                    if (displayPlan(request) != plan) {
+                    if (!isCurrent(request)) {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "The run, app, window, or protected content changed before screenshot processing."))
+                            "reason" to "The run, app, or window changed before screenshot processing."))
+                        finishCapture()
+                        return
+                    }
+                    val currentPlan = displayPlan(request)
+                    if (currentPlan?.maskedRegions != plan.maskedRegions) {
+                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                            "reason" to "The keyboard region changed before screenshot processing."))
                         finishCapture()
                         return
                     }
@@ -514,8 +464,10 @@ class TypingCaptureService : AccessibilityService() {
                     val canvas = Canvas(bitmap)
                     val paint = Paint().apply { color = Color.BLACK }
                     plan.maskedRegions.forEach { canvas.drawRect(it.bounds, paint) }
+                    // Other metadata changes affect attribution only.
+                    val sourcePlan = if (currentPlan == plan) plan else plan.copy(windows = emptyList())
                     softwareBitmap = null // OCR owns the bitmap until its task completes.
-                    recognize(request, captureId, bitmap, System.currentTimeMillis(), plan)
+                    recognize(request, captureId, bitmap, System.currentTimeMillis(), sourcePlan)
                 } catch (_: Exception) {
                     captureFailed(request, captureId, "Android could not prepare the screenshot for OCR.")
                     finishCapture()
@@ -552,9 +504,11 @@ class TypingCaptureService : AccessibilityService() {
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    if (displayPlan(request) == plan) {
+                    val currentPlan = displayPlan(request)
+                    if (isCurrent(request) && currentPlan?.maskedRegions == plan.maskedRegions) {
+                        val sourcePlan = if (currentPlan == plan) plan else plan.copy(windows = emptyList())
                         val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
-                            textRegion(line.text, line.boundingBox, plan)
+                            textRegion(line.text, line.boundingBox, sourcePlan)
                         } }
                         val uncertain = regions.isEmpty() || regions.any { it["sourceAttribution"] == "uncertain" }
                         val distinctWindows = regions.mapNotNull { it["windowId"] as? Int }.distinct()
@@ -573,9 +527,10 @@ class TypingCaptureService : AccessibilityService() {
                             "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt,
                             "sourceAttribution" to attribution, "sourceLabel" to sourceLabel,
                             "textRegions" to regions, "maskedRegions" to plan.maskedRegions.map { it.details() }))
+                        JevAnalysis.evaluate(text.text, captureId, request.runId) { isCurrent(request) }
                     } else {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "The run, app, window, or protected content changed before OCR completed."))
+                            "reason" to "The run, app, window, or keyboard region changed before OCR completed."))
                     }
                 }
                 .addOnFailureListener(mainExecutor) {
@@ -603,37 +558,33 @@ class TypingCaptureService : AccessibilityService() {
             "captureScope" to "display", "sourceAttribution" to "uncertain",
             "sourceLabel" to "Visible screen: source uncertain") + values
 
-    /** Window overlap is allowed. Only excluded or uninspectable regions become masks. */
+    /** Only keyboard windows are masked. Other window metadata estimates text sources. */
     private fun displayPlan(request: Request): DisplayPlan? {
-        val target = targetBounds(request) ?: return null
-        val allWindows = try { windows } catch (_: RuntimeException) { return null }
+        if (!isCurrent(request) || !getSystemService(PowerManager::class.java).isInteractive) return null
+        val display: Rect
+        val rotation: Int
         try {
-            val display = captureWindowManager?.maximumWindowMetrics?.bounds?.let(::Rect) ?: return null
-            val rotation = getSystemService(DisplayManager::class.java)
+            display = captureWindowManager?.maximumWindowMetrics?.bounds?.let(::Rect) ?: return null
+            rotation = getSystemService(DisplayManager::class.java)
                 .getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: return null
             if (display.isEmpty) return null
-            val reported = mutableListOf<WindowRegion>()
-            val masks = mutableListOf<MaskedRegion>()
-            if (request.sensitiveInteraction) {
-                val bounds = request.sensitiveInteractionBounds?.let(::Rect)
-                if (bounds == null || !bounds.intersect(target)) {
-                    masks += MaskedRegion(Rect(target), "Sensitive interaction bounds are unavailable.")
-                } else {
-                    masks += MaskedRegion(bounds, "Sensitive interaction excluded.")
-                }
-            }
-            val budget = InspectionBudget()
-            val uncovered = Region(display)
+        } catch (_: RuntimeException) {
+            return null
+        }
+        val allWindows = try { windows } catch (_: RuntimeException) { emptyList() }
+        val reported = mutableListOf<WindowRegion>()
+        val masks = mutableListOf<MaskedRegion>()
+        try {
             for (window in allWindows.sortedWith(compareByDescending<AccessibilityWindowInfo> { it.layer }.thenBy { it.id })) {
                 if (window.displayId != Display.DEFAULT_DISPLAY) continue
                 val bounds = Rect().also(window::getBoundsInScreen)
                 if (!bounds.intersect(display)) continue
-                uncovered.op(bounds, Region.Op.DIFFERENCE)
                 val keyboard = window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                if (keyboard) masks += MaskedRegion(Rect(bounds), "Keyboard excluded.")
                 var root: AccessibilityNodeInfo? = null
                 try {
                     val windowPackage = try {
-                        if (!keyboard) root = window.root
+                        root = window.root
                         root?.packageName?.toString()
                     } catch (_: RuntimeException) { null }
                     val kind = when {
@@ -643,86 +594,17 @@ class TypingCaptureService : AccessibilityService() {
                     }
                     reported += WindowRegion(window.id, window.layer, window.type, Rect(bounds),
                         windowPackage, windowPackage?.let(::appLabel), kind)
-                    when {
-                        keyboard -> masks += MaskedRegion(Rect(bounds), "Keyboard excluded.")
-                        root == null -> masks += MaskedRegion(Rect(bounds), "Window content is unavailable for privacy inspection.")
-                        else -> {
-                            val inspectedRoot = root
-                            root = null // The traversal now owns this root, including exceptional paths.
-                            inspectSensitiveRegions(inspectedRoot, bounds, masks, budget)
-                        }
-                    }
                 } finally {
                     root?.recycleCompat()
                 }
             }
-            // Accessibility can omit a window behind a modal. Do not inspect its exposed pixels as known content.
-            val gaps = RegionIterator(uncovered)
-            val gap = Rect()
-            while (gaps.next(gap)) masks += MaskedRegion(Rect(gap), "No accessible window information.")
-            return DisplayPlan(display, rotation, target, reported, masks.distinct().sortedWith(
-                compareBy<MaskedRegion> { it.bounds.top }.thenBy { it.bounds.left }
-                    .thenBy { it.bounds.bottom }.thenBy { it.bounds.right }.thenBy { it.reason },
-            ))
         } catch (_: RuntimeException) {
-            return null
+            // A partial window list cannot establish which window owns a text region.
+            reported.clear()
         } finally {
             allWindows.forEach { it.recycleCompat() }
         }
-    }
-
-    /** This traversal owns root and children. The existing node ceiling applies across all windows. */
-    private fun inspectSensitiveRegions(
-        root: AccessibilityNodeInfo,
-        windowBounds: Rect,
-        masks: MutableList<MaskedRegion>,
-        budget: InspectionBudget,
-    ) {
-        val stack = ArrayDeque<NodeFrame>()
-        stack.addLast(NodeFrame(root))
-        try {
-            while (stack.isNotEmpty()) {
-                val frame = stack.last()
-                val node = frame.node
-                if (frame.childIndex == -1) {
-                    if (budget.remaining == 0) {
-                        masks += MaskedRegion(Rect(windowBounds), "Privacy inspection reached the 1,000-node limit.")
-                        return
-                    }
-                    budget.remaining--
-                    frame.childIndex = 0
-                    if ((node === root || node.isVisibleToUser) && node.isSensitive()) {
-                        val bounds = Rect().also(node::getBoundsInScreen)
-                        if (bounds.isEmpty || !bounds.intersect(windowBounds)) {
-                            masks += MaskedRegion(Rect(windowBounds), "Sensitive field bounds are unavailable.")
-                        } else {
-                            masks += MaskedRegion(bounds, "Sensitive field excluded.")
-                        }
-                        stack.removeLast().node.recycleCompat()
-                        continue
-                    }
-                }
-                if (frame.childIndex >= node.childCount) {
-                    stack.removeLast().node.recycleCompat()
-                    continue
-                }
-                // Fetch one child at a time. A wide tree cannot allocate beyond the inspection ceiling.
-                if (budget.remaining == 0) {
-                    masks += MaskedRegion(Rect(windowBounds), "Privacy inspection reached the 1,000-node limit.")
-                    return
-                }
-                val child = node.getChild(frame.childIndex++)
-                if (child == null) {
-                    masks += MaskedRegion(Rect(windowBounds), "A field is unavailable for privacy inspection.")
-                    return
-                }
-                stack.addLast(NodeFrame(child))
-            }
-        } catch (_: RuntimeException) {
-            masks += MaskedRegion(Rect(windowBounds), "Window privacy inspection failed.")
-        } finally {
-            stack.forEach { it.node.recycleCompat() }
-        }
+        return DisplayPlan(display, rotation, reported, masks)
     }
 
     private fun textRegion(text: String, bounds: Rect?, plan: DisplayPlan): Map<String, Any?> {
@@ -739,20 +621,6 @@ class TypingCaptureService : AccessibilityService() {
             "sourceAttribution" to if (source == null) "uncertain" else "window_bounds")
     }
 
-    private fun AccessibilityNodeInfo.isSensitive(): Boolean {
-        val kind = inputType and InputType.TYPE_MASK_CLASS
-        val variation = inputType and InputType.TYPE_MASK_VARIATION
-        val passwordInput = (kind == InputType.TYPE_CLASS_TEXT && variation in setOf(
-            InputType.TYPE_TEXT_VARIATION_PASSWORD,
-            InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-            InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
-        )) || (kind == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
-        return isPassword || passwordInput || (Build.VERSION.SDK_INT >= 34 && isAccessibilityDataSensitive)
-    }
-
-    private fun AccessibilityEvent.isSensitive(): Boolean =
-        isPassword || (Build.VERSION.SDK_INT >= 34 && isAccessibilityDataSensitive)
-
     private fun finishCapture() {
         inFlight = false
         if (destroyed) recognizer.close() else drainPending()
@@ -766,6 +634,7 @@ class TypingCaptureService : AccessibilityService() {
     override fun onDestroy() {
         destroyed = true
         invalidate("The accessibility service stopped.")
+        JevWarning.update(this, null)
         scope.cancel()
         if (!inFlight) recognizer.close()
         CaptureStore.connected(false)
@@ -797,7 +666,6 @@ class TypingCaptureService : AccessibilityService() {
         const val MAX_SETTLE_WAIT_MS = 3000L
         const val MIN_CAPTURE_INTERVAL_MS = 1500L
         const val MIN_CONTENT_CAPTURE_INTERVAL_MS = 5000L
-        const val MAX_INSPECTED_NODES = 1000
         val INPUT_OBSERVATION_EVENTS = setOf(
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED,
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,

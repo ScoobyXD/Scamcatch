@@ -25,6 +25,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 ACTIVE = {"starting", "active", "stopping"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
 
 
 def utc_now():
@@ -110,12 +111,20 @@ class Console:
                                 event = json.loads(line)
                                 if event.get("type") not in {"snapshot", "state_changed"}:
                                     self.activity.append(self.activity_entry(event))
+                                if event.get("type") in JEV_EVENTS and isinstance(event.get("data"), dict):
+                                    # An event can reach disk before its joined run metadata.
+                                    self.save_jev(event, persist=False)
                             except (ValueError, TypeError, AttributeError):
                                 # A partial final line does not hide the rest of a saved run.
                                 continue
                 if run.get("status") in ACTIVE:
                     self.recording_run = True
                     try:
+                        for record in self.ocr:
+                            if record.get("jev"):
+                                self.write_ocr_record(record)
+                        if not events.is_symlink():
+                            self.event_file = events.open("a", encoding="utf-8", newline="\n")
                         self.finish("interrupted", "The recorder closed before Stop was confirmed.")
                     except OSError:
                         self.recording_failed()
@@ -361,11 +370,15 @@ class Console:
                     self.run["status"] = "active"
                 if kind == "ocr_completed":
                     self.save_ocr(event)
+                if kind in JEV_EVENTS:
+                    self.save_jev(event)
                 if kind == "run_stopped":
                     self.finish("stopped", data.get("reason") or "Stop confirmed by the device.")
                 else:
                     self.run["counters"] = self.state.get("counters", {})
                     self.persist_run()
+                    if kind in JEV_EVENTS:
+                        self.write_summary()
             if kind == "command_error":
                 self.message = str(data.get("reason") or "The device rejected the command.")
                 if self.run and self.run["status"] == "starting":
@@ -406,14 +419,14 @@ class Console:
             if self.state.get("runId"):
                 raise ValueError("The device still has an active run. Wait for Stop to finish.")
             if not all(self.state.get(key) for key in ("consentGranted", "monitoringEnabled", "serviceConnected")):
-                raise ValueError("Allow local capture, resume capture, and enable the accessibility service in Antiscam Dev.")
+                raise ValueError("Allow capture and cloud text analysis, resume capture, and enable the accessibility service in Antiscam Dev.")
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + secrets.token_hex(4)
             folder = self.runs / run_id
             (folder / "ocr").mkdir(parents=True)
             self.run = {"id": run_id, "status": "starting", "startedAt": utc_now(), "endedAt": None,
                         "device": self.selected_device, "captureScope": self.state.get("captureScope", "foreground"),
                         "appVersion": self.state.get("appVersion"), "androidApi": self.state.get("androidApi"),
-                        "counters": {}, "eventCount": 0, "ocr": [], "reason": None,
+                        "counters": {}, "eventCount": 0, "ocr": [], "reason": None, "jevExpected": True,
                         "folder": str(folder)}
             self.ocr = []
             self.activity = []
@@ -464,12 +477,58 @@ class Console:
                 "elapsedMs": event.get("elapsedMs"), "durationMs": data.get("durationMs"),
                 "packageName": data.get("packageName"), "appLabel": data.get("appLabel"),
                 "windowId": data.get("windowId"), "characters": len(text)}
+        # Preserve keyboard masks and mask metadata from earlier app versions.
         for key in ("captureScope", "sourceAttribution", "sourceLabel", "textRegions", "maskedRegions"):
             if key in data:
                 item[key] = data[key]
         self.run["ocr"].append(item)
         self.ocr.append({**item, "text": text})
+        self.write_ocr_record(self.ocr[-1])
         self.publish("ocr", self.ocr[-1])
+
+    def write_ocr_record(self, record):
+        path = (self.runs / self.run["id"] / record["file"]).with_suffix(".json")
+        write_json(path, record)
+
+    def save_jev(self, event, persist=True):
+        if not self.run or event.get("runId") != self.run["id"]:
+            return
+        data = event["data"]
+        capture_id = str(data.get("captureId", ""))
+        item = next((item for item in self.run["ocr"] if item["captureId"] == capture_id), None)
+        if item is None:
+            return
+        previous = item.get("jev")
+        if previous and previous.get("status") != "pending":
+            return
+        record = next((record for record in self.ocr if record["file"] == item["file"]), None)
+        if record is None:
+            return
+        # Android owns the questions, model, probabilities, and decision rule.
+        jev = {key: value for key, value in data.items() if key != "captureId"}
+        item["jev"] = jev
+        record["jev"] = jev
+        if persist:
+            self.write_ocr_record(record)
+        self.publish("jev", {"captureId": capture_id, "jev": jev})
+
+    def cancel_unresolved_jev(self, reason, persist=True):
+        for item in self.run.get("ocr", []):
+            jev = item.get("jev")
+            if jev and jev.get("status") != "pending":
+                continue
+            if jev is None and not self.run.get("jevExpected"):
+                continue
+            event = {"protocol": 1, "type": "jev_canceled", "runId": self.run["id"],
+                     "timestampMs": int(time.time() * 1000),
+                     "data": {**(jev or {}), "captureId": item["captureId"],
+                              "status": "canceled", "reason": reason}}
+            if persist:
+                self.append_event(event)
+            self.save_jev(event, persist=persist)
+            entry = self.activity_entry(event)
+            self.activity.append(entry)
+            self.publish("activity", entry)
 
     def persist_run(self):
         if self.run:
@@ -480,7 +539,7 @@ class Console:
             return
         run = self.run
         counters = run.get("counters", {})
-        scope = {"foreground": "Current foreground app", "display": "Visible display with excluded regions masked"}.get(
+        scope = {"foreground": "Current foreground app", "display": "Visible default display"}.get(
             run.get("captureScope"), run.get("targetPackage") or "Unknown")
         lines = ["Antiscam run", f"Run: {run['id']}", f"Status: {run['status']}",
                  f"Started: {run['startedAt']}", f"Ended: {run.get('endedAt') or 'Not ended'}",
@@ -489,13 +548,23 @@ class Console:
                  f"Capture scope: {scope}",
                  f"Events saved: {run.get('eventCount', 0)}", f"OCR files: {len(run.get('ocr', []))}"]
         lines += [f"{label}: {counters.get(key, 0)}" for key, label in [("requests", "Capture requests"), ("screenshots", "Screenshots received"), ("failed", "Screenshot failures"), ("ocrCompleted", "OCR completed"), ("ocrFailed", "OCR failures"), ("skipped", "Captures skipped")]]
-        lines += [f"Reason: {run.get('reason') or 'Run in progress'}", "", "Full OCR text is in ocr/. Events are in events.jsonl. No screenshot files are saved."]
+        analyses = [item["jev"] for item in run.get("ocr", []) if item.get("jev")]
+        if analyses or run.get("jevExpected"):
+            lines += [f"Jev {status}: {sum(analysis.get('status') == status for analysis in analyses)}"
+                      for status in ("pending", "completed", "failed", "skipped", "canceled")]
+            flagged = sum(analysis.get("status") == "completed" and analysis.get("flagged") is True for analysis in analyses)
+            lines.append(f"Probably scam flags: {flagged}")
+            lines.append("Flags are experiment results, not proof of fraud. Failed, skipped, and canceled checks are not safe results.")
+        lines += [f"Reason: {run.get('reason') or 'Run in progress'}", "",
+                  "Full OCR text and capture JSON are in ocr/. Jev questions, probabilities, model, and threshold are saved when supplied by Android.",
+                  "Events are in events.jsonl. No screenshot files or Jev API keys are saved."]
         summary = self.runs / run["id"] / "summary.txt"
         temporary = summary.with_suffix(".txt.tmp")
         temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
         temporary.replace(summary)
 
     def finish(self, status, reason):
+        self.cancel_unresolved_jev(reason)
         self.run["status"] = status
         self.run["endedAt"] = utc_now()
         self.run["reason"] = reason
@@ -530,6 +599,7 @@ class Console:
                     pass
                 self.bridge = None
             if self.run and self.recording_run:
+                self.cancel_unresolved_jev(self.recording_error, persist=False)
                 self.run["status"] = "interrupted"
                 self.run["endedAt"] = utc_now()
                 self.run["reason"] = self.recording_error
@@ -558,7 +628,9 @@ class Console:
             folder = self.runs / self.run["id"]
             content = io.BytesIO()
             with zipfile.ZipFile(content, "w", zipfile.ZIP_DEFLATED) as archive:
-                names = ["summary.txt", "run.json", "events.jsonl"] + [item["file"] for item in self.run["ocr"]]
+                names = ["summary.txt", "run.json", "events.jsonl"]
+                for item in self.run["ocr"]:
+                    names.extend((item["file"], str(Path(item["file"]).with_suffix(".json"))))
                 for name in names:
                     path = folder / name
                     if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(folder.resolve()):
@@ -674,6 +746,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.console.refresh_devices()
             elif path == "/api/connect":
                 self.console.connect_device(body.get("serial"))
+            elif path == "/api/jev-key":
+                api_key = body.pop("apiKey", None)
+                if not isinstance(api_key, str) or (api_key and not re.fullmatch(r"[\x21-\x7e]{1,2048}", api_key)):
+                    raise ValueError("Use an API key of at most 2048 ASCII characters without spaces, or leave it empty to clear.")
+                # Deliver once. Never retain the key in recorder state or events.
+                self.console.send_command({"command": "jev_key", "apiKey": api_key})
+                del api_key
             elif path == "/api/command":
                 command = body.get("command")
                 if command == "start":
@@ -687,6 +766,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.respond(404, {"error": "Not found."})
                 return
+            # A key command is acknowledged later by the phone's jevReady state.
             self.respond(200, {"ok": True})
         except (ValueError, RuntimeError, UnicodeDecodeError) as error:
             self.respond(409, {"error": str(error)})

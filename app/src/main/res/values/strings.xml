@@ -1,5 +1,5 @@
 <resources>
-    <string name="capture_service_description">Observes app changes, typing, taps, and scrolling. After consent, the app on your screen can be captured during a desktop dashboard run. ML Kit reads text locally. Screenshot images stay in memory. Run events and extracted text are saved on your connected computer through ADB. This version does not detect scams.</string>
+    <string name="capture_service_description">Observes app changes, typing, taps, and scrolling. After consent, the visible screen can be captured during a desktop dashboard run. ML Kit reads text locally after keyboard masking. Screenshot images stay in memory. Run events and extracted text are saved on your connected computer through ADB. In debug builds with a development key, extracted text goes to TypeSafe for Jev analysis. Any of the six checks at 0.7 or higher flags the capture as probably scam.</string>
     <style name="Theme.Antiscam" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>

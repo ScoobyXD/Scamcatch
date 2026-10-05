@@ -6,13 +6,15 @@ let model = { state: {}, run: null, connection: "disconnected", devices: [], ocr
 let token = "";
 let stream;
 let commandBusy = false;
+let keySending = false;
 let streamReady = false;
 const expandedCaptures = new Set();
+const jevCards = new Map();
 const textResizeObserver = new ResizeObserver((entries) => {
   for (const { target } of entries) updateTextToggle(target);
 });
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3, hour12: false });
-const labels = {run_started:"Run started",run_stopped:"Run stopped",app_changed:"App changed",interaction:"Interaction",typing_state:"Typing changed",capture_waiting:"Capture waiting",capture_requested:"Capture requested",screenshot_received:"Screenshot received",capture_failed:"Capture failed",capture_discarded:"Capture discarded",capture_skipped:"Capture skipped",ocr_started:"OCR started",ocr_completed:"OCR completed",ocr_failed:"OCR failed",pending_canceled:"Pending work canceled",command_error:"Command rejected"};
+const labels = {run_started:"Run started",run_stopped:"Run stopped",app_changed:"App changed",interaction:"Interaction",typing_state:"Typing changed",capture_waiting:"Capture waiting",capture_requested:"Capture requested",screenshot_received:"Screenshot received",capture_failed:"Capture failed",capture_discarded:"Capture discarded",capture_skipped:"Capture skipped",ocr_started:"OCR started",ocr_completed:"OCR completed",ocr_failed:"OCR failed",jev_started:"Jev started",jev_completed:"Jev completed",jev_failed:"Jev failed",jev_skipped:"Jev skipped",jev_canceled:"Jev canceled",pending_canceled:"Pending work canceled",command_error:"Command rejected"};
 
 function title(value, fallback = "Idle") {
   if (value == null || value === "") return fallback;
@@ -69,6 +71,15 @@ function renderStatus() {
   byId("stop").textContent = run?.status === "stopping" ? "Stopping…" : "Stop";
   byId("connect").disabled = commandBusy || Boolean(active) || deviceRunActive || changingDevice || selectedDevice?.status !== "device" || (connected && !differentDevice);
   byId("connect").textContent = connected ? "Switch device" : "Connect";
+  byId("jev-key-open").disabled = commandBusy || !connected || differentDevice;
+  byId("jev-key-input").disabled = commandBusy || !connected || differentDevice;
+  byId("jev-key-send").disabled = commandBusy || !connected || differentDevice;
+  byId("jev-key-clear").disabled = commandBusy || !connected || differentDevice;
+  byId("jev-key-send").textContent = keySending ? "Sending…" : "Send to phone";
+  if ((!connected || differentDevice) && byId("jev-key-dialog").open) {
+    byId("jev-key-input").value = "";
+    byId("jev-key-message").textContent = "Connect the selected phone before sending a key.";
+  }
   byId("refresh").disabled = commandBusy || changingDevice;
   byId("device").disabled = commandBusy || Boolean(active) || deviceRunActive || changingDevice;
   byId("device").title = active ? "Stop the run before changing devices." : "Choose a device, then connect.";
@@ -81,6 +92,7 @@ function renderStatus() {
   byId("typing").textContent = state.typing === true || state.typing === "typing" ? "Typing now" : "Not typing";
   byId("capture-status").textContent = title(state.captureStatus, "Ready");
   byId("ocr-status").textContent = title(state.ocrStatus, "Ready");
+  byId("jev-status").textContent = state.jevFlagged === true ? "Probably scam" : title(state.jevStatus, state.jevReady ? "Ready" : "Not configured");
   const counters = active ? (state.counters ?? {}) : (run?.counters ?? {});
   for (const name of ["requests", "screenshots", "ocrCompleted", "failed", "ocrFailed", "skipped"]) {
     byId(`count-${name}`).textContent = String(counters[name] ?? 0);
@@ -94,6 +106,7 @@ function renderStatus() {
   setCheck("check-consent", state.consentGranted);
   setCheck("check-service", state.serviceConnected);
   setCheck("check-monitoring", state.monitoringEnabled);
+  setCheck("check-jev", state.jevReady);
   byId("export").classList.toggle("disabled", !run);
   byId("export").setAttribute("aria-disabled", String(!run));
   byId("save-status").textContent = run ? active ? "Recording locally" : run.status === "interrupted" ? "Partial run saved" : "Run saved" : "Runs save locally.";
@@ -103,7 +116,7 @@ function renderStatus() {
   else if (differentDevice) notice("Select Switch device to connect to the selected device.");
   else if (run?.status === "interrupted") notice("Run interrupted. Received events are saved. Start a new run to continue.", "warning");
   else if (run?.status === "failed") notice(run.reason || "The run could not start.", "error");
-  else if (!state.consentGranted) notice("Open Antiscam on the selected device and allow local capture.", "warning");
+  else if (!state.consentGranted) notice("Open Antiscam on the selected device and review capture and Jev consent.", "warning");
   else if (!state.serviceConnected) notice("Enable Antiscam interaction capture in Android Accessibility settings.", "warning");
   else if (!state.monitoringEnabled) notice("Capture paused. Select Resume, then Start run.", "warning");
   else notice(run?.status === "stopping" ? "Waiting for Stop confirmation…" : "");
@@ -130,13 +143,19 @@ function renderDevices(selectConnected = false) {
 }
 
 function scrollPosition(pane) {
-  return { top: pane.scrollTop, height: pane.scrollHeight, follow: pane.scrollTop < 8 };
+  const paneTop = pane.getBoundingClientRect().top;
+  const anchor = [...pane.querySelectorAll("[data-scroll-key]")].find((item) => item.getBoundingClientRect().bottom > paneTop);
+  return { top: pane.scrollTop, height: pane.scrollHeight, follow: pane.scrollTop < 8,
+    anchorKey: anchor?.dataset.scrollKey, anchorOffset: anchor ? anchor.getBoundingClientRect().top - paneTop : 0 };
 }
 
 function restoreScroll(pane, position) {
-  // New records go above the old ones. Keep the same text in view when reading history.
+  // Keep the visible capture in place when records arrive or a Jev card changes height.
   // CSS disables native scroll anchoring, so this adjustment happens only once.
-  pane.scrollTop = position.follow ? 0 : position.top + pane.scrollHeight - position.height;
+  const anchor = position.anchorKey == null ? null : [...pane.querySelectorAll("[data-scroll-key]")].find((item) => item.dataset.scrollKey === position.anchorKey);
+  if (position.follow) pane.scrollTop = 0;
+  else if (anchor) pane.scrollTop += anchor.getBoundingClientRect().top - pane.getBoundingClientRect().top - position.anchorOffset;
+  else pane.scrollTop = position.top + pane.scrollHeight - position.height;
 }
 
 function updateTextToggle(text) {
@@ -158,6 +177,7 @@ function prependOcr(item, index, preserveScroll = true) {
   const position = preserveScroll ? scrollPosition(pane) : null;
   const result = document.createElement("li");
   result.className = "result";
+  result.dataset.scrollKey = String(item.captureId);
   result.classList.toggle("result-expanded", expandedCaptures.has(item.captureId));
   const heading = document.createElement("div");
   heading.className = "result-heading";
@@ -251,12 +271,115 @@ function renderOcr() {
   model.ocr.forEach((item, index) => prependOcr(item, index, false));
 }
 
+function renderJevCard(card, item) {
+  const jev = item.jev;
+  const status = jev?.status || "unavailable";
+  const completed = status === "completed";
+  const hasCutoff = Number.isFinite(jev?.threshold) && jev.threshold >= 0 && jev.threshold <= 1;
+  card.className = "jev-card";
+  card.classList.toggle("jev-flagged", completed && jev.flagged === true);
+  card.replaceChildren();
+  const heading = document.createElement("div");
+  heading.className = "result-heading";
+  const label = document.createElement("span");
+  label.className = "result-title";
+  label.textContent = `Capture ${item.captureId}`;
+  const meta = document.createElement("span");
+  meta.className = "result-meta";
+  meta.textContent = `${timestamp(item.timestampMs)}${jev?.durationMs != null ? ` · ${jev.durationMs} ms Jev` : ""}`;
+  heading.append(label, meta);
+  const summary = document.createElement("div");
+  summary.className = "jev-summary";
+  const badge = document.createElement("span");
+  badge.className = `badge ${completed && jev.flagged === true ? "warning" : status === "failed" ? "error" : "neutral"}`;
+  badge.textContent = completed ? jev.flagged === true ? "Probably scam" : jev.flagged === false ? "No question reached cutoff" : "Flag unavailable" : title(status);
+  summary.append(badge);
+  if (hasCutoff) {
+    const cutoff = document.createElement("span");
+    cutoff.className = "jev-cutoff";
+    cutoff.textContent = `Yes at ≥ ${jev.threshold}`;
+    summary.append(cutoff);
+  }
+  card.append(heading, summary);
+  const configuration = [jev?.model, jev?.questionSetVersion].filter(Boolean);
+  if (configuration.length) {
+    const detail = document.createElement("p");
+    detail.className = "jev-model";
+    detail.textContent = configuration.join(" · ");
+    card.append(detail);
+  }
+  const questions = Object.entries(jev?.questions || {});
+  if (questions.length) {
+    const list = document.createElement("ol");
+    list.className = "jev-questions";
+    list.setAttribute("role", "list");
+    for (const [id, question] of questions) {
+      const row = document.createElement("li");
+      row.className = "jev-question";
+      const text = document.createElement("span");
+      text.className = "jev-question-text";
+      text.textContent = question.instructions;
+      const result = document.createElement("span");
+      result.className = "jev-answer";
+      const answer = jev.answers?.[id];
+      const valid = completed && answer?.type === "noul" && Number.isFinite(answer.noul) && answer.noul >= 0 && answer.noul <= 1;
+      if (valid) {
+        const yes = hasCutoff && answer.noul >= jev.threshold;
+        result.textContent = hasCutoff ? `${yes ? "Yes" : "No"} · ${answer.noul}` : `${answer.noul} · No cutoff`;
+        result.classList.toggle("yes", yes);
+      } else result.textContent = status === "pending" ? "Waiting" : "Unavailable";
+      row.append(text, result);
+      list.append(row);
+    }
+    card.append(list);
+  }
+  if (jev?.reason || !questions.length) {
+    const reason = document.createElement("p");
+    reason.className = "jev-reason";
+    reason.textContent = jev?.reason ? title(jev.reason) : "No Jev question details received for this capture.";
+    card.append(reason);
+  }
+}
+
+function prependJev(item, preserveScroll = true) {
+  const pane = byId("jev-scroll");
+  const position = preserveScroll ? scrollPosition(pane) : null;
+  const card = document.createElement("li");
+  card.dataset.scrollKey = String(item.captureId);
+  jevCards.set(String(item.captureId), card);
+  renderJevCard(card, item);
+  byId("jev-results").prepend(card);
+  byId("jev-empty").hidden = true;
+  byId("jev-count").textContent = String(model.ocr.length);
+  if (position) restoreScroll(pane, position);
+}
+
+function renderJev() {
+  jevCards.clear();
+  byId("jev-results").replaceChildren();
+  byId("jev-empty").hidden = model.ocr.length > 0;
+  byId("jev-count").textContent = String(model.ocr.length);
+  model.ocr.forEach((item) => prependJev(item, false));
+}
+
+function applyJev(update) {
+  const item = model.ocr.find((capture) => String(capture.captureId) === String(update.captureId));
+  if (!item) return;
+  item.jev = update.jev;
+  const card = jevCards.get(String(update.captureId));
+  if (!card) return;
+  const pane = byId("jev-scroll");
+  const position = scrollPosition(pane);
+  renderJevCard(card, item);
+  restoreScroll(pane, position);
+}
+
 function prependActivity(entry, preserveScroll = true) {
   const pane = byId("activity-scroll");
   const position = preserveScroll ? scrollPosition(pane) : null;
   const item = document.createElement("li");
   if (entry.type.endsWith("failed") || entry.type === "command_error") item.className = "event-error";
-  else if (["capture_skipped", "capture_discarded"].includes(entry.type)) item.className = "event-warning";
+  else if (["capture_skipped", "capture_discarded", "jev_skipped", "jev_canceled"].includes(entry.type)) item.className = "event-warning";
   const time = document.createElement("time");
   time.textContent = timestamp(entry.timestampMs);
   if (Number.isFinite(entry.timestampMs)) time.dateTime = new Date(entry.timestampMs).toISOString();
@@ -288,11 +411,12 @@ function applySnapshot(snapshot) {
   const sameRun = model.run?.id === snapshot.run?.id;
   const deviceChanged = model.selectedDevice !== snapshot.selectedDevice;
   if (!sameRun) expandedCaptures.clear();
-  const positions = ["text-scroll", "activity-scroll"].map((id) => ({ id, ...scrollPosition(byId(id)) }));
+  const positions = ["jev-scroll", "text-scroll", "activity-scroll"].map((id) => ({ id, ...scrollPosition(byId(id)) }));
   if (snapshot.token) token = snapshot.token;
   model = { ...model, ...snapshot };
   renderDevices(deviceChanged);
   renderOcr();
+  renderJev();
   renderActivity();
   renderStatus();
   for (const position of positions) {
@@ -321,6 +445,44 @@ async function request(path, body) {
   }
 }
 
+async function sendJevKey(clear = false) {
+  if (commandBusy || model.connection !== "connected" || !streamReady || byId("device").value !== model.selectedDevice) return;
+  let payload = JSON.stringify({ apiKey: clear ? "" : byId("jev-key-input").value });
+  byId("jev-key-input").value = "";
+  keySending = true;
+  commandBusy = true;
+  byId("jev-key-message").textContent = "";
+  byId("jev-key-message").className = "key-message";
+  renderStatus();
+  try {
+    const delivery = fetch("/api/jev-key", { method: "POST", headers: { "Content-Type": "application/json", "X-Antiscam-Token": token }, body: payload });
+    payload = "";
+    const response = await delivery;
+    if (!response.ok) throw new Error("Key delivery failed.");
+    byId("jev-key-message").textContent = clear ? "Clear request sent to phone." : "Key sent to phone. Jev readiness confirms receipt, not key validity.";
+  } catch {
+    byId("jev-key-message").textContent = "The request could not be sent. Check the phone connection and try again.";
+    byId("jev-key-message").className = "key-message error";
+  } finally {
+    payload = "";
+    keySending = false;
+    commandBusy = false;
+    renderStatus();
+  }
+}
+
+byId("jev-key-open").addEventListener("click", () => {
+  byId("jev-key-input").value = "";
+  byId("jev-key-message").textContent = "";
+  byId("jev-key-message").className = "key-message";
+  byId("jev-key-dialog").showModal();
+});
+byId("jev-key-form").addEventListener("submit", (event) => { event.preventDefault(); sendJevKey(); });
+byId("jev-key-clear").addEventListener("click", () => sendJevKey(true));
+byId("jev-key-close").addEventListener("click", () => byId("jev-key-dialog").close());
+byId("jev-key-dialog").addEventListener("cancel", () => { byId("jev-key-input").value = ""; });
+byId("jev-key-dialog").addEventListener("close", () => { byId("jev-key-input").value = ""; });
+
 byId("start").addEventListener("click", () => request("/api/command", { command: "start" }));
 byId("stop").addEventListener("click", () => request("/api/command", { command: "stop" }));
 byId("pause").addEventListener("click", () => request("/api/command", { command: model.state.monitoringEnabled ? "pause" : "resume" }));
@@ -329,6 +491,7 @@ byId("connect").addEventListener("click", () => request("/api/connect", { serial
 byId("device").addEventListener("change", renderStatus);
 byId("export").addEventListener("click", (event) => { if (!model.run) event.preventDefault(); });
 byId("text-latest").addEventListener("click", () => { byId("text-scroll").scrollTop = 0; });
+byId("jev-latest").addEventListener("click", () => { byId("jev-scroll").scrollTop = 0; });
 byId("activity-latest").addEventListener("click", () => { byId("activity-scroll").scrollTop = 0; });
 
 async function initialize() {
@@ -349,7 +512,8 @@ async function initialize() {
         renderDevices(deviceChanged);
         renderStatus();
       }
-      else if (update.kind === "ocr") { model.ocr.push(update.data); prependOcr(update.data, model.ocr.length - 1); }
+      else if (update.kind === "ocr") { model.ocr.push(update.data); prependOcr(update.data, model.ocr.length - 1); prependJev(update.data); }
+      else if (update.kind === "jev") applyJev(update.data);
       else if (update.kind === "activity") { model.activity.push(update.data); prependActivity(update.data); byId("activity-count").textContent = String(model.activity.length); }
     };
     stream.onerror = () => { streamReady = false; renderStatus(); };
@@ -358,7 +522,7 @@ async function initialize() {
   }
 }
 
-window.addEventListener("pagehide", () => stream?.close());
+window.addEventListener("pagehide", () => { byId("jev-key-input").value = ""; stream?.close(); });
 // This timer only updates the displayed clock. Device data arrives through SSE.
 setInterval(renderElapsed, 1000);
 initialize();

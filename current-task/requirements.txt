@@ -1,20 +1,20 @@
-Current task: background capture and real-app developer console
+Current task: background capture, direct Jev experiments, and real-app developer console
 User-approved scope: 4 October 2026
 
 1. Delete the entire demo/test app from the emulator and project. Remove its fixture module, sample conversations, test screens, password toggles, capture toggles, and install/launch references.
 2. Use real apps for all further device checks. Do not recreate or reopen a synthetic conversation app.
 3. Keep the Android app as background interaction, screenshot, OCR, and capture-logic infrastructure.
-4. Keep only accessibility status, an accessibility settings button, and required capture consent in the Android setup screen. Do not show run instructions, run controls, OCR text, capture results, or demo buttons there.
+4. Keep accessibility status, an accessibility settings button, capture/cloud consent, and Jev readiness in Android setup. Enter the Jev key in the desktop dashboard. Do not show run controls, OCR text, capture results, or demo buttons on the phone.
 5. Capture the visible default display during a run. Foreground app interactions still trigger capture. Do not require an app selector or allowlist.
 6. Update the current app when the user visits Home, Chrome, Photos, Facebook, Instagram, WhatsApp, or another app. Report unknown states explicitly.
-7. Respect Android secure windows. Mask keyboard windows, password fields, and Android-marked sensitive regions before OCR, including reported overlay windows.
+7. Mask keyboard windows before OCR. Remove all other app-level masking and exclusions for password fields, Android-marked sensitive regions, overlays, and the lock screen. Android capture restrictions still apply.
 8. Drive capture from Android accessibility events. Do not poll the screen continuously.
 9. Request one capture when a typing burst starts and another after about one second without typing. Do not request a screenshot for every character.
 10. Request capture after supported interactions and screen changes settle, including taps, long presses, scrolling, focus/selection changes, text edits, app changes, and screen-content updates. Keep typing debounce and Android screenshot limits. Do not depend on physical touches that Android does not report.
 11. Combine overlapping requests, respect Android capture intervals, and cancel stale work when the app/window or run changes.
 12. Run ML Kit OCR on the device. Associate results with capture numbers, timestamps, source estimates, and capture events. Mark ambiguous sources uncertain.
 13. Keep the emulator, desktop dashboard, and Android Studio separate. Open the dashboard for run work.
-14. Give full extracted text most of the left column. Show the newest capture at the top and the oldest at the bottom, with complete text and identifying metadata.
+14. Use three dashboard columns: Jev results on the left, full OCR text in the middle, and activity on the right. Show newest records first with capture IDs and complete text.
 15. Give the activity log a large right column. Show the newest entry at the top and the oldest at the bottom. Include interactions, requests, screenshots, OCR, failures, cancellations, and reasons for skipped captures. Keep readiness indicators compact.
 16. Give each main dashboard column one scrollbar. Do not add nested scrolling or clip individual OCR results. Preserve the reading position when new events arrive.
 17. Use a dark charcoal theme with orange accents. Put Start, Stop, Pause/Resume, Export ZIP, connection, and run status in a compact toolbar. Remove promotional text, large title sections, oversized cards, and wasted space.
@@ -22,12 +22,29 @@ User-approved scope: 4 October 2026
 19. Start begins a new recording. Stop ends recording and keeps the results. Do not flood stopped runs with no-run capture-skipped messages.
 20. Save each run locally with timestamps, app changes, interactions, capture requests/outcomes, full OCR text, and errors. Link related events by capture ID.
 21. Preserve received records if a run is interrupted. Export the run as a ZIP for later analysis. Screenshot images remain in device memory; screenshot events and OCR text are saved.
-22. Keep private run data out of Git and console diagnostics. Do not send captured content to cloud services.
+22. Keep private run data out of Git and console diagnostics. With renewed consent and a configured key, send OCR text directly to TypeSafe over HTTPS. Keep screenshot images on the device.
 23. Rebuild, install, check the real-app workflow, and open the dashboard. Leave recording stopped and ready for the user to select Start run.
 24. Do not create or run unit tests under the current project instructions.
-25. Cloud analysis, scam judgments, and voice remain outside this task.
+25. Include the approved Jev experiment and its Probably scam flag. Voice and public-release credential distribution remain outside this task.
 26. Use this file as the implementation and acceptance checklist. Later explicit user changes take precedence.
 27. Use the accessibility display-screenshot API on all supported Android versions. Overlapping window rectangles do not reject the entire capture.
-28. Mask reported regions with unavailable privacy information. Preserve ordinary text outside excluded regions when Android permits capture.
-29. Save text-region attribution and mask reasons with OCR metadata. The triggering app does not automatically own all display text.
-30. Keep the 1,000-node inspection ceiling and current event timing. Do not add sampling, retries, worker changes, or node-budget tuning in this change.
+28. Missing privacy information or window metadata must not add masks or prevent capture. Mark unidentified text sources uncertain.
+29. Save text-region attribution and keyboard masks with OCR metadata. The triggering app does not automatically own all display text. Preserve historical mask metadata in saved records.
+30. Remove the obsolete sensitive-node inspection without a replacement scan or a larger node budget. Keep current event timing, sampling, retries, and workers unchanged.
+31. Keep the strict masking rules in docs/masking-rules.md. Update that numbered list whenever masking behavior changes.
+32. Send all six approved Noul questions together in one Jev request. Keep their definitions only in Android code.
+33. Pin the model to jev-1.13.0 and identify this question set as financial-topics-v2.
+34. Set Probably scam only after a completed response has at least one probability greater than or equal to 0.7.
+35. A flag is an experiment result, not proof of fraud. Values below 0.7 do not prove safety.
+36. Enter the TypeSafe key in the desktop Jev key dialog. Forward it once through the local server and ADB bridge to phone memory. Never save it in preferences, source, APK resources, browser storage, run files, or diagnostics.
+37. Require new consent that explains cloud text transfer. Keep the Jev integration limited to the development build.
+38. Associate Jev events with the matching run and capture. Preserve pending, completed, failed, skipped, and canceled states. Do not replace failures with zero probabilities.
+39. Save exact question definitions, probabilities, model, question-set version, threshold, duration, and reasons when available. Include them in snapshots, capture JSON, and ZIP exports.
+40. Stop and interruption cancel unresolved analysis. Preserve terminal results and older records without Jev data.
+41. Keep capture and the dashboard responsive while Jev requests run. Reject stale results before they can change the current phone warning.
+42. Do not create AWS, OVH, or database services for this direct development integration.
+43. Ask the user to audit any new Jev question before implementing it.
+44. Show a silent Probably scam notification only for the current flagged capture. Include no OCR text. Clear it when analysis is invalidated or stopped.
+45. Offer the Android 13+ notification permission control in Android setup. Keep run controls in the desktop dashboard.
+46. Protect POST /api/jev-key with the existing local Origin and command-token checks. Accept at most 2048 ASCII characters without whitespace. An empty key clears phone memory.
+47. Clear the masked browser input after submission or dismissal. Report delivery separately from the phone's Jev readiness acknowledgment. Never echo the key in replies, events, or errors.

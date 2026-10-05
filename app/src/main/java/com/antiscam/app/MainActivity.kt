@@ -1,13 +1,18 @@
 package com.antiscam.app
 
+import android.Manifest
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,10 +38,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.antiscam.app.capture.CaptureState
 import com.antiscam.app.capture.CaptureStore
+import com.antiscam.app.capture.JevAnalysis
+import com.antiscam.app.capture.JevWarning
 import com.antiscam.app.capture.RunMonitor
 
 class MainActivity : ComponentActivity() {
@@ -108,6 +116,7 @@ private fun SetupScreen(
                     Text("Withdraw capture consent")
                 }
             }
+            if (JevAnalysis.available) JevStatusCard(state)
         }
     }
 }
@@ -121,17 +130,22 @@ private fun ConsentCard() {
             Text(
                 "Antiscam uses Android Accessibility to observe app changes, typing, taps, and scrolling. " +
                     "During a dashboard run, it captures the visible screen, including overlapping windows, " +
-                    "and extracts text with ML Kit on this device.",
+                    "and extracts text with ML Kit on this device. " +
+                    "Antiscam masks keyboard windows before OCR. It does not mask sensitive fields. " +
+                    "Android capture restrictions still apply.",
             )
             Text(
-                "Screens can contain private messages and typed text. Screenshot images stay in device memory. " +
-                    "Extracted text and event records are saved on your connected computer. They are not sent to a cloud service.",
+                "Captured text can include private messages and visible passwords. " +
+                    "Screenshot images stay in device memory. " +
+                    "Extracted text, Jev questions, answers, and event records are saved on your connected computer. " +
+                    "With a development key configured, the app sends extracted text to TypeSafe's Jev service over the Internet. " +
+                    "Jev checks the text for the configured topics.",
             )
             Text("You can withdraw consent here at any time. Previously saved runs remain on your computer.")
             Row {
                 Checkbox(checked = accepted, onCheckedChange = { accepted = it })
                 Text(
-                    "I allow local screen capture and text extraction across apps during dashboard runs.",
+                    "I allow screen capture, text extraction, and sending extracted text to TypeSafe for Jev analysis during dashboard runs.",
                     modifier = Modifier.weight(1f).padding(top = 12.dp),
                 )
             }
@@ -143,8 +157,43 @@ private fun ConsentCard() {
                 enabled = accepted,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Allow local capture")
+                Text("Allow capture and Jev analysis")
             }
+        }
+    }
+}
+
+@Composable
+private fun JevStatusCard(state: CaptureState) {
+    val context = LocalContext.current
+    var notificationMessage by remember { mutableStateOf<String?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. Flags remain in the console."
+        if (granted) JevWarning.update(context, CaptureStore.state.value.let { if (it.jevFlagged == true) it.jevCaptureId else null })
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Jev analysis", style = MaterialTheme.typography.titleMedium)
+            Text(if (state.jevReady) "Development key is set for this app session." else "Set the TypeSafe API key with the Jev key button in the desktop console.")
+            Text("The key stays in app memory until cleared or the app process ends. It is not included in console records.")
+            Text(
+                when {
+                    state.jevFlagged == true -> "Probably scam"
+                    state.jevFlagged == false -> "No check reached 0.7. This is not a safety verdict."
+                    else -> "Jev: ${state.jevStatus}"
+                },
+                color = if (state.jevFlagged == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text("Any of the six checks at 0.7 or higher flags the capture. Read the questions and results in the console.")
+            OutlinedButton(onClick = {
+                if (Build.VERSION.SDK_INT >= 33 && !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+                }
+            }) { Text("Scam flag notifications") }
+            notificationMessage?.let { Text(it) }
         }
     }
 }

@@ -26,6 +26,7 @@
         <select id="device"><option value="">No device</option></select>
         <button id="refresh" class="button icon-button" aria-label="Refresh devices" title="Refresh devices">↻</button>
         <button id="connect" class="button" disabled>Connect</button>
+        <button id="jev-key-open" class="button" disabled>Jev key</button>
       </div>
       <span id="connection" class="badge neutral">Connecting</span>
     </header>
@@ -34,6 +35,7 @@
       <div><span class="status-label">Interaction</span><strong id="interaction">Idle</strong><span id="typing" class="detail">Not typing</span></div>
       <div><span class="status-label">Screenshot</span><strong id="capture-status">Ready</strong></div>
       <div><span class="status-label">Text recognition</span><strong id="ocr-status">Ready</strong></div>
+      <div><span class="status-label">Jev</span><strong id="jev-status">Not configured</strong></div>
     </section>
     <section class="counter-strip" aria-label="Run totals">
       <span><strong id="count-requests">0</strong> Requests</span>
@@ -46,6 +48,13 @@
     </section>
     <div id="notice" class="notice" role="status" hidden></div>
     <div class="content-grid">
+      <section class="pane jev-panel" aria-labelledby="jev-title">
+        <header class="pane-heading"><h2 id="jev-title">Jev questions <span id="jev-count" class="count-badge">0</span></h2><button id="jev-latest" class="text-button" aria-label="Go to the latest Jev analysis">Latest ↑</button></header>
+        <div id="jev-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Jev questions and results, newest capture first">
+          <p id="jev-empty" class="empty-state">Each OCR capture appears here with its Jev questions and results. Use Jev key above to send the API key to the phone.</p>
+          <ol id="jev-results" class="results-list" role="list" aria-label="Jev results by capture, newest to oldest"></ol>
+        </div>
+      </section>
       <section class="pane results-panel" aria-labelledby="results-title">
         <header class="pane-heading"><h2 id="results-title">Extracted text <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button" aria-label="Go to the latest extracted text">Latest ↑</button></header>
         <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Extracted text, newest first">
@@ -61,6 +70,7 @@
           <li><span id="check-consent" class="check">○</span> Consent</li>
           <li><span id="check-service" class="check">○</span> Accessibility</li>
           <li><span id="check-monitoring" class="check">○</span> Capture</li>
+          <li><span id="check-jev" class="check">○</span> Jev</li>
         </ul>
         <div id="activity-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Run activity, newest first">
           <p id="activity-empty" class="empty-state">Run interactions and capture events appear here.</p>
@@ -69,5 +79,19 @@
       </aside>
     </div>
   </main>
+  <dialog id="jev-key-dialog" class="key-dialog" aria-labelledby="jev-key-title" aria-describedby="jev-key-help">
+    <form id="jev-key-form" method="dialog" autocomplete="off">
+      <h2 id="jev-key-title">Jev API key</h2>
+      <p id="jev-key-help">The console sends this key through local ADB to the phone's memory. It does not save the key. Enter it again after the app process ends.</p>
+      <label for="jev-key-input">API key</label>
+      <input id="jev-key-input" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="2048" pattern="[!-~]+" required aria-describedby="jev-key-help" autofocus>
+      <p id="jev-key-message" class="key-message" role="status"></p>
+      <div class="key-actions">
+        <button id="jev-key-clear" type="button" class="button">Clear phone key</button>
+        <button id="jev-key-close" type="button" class="button">Close</button>
+        <button id="jev-key-send" type="submit" class="button primary">Send to phone</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>
