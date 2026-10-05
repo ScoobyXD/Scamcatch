@@ -22,6 +22,8 @@ android {
     buildTypes {
         release { isMinifyEnabled = false }
     }
+    // Compile the editable prompts directly from app/ai-instructions.
+    sourceSets.getByName("debug").java.srcDir(file("ai-instructions"))
 }
 
 kotlin {

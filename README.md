@@ -4,6 +4,13 @@ An Android capture service with Jev analysis, automatic voice warnings, a deskto
 
 The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 
+## Edit Jev questions and voice prompts
+
+1. Edit [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt). It is the single source for all Jev questions and voice prompts.
+2. The file also defines both models, the Jev question-set version and threshold, and the voice name. The debug build compiles it directly.
+3. After an edit, stop the run, build, install, and restart Antiscam. Reconnect the dashboard and enter the API keys again. Edits do not reload live.
+4. Ask the user to audit any new Jev question before adding it.
+
 ## Start
 
 1. Start the Android emulator or connect a debugging-enabled Android device.
@@ -82,9 +89,9 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 ## Jev experiment rules
 
 1. Android sends OCR text directly to the TypeSafe HTTPS API. The desktop recorder does not call Jev.
-2. The approved six Noul questions are sent together in one request. Android defines the questions once. Topics cover crypto, private apps, crypto investment, moving another person's money, bank-account login, and scam attempts.
-3. The experiment pins `jev-1.13.0` and identifies the question set as `financial-topics-v2`.
-4. A completed response triggers **Probably scam** when any answer is at least `0.7`.
+2. Send the six approved Noul questions from [AIInstructions.kt](app/ai-instructions/AIInstructions.kt) together in one request.
+3. The shared instruction file pins the Jev model, question-set version, and threshold.
+4. A completed response triggers **Probably scam** when any answer reaches the configured threshold.
 5. This flag is an experiment result, not proof of fraud. Answers below the threshold do not prove safety.
 6. Missing keys, empty text, and failed requests remain explicit. They never become successful checks with zero probabilities.
 7. Analyze each captured text even after typing, scrolling, screen updates, app changes, or newer captures. Save results with their original run and capture.

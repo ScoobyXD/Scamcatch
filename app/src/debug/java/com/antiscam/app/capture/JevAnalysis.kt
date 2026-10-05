@@ -3,6 +3,10 @@ package com.antiscam.app.capture
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.antiscam.app.capture.AIInstructions.JEV_MODEL
+import com.antiscam.app.capture.AIInstructions.JEV_QUESTION_SET_VERSION
+import com.antiscam.app.capture.AIInstructions.JEV_THRESHOLD
+import com.antiscam.app.capture.AIInstructions.jevQuestions
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
@@ -19,20 +23,9 @@ import org.json.JSONObject
 /** Debug-only client. Credentials exist only in this process and active HTTPS calls. */
 object JevAnalysis {
     val available = true
-    private const val MODEL = "jev-1.13.0"
-    private const val QUESTION_SET_VERSION = "financial-topics-v2"
-    private const val THRESHOLD = 0.7
     private const val MAX_TEXT_BYTES = 64 * 1024
     private const val MAX_RESPONSE_BYTES = 64L * 1024
     private val handler = Handler(Looper.getMainLooper())
-    private val questions = linkedMapOf(
-        "crypto" to "Is someone mentioning buying or moving crypto?",
-        "private_app" to "Is someone asking the recipient to talk on a private messaging app, such as WhatsApp?",
-        "crypto_investing" to "Is there talk of investing into crypto",
-        "moving_money_for_another_person" to "Is there talk of moving money for another person",
-        "bank_account_login" to "Is there talk of logging into a checking account/bank account",
-        "scam_attempt" to "Is someone trying to commit a scam",
-    ).mapValues { (_, instructions) -> mapOf("type" to "noul", "instructions" to instructions) }
     private val client = OkHttpClient.Builder()
         .dispatcher(Dispatcher().apply { maxRequests = 1; maxRequestsPerHost = 1 })
         .connectTimeout(8, TimeUnit.SECONDS)
@@ -89,9 +82,9 @@ object JevAnalysis {
             return
         }
         val body = JSONObject().apply {
-            put("model", MODEL)
+            put("model", JEV_MODEL)
             put("state", text)
-            put("questions", JSONObject(questions))
+            put("questions", JSONObject(jevQuestions))
         }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
             .url("https://api.typesafe.ai/v1/systemone")
@@ -145,12 +138,12 @@ object JevAnalysis {
         source.request(MAX_RESPONSE_BYTES + 1)
         if (source.buffer.size > MAX_RESPONSE_BYTES) return Result.Failed("Jev returned an oversized response.")
         val payload = JSONObject(source.readUtf8())
-        if (payload.opt("model") != MODEL) return Result.Failed("Jev returned an unexpected model version.")
+        if (payload.opt("model") != JEV_MODEL) return Result.Failed("Jev returned an unexpected model version.")
         val returned = payload.optJSONObject("answers")
-            ?: return Result.Failed("Jev did not return all six Noul answers.")
-        if (returned.length() != questions.size) return Result.Failed("Jev did not return exactly six Noul answers.")
+            ?: return Result.Failed("Jev did not return the configured Noul answers.")
+        if (returned.length() != jevQuestions.size) return Result.Failed("Jev returned an unexpected number of Noul answers.")
         val answers = linkedMapOf<String, Map<String, Any>>()
-        for (id in questions.keys) {
+        for (id in jevQuestions.keys) {
             val answer = returned.optJSONObject(id)
             val probability = (answer?.opt("noul") as? Number)?.toDouble()
             if (answer?.opt("type") != "noul" || probability == null || !probability.isFinite() || probability !in 0.0..1.0) {
@@ -167,15 +160,15 @@ object JevAnalysis {
         answers: Map<String, Map<String, Any>>? = null,
         reason: String? = null,
     ) {
-        val flagged = answers?.values?.any { (it.getValue("noul") as Double) >= THRESHOLD }
+        val flagged = answers?.values?.any { (it.getValue("noul") as Double) >= JEV_THRESHOLD }
         if (CaptureStore.state.value.runId == pending.runId) {
             CaptureStore.setJevResult(status, pending.captureId, flagged)
         }
         if (flagged == true) {
             // Reuse the exact captured evidence and approved questions. Never substitute newer OCR.
-            val signals = answers.filterValues { (it.getValue("noul") as Double) >= THRESHOLD }
+            val signals = answers.filterValues { (it.getValue("noul") as Double) >= JEV_THRESHOLD }
                 .map { (id, answer) ->
-                    mapOf("question" to questions.getValue(id).getValue("instructions"), "probability" to answer.getValue("noul"))
+                    mapOf("question" to jevQuestions.getValue(id).getValue("instructions"), "probability" to answer.getValue("noul"))
                 }
             val evidence = JSONObject().put("flaggedChecks", org.json.JSONArray(signals))
                 .put("capturedText", pending.text).toString()
@@ -185,10 +178,10 @@ object JevAnalysis {
             "runId" to pending.runId,
             "captureId" to pending.captureId,
             "status" to status,
-            "model" to MODEL,
-            "questionSetVersion" to QUESTION_SET_VERSION,
-            "threshold" to THRESHOLD,
-            "questions" to questions,
+            "model" to JEV_MODEL,
+            "questionSetVersion" to JEV_QUESTION_SET_VERSION,
+            "threshold" to JEV_THRESHOLD,
+            "questions" to jevQuestions,
         )
         if (status != "pending") data["durationMs"] = SystemClock.elapsedRealtime() - pending.startedAt
         if (answers != null) {
