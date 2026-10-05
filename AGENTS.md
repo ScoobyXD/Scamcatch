@@ -1,5 +1,5 @@
 Purpose:
-Reduce dollars lost from scams to $0. In the future see scams as this thing of the past like smallpox and polio.
+Reduce the amount of money lost to scams to $0. In the future we'll see scams as this thing of the past like smallpox and polio.
 
 User Preferences:
 1. When I ask you to create a new git worktree, I always mean to create a new git worktree in a brand new codex instance. And make sure to number them, like # <worktree name>

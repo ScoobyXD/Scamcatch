@@ -40,5 +40,6 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("com.squareup.okhttp3:okhttp:4.12.0")
+    debugImplementation("io.github.webrtc-sdk:android:150.7871.01")
     testImplementation("junit:junit:4.13.2")
 }

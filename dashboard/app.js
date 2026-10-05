@@ -7,7 +7,12 @@ let token = "";
 let stream;
 let commandBusy = false;
 let keySending = false;
+let keyProvider = "jev";
 let streamReady = false;
+const keyProviders = {
+  jev: { label: "Jev", endpoint: "/api/jev-key" },
+  openai: { label: "OpenAI", endpoint: "/api/openai-key" },
+};
 const expandedCaptures = new Set();
 const jevCards = new Map();
 const textResizeObserver = new ResizeObserver((entries) => {
@@ -72,13 +77,14 @@ function renderStatus() {
   byId("connect").disabled = commandBusy || Boolean(active) || deviceRunActive || changingDevice || selectedDevice?.status !== "device" || (connected && !differentDevice);
   byId("connect").textContent = connected ? "Switch device" : "Connect";
   byId("jev-key-open").disabled = commandBusy || !connected || differentDevice;
-  byId("jev-key-input").disabled = commandBusy || !connected || differentDevice;
-  byId("jev-key-send").disabled = commandBusy || !connected || differentDevice;
-  byId("jev-key-clear").disabled = commandBusy || !connected || differentDevice;
-  byId("jev-key-send").textContent = keySending ? "Sending…" : "Send to phone";
-  if ((!connected || differentDevice) && byId("jev-key-dialog").open) {
-    byId("jev-key-input").value = "";
-    byId("jev-key-message").textContent = "Connect the selected phone before sending a key.";
+  byId("openai-key-open").disabled = commandBusy || !connected || differentDevice;
+  byId("api-key-input").disabled = commandBusy || !connected || differentDevice;
+  byId("api-key-send").disabled = commandBusy || !connected || differentDevice;
+  byId("api-key-clear").disabled = commandBusy || !connected || differentDevice;
+  byId("api-key-send").textContent = keySending ? "Sending…" : "Send to phone";
+  if ((!connected || differentDevice) && byId("api-key-dialog").open) {
+    byId("api-key-input").value = "";
+    byId("api-key-message").textContent = "Connect the selected phone before sending a key.";
   }
   byId("refresh").disabled = commandBusy || changingDevice;
   byId("device").disabled = commandBusy || Boolean(active) || deviceRunActive || changingDevice;
@@ -90,9 +96,12 @@ function renderStatus() {
   byId("current-package").textContent = state.currentPackage || state.lastExternalApp || "No activity yet";
   byId("interaction").textContent = title(state.lastInteraction);
   byId("typing").textContent = state.typing === true || state.typing === "typing" ? "Typing now" : "Not typing";
-  byId("capture-status").textContent = title(state.captureStatus, "Ready");
-  byId("ocr-status").textContent = title(state.ocrStatus, "Ready");
+  byId("capture-status").textContent = state.warningActive ? "Paused for warning" : title(state.captureStatus, "Ready");
+  byId("ocr-status").textContent = state.warningActive ? "Paused for warning" : title(state.ocrStatus, "Ready");
   byId("jev-status").textContent = state.jevFlagged === true ? "Probably scam" : title(state.jevStatus, state.jevReady ? "Ready" : "Not configured");
+  byId("voice-status").textContent = !state.warningActive && (!state.voiceStatus || state.voiceStatus === "idle")
+    ? state.voiceReady ? "Key loaded" : "Key not set"
+    : title(state.voiceStatus);
   const counters = active ? (state.counters ?? {}) : (run?.counters ?? {});
   for (const name of ["requests", "screenshots", "ocrCompleted", "failed", "ocrFailed", "skipped"]) {
     byId(`count-${name}`).textContent = String(counters[name] ?? 0);
@@ -105,8 +114,9 @@ function renderStatus() {
   setCheck("check-bridge", connected);
   setCheck("check-consent", state.consentGranted);
   setCheck("check-service", state.serviceConnected);
-  setCheck("check-monitoring", state.monitoringEnabled);
+  setCheck("check-monitoring", state.monitoringEnabled && !state.warningActive);
   setCheck("check-jev", state.jevReady);
+  setCheck("check-voice", state.voiceReady);
   byId("export").classList.toggle("disabled", !run);
   byId("export").setAttribute("aria-disabled", String(!run));
   byId("save-status").textContent = run ? active ? "Recording locally" : run.status === "interrupted" ? "Partial run saved" : "Run saved" : "Runs save locally.";
@@ -116,8 +126,9 @@ function renderStatus() {
   else if (differentDevice) notice("Select Switch device to connect to the selected device.");
   else if (run?.status === "interrupted") notice("Run interrupted. Received events are saved. Start a new run to continue.", "warning");
   else if (run?.status === "failed") notice(run.reason || "The run could not start.", "error");
-  else if (!state.consentGranted) notice("Open Antiscam on the selected device and review capture and Jev consent.", "warning");
+  else if (!state.consentGranted) notice("Open Antiscam on the selected device and review capture and cloud consent.", "warning");
   else if (!state.serviceConnected) notice("Enable Antiscam interaction capture in Android Accessibility settings.", "warning");
+  else if (state.warningActive) notice("Scam warning open on the phone. Screenshots and OCR are paused. Close it with the red X to resume.", "warning");
   else if (!state.monitoringEnabled) notice("Capture paused. Select Resume, then Start run.", "warning");
   else notice(run?.status === "stopping" ? "Waiting for Stop confirmation…" : "");
 }
@@ -445,24 +456,27 @@ async function request(path, body) {
   }
 }
 
-async function sendJevKey(clear = false) {
+async function sendApiKey(clear = false) {
   if (commandBusy || model.connection !== "connected" || !streamReady || byId("device").value !== model.selectedDevice) return;
-  let payload = JSON.stringify({ apiKey: clear ? "" : byId("jev-key-input").value });
-  byId("jev-key-input").value = "";
+  const provider = keyProviders[keyProvider];
+  let payload = JSON.stringify({ apiKey: clear ? "" : byId("api-key-input").value });
+  byId("api-key-input").value = "";
   keySending = true;
   commandBusy = true;
-  byId("jev-key-message").textContent = "";
-  byId("jev-key-message").className = "key-message";
+  byId("api-key-message").textContent = "";
+  byId("api-key-message").className = "key-message";
   renderStatus();
   try {
-    const delivery = fetch("/api/jev-key", { method: "POST", headers: { "Content-Type": "application/json", "X-Antiscam-Token": token }, body: payload });
+    const delivery = fetch(provider.endpoint, { method: "POST", headers: { "Content-Type": "application/json", "X-Antiscam-Token": token }, body: payload });
     payload = "";
     const response = await delivery;
     if (!response.ok) throw new Error("Key delivery failed.");
-    byId("jev-key-message").textContent = clear ? "Clear request sent to phone." : "Key sent to phone. Jev readiness confirms receipt, not key validity.";
+    byId("api-key-message").textContent = clear ? "Clear request sent to phone." : keyProvider === "jev"
+      ? "Key sent to phone. Jev readiness confirms receipt, not key validity."
+      : "Key sent to phone. The OpenAI key indicator confirms loading only. It does not validate the key. Voice also needs consent and microphone permission.";
   } catch {
-    byId("jev-key-message").textContent = "The request could not be sent. Check the phone connection and try again.";
-    byId("jev-key-message").className = "key-message error";
+    byId("api-key-message").textContent = "The request could not be sent. Check the phone connection and try again.";
+    byId("api-key-message").className = "key-message error";
   } finally {
     payload = "";
     keySending = false;
@@ -471,17 +485,25 @@ async function sendJevKey(clear = false) {
   }
 }
 
-byId("jev-key-open").addEventListener("click", () => {
-  byId("jev-key-input").value = "";
-  byId("jev-key-message").textContent = "";
-  byId("jev-key-message").className = "key-message";
-  byId("jev-key-dialog").showModal();
-});
-byId("jev-key-form").addEventListener("submit", (event) => { event.preventDefault(); sendJevKey(); });
-byId("jev-key-clear").addEventListener("click", () => sendJevKey(true));
-byId("jev-key-close").addEventListener("click", () => byId("jev-key-dialog").close());
-byId("jev-key-dialog").addEventListener("cancel", () => { byId("jev-key-input").value = ""; });
-byId("jev-key-dialog").addEventListener("close", () => { byId("jev-key-input").value = ""; });
+function openApiKey(provider) {
+  if (commandBusy) return;
+  keyProvider = provider;
+  byId("api-key-title").textContent = `${keyProviders[provider].label} API key`;
+  byId("api-key-voice-help").hidden = provider !== "openai";
+  byId("api-key-input").setAttribute("aria-describedby", provider === "openai" ? "api-key-help api-key-voice-help" : "api-key-help");
+  byId("api-key-input").value = "";
+  byId("api-key-message").textContent = "";
+  byId("api-key-message").className = "key-message";
+  byId("api-key-dialog").showModal();
+}
+
+byId("jev-key-open").addEventListener("click", () => openApiKey("jev"));
+byId("openai-key-open").addEventListener("click", () => openApiKey("openai"));
+byId("api-key-form").addEventListener("submit", (event) => { event.preventDefault(); sendApiKey(); });
+byId("api-key-clear").addEventListener("click", () => sendApiKey(true));
+byId("api-key-close").addEventListener("click", () => byId("api-key-dialog").close());
+byId("api-key-dialog").addEventListener("cancel", () => { byId("api-key-input").value = ""; });
+byId("api-key-dialog").addEventListener("close", () => { byId("api-key-input").value = ""; });
 
 byId("start").addEventListener("click", () => request("/api/command", { command: "start" }));
 byId("stop").addEventListener("click", () => request("/api/command", { command: "stop" }));
@@ -522,7 +544,7 @@ async function initialize() {
   }
 }
 
-window.addEventListener("pagehide", () => { byId("jev-key-input").value = ""; stream?.close(); });
+window.addEventListener("pagehide", () => { byId("api-key-input").value = ""; stream?.close(); });
 // This timer only updates the displayed clock. Device data arrives through SSE.
 setInterval(renderElapsed, 1000);
 initialize();

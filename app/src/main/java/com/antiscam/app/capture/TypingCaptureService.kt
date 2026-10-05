@@ -74,6 +74,7 @@ class TypingCaptureService : AccessibilityService() {
         val target: String,
         val windowId: Int,
         val trigger: String,
+        val warningGeneration: Long = ScamIntervention.generation,
     )
 
     private data class WindowRegion(
@@ -101,20 +102,13 @@ class TypingCaptureService : AccessibilityService() {
         super.onCreate()
         CaptureStore.initialize(this)
         RunMonitor.initialize(this)
+        ScamIntervention.bind(this)
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         inputMethodPackages = getSystemService(InputMethodManager::class.java)
             .inputMethodList.map { it.packageName }.toSet()
         scope.launch {
             CaptureStore.state.map { it.revision }.distinctUntilChanged().collect {
                 invalidate("Run or capture settings changed.")
-            }
-        }
-        scope.launch {
-            CaptureStore.state.map {
-                if (it.consentGranted && it.monitoringEnabled && it.runId != null && it.jevFlagged == true)
-                    it.jevCaptureId else null
-            }.distinctUntilChanged().collect { captureId ->
-                JevWarning.update(this@TypingCaptureService, captureId)
             }
         }
     }
@@ -128,6 +122,7 @@ class TypingCaptureService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || destroyed) return
         observeForeground()
+        if (CaptureStore.state.value.warningActive) return
         val eventPackage = event.packageName?.toString()
         // Keyboard and background events do not replace the visible app's interaction.
         if (eventPackage != null && eventPackage in inputMethodPackages) return
@@ -180,7 +175,7 @@ class TypingCaptureService : AccessibilityService() {
     /** Some apps report edits as parent content changes instead of text-change events. */
     private fun observeFocusedInput(event: AccessibilityEvent): Boolean {
         val state = CaptureStore.state.value
-        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) {
+        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled || state.warningActive) {
             focusedInput = null
             return false
         }
@@ -217,7 +212,7 @@ class TypingCaptureService : AccessibilityService() {
     private fun requestFor(event: AccessibilityEvent, kind: String): Request? {
         val state = CaptureStore.state.value
         // Keep observation live between runs, without generating capture work or skip events.
-        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled) return null
+        if (state.runId == null || !state.consentGranted || !state.monitoringEnabled || state.warningActive) return null
         val target = foregroundPackage ?: return null
         val windowId = foregroundWindowId ?: return null
         if (event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
@@ -317,7 +312,7 @@ class TypingCaptureService : AccessibilityService() {
         if (windowChanged && observedPackage != null && observedWindowId != null) {
             val state = CaptureStore.state.value
             val runId = state.runId
-            if (runId != null && state.consentGranted && state.monitoringEnabled) {
+            if (runId != null && state.consentGranted && state.monitoringEnabled && !state.warningActive) {
                 val request = Request(generation, state.revision, runId, observedPackage,
                     observedWindowId, "app_settled")
                 scheduleSettled(request)
@@ -410,6 +405,7 @@ class TypingCaptureService : AccessibilityService() {
         val state = CaptureStore.state.value
         return !destroyed && request.generation == generation && request.revision == state.revision &&
             request.runId == state.runId && state.consentGranted && state.monitoringEnabled &&
+            !state.warningActive && request.warningGeneration == ScamIntervention.generation &&
             request.target == foregroundPackage && request.windowId == foregroundWindowId
     }
 
@@ -439,6 +435,12 @@ class TypingCaptureService : AccessibilityService() {
                 var softwareBitmap: Bitmap? = null
                 try {
                     RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
+                    if (request.warningGeneration != ScamIntervention.generation || CaptureStore.state.value.warningActive) {
+                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                            "reason" to "A scam warning paused screenshot and OCR work."))
+                        finishCapture()
+                        return
+                    }
                     val currentPlan = displayPlan(request)
                     val masks = (plan.maskedRegions + currentPlan?.maskedRegions.orEmpty()).distinct()
                     hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
@@ -494,6 +496,11 @@ class TypingCaptureService : AccessibilityService() {
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
+                    if (request.warningGeneration != ScamIntervention.generation || CaptureStore.state.value.warningActive) {
+                        RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                            "reason" to "A scam warning paused screenshot and OCR work."))
+                        return@addOnSuccessListener
+                    }
                     val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
                         textRegion(line.text, line.boundingBox, plan)
                     } }
@@ -620,6 +627,7 @@ class TypingCaptureService : AccessibilityService() {
         destroyed = true
         invalidate("The accessibility service stopped.")
         JevWarning.update(this, null)
+        ScamIntervention.unbind()
         scope.cancel()
         if (!inFlight) recognizer.close()
         CaptureStore.connected(false)

@@ -26,7 +26,8 @@ ROOT = HERE.parent
 ACTIVE = {"starting", "active", "stopping"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
-CAPTURE_RESULTS = {"screenshot_received", "capture_failed", "capture_discarded", "ocr_started", "ocr_completed", "ocr_failed"} | JEV_EVENTS
+LATE_RESULTS = {"screenshot_received", "capture_failed", "capture_discarded", "ocr_started", "ocr_completed", "ocr_failed", "voice_audio_summary"} | JEV_EVENTS
+KEY_COMMANDS = {"/api/jev-key": "jev_key", "/api/openai-key": "openai_key"}
 
 
 def utc_now():
@@ -364,11 +365,11 @@ class Console:
             data = event.get("data") or {}
             if not isinstance(data, dict):
                 raise ValueError("The device sent invalid event data.")
-            # Captured work can finish after Stop or after another run starts.
+            # Captured work and voice cleanup can finish after Stop or another run starts.
             matching = self.run and event.get("runId") == self.run["id"] and (
-                self.run["status"] in ACTIVE or kind in CAPTURE_RESULTS)
+                self.run["status"] in ACTIVE or kind in LATE_RESULTS)
             run = self.run if matching else None
-            if run is None and kind in CAPTURE_RESULTS:
+            if run is None and kind in LATE_RESULTS:
                 run = self.saved_run(event.get("runId"))
             if run:
                 active = run is self.run and run["status"] in ACTIVE
@@ -776,13 +777,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.console.refresh_devices()
             elif path == "/api/connect":
                 self.console.connect_device(body.get("serial"))
-            elif path == "/api/jev-key":
+            elif path in KEY_COMMANDS:
                 api_key = body.pop("apiKey", None)
                 if not isinstance(api_key, str) or (api_key and not re.fullmatch(r"[\x21-\x7e]{1,2048}", api_key)):
                     raise ValueError("Use an API key of at most 2048 ASCII characters without spaces, or leave it empty to clear.")
                 # Deliver once. Never retain the key in recorder state or events.
-                self.console.send_command({"command": "jev_key", "apiKey": api_key})
-                del api_key
+                try:
+                    self.console.send_command({"command": KEY_COMMANDS[path], "apiKey": api_key})
+                finally:
+                    del api_key
             elif path == "/api/command":
                 command = body.get("command")
                 if command == "start":
@@ -796,7 +799,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.respond(404, {"error": "Not found."})
                 return
-            # A key command is acknowledged later by the phone's jevReady state.
+            # The phone reports key readiness later through its state event.
             self.respond(200, {"ok": True})
         except (ValueError, RuntimeError, UnicodeDecodeError) as error:
             self.respond(409, {"error": str(error)})

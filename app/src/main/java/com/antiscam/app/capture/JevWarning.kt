@@ -9,7 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import com.antiscam.app.MainActivity
+import com.antiscam.app.ScamWarningActivity
 import com.antiscam.app.R
 
 /** Show the current flag without copying captured text into a notification. */
@@ -28,11 +28,11 @@ object JevWarning {
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Scam flags", NotificationManager.IMPORTANCE_LOW))
         if (!manager.areNotificationsEnabled()) return
         val intent = PendingIntent.getActivity(context, 0,
-            Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            Intent(context, ScamWarningActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_scam_flag)
             .setContentTitle("Probably scam")
-            .setContentText("A check reached the alert threshold. Review capture #$captureId in the console.")
+            .setContentText("Screen checks are paused. Tap to open the warning for capture #$captureId.")
             .setContentIntent(intent)
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)

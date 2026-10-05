@@ -20,6 +20,10 @@ data class CaptureState(
     val jevStatus: String = "idle",
     val jevFlagged: Boolean? = null,
     val jevCaptureId: Int? = null,
+    val voiceReady: Boolean = false,
+    val voiceConsentGranted: Boolean = false,
+    val warningActive: Boolean = false,
+    val voiceStatus: String = "idle",
     // A run exists only while the developer dashboard owns the local connection.
     val runId: String? = null,
     // Every change that invalidates a pending capture increments this value.
@@ -42,6 +46,7 @@ object CaptureStore {
         val enabled = consent && prefs.getBoolean("enabled", false)
         mutableState.value = CaptureState(
             consentGranted = consent,
+            voiceConsentGranted = consent && prefs.getBoolean("voiceConsent", false),
             monitoringEnabled = enabled,
             status = if (enabled) "Waiting for the accessibility service." else "Monitoring is paused.",
         )
@@ -51,6 +56,7 @@ object CaptureStore {
         mutableState.update {
             it.copy(
                 consentGranted = granted,
+                voiceConsentGranted = granted && it.voiceConsentGranted,
                 monitoringEnabled = granted && it.monitoringEnabled,
                 latestText = if (granted) it.latestText else "",
                 lastCapturedAtMillis = if (granted) it.lastCapturedAtMillis else null,
@@ -100,6 +106,7 @@ object CaptureStore {
 
     fun reset() {
         JevAnalysis.clearKey()
+        LiveVoice.clearKey()
         mutableState.update {
             CaptureState(serviceConnected = it.serviceConnected, revision = it.revision + 1)
         }
@@ -145,6 +152,29 @@ object CaptureStore {
         mutableState.update { it.copy(jevReady = ready) }
     }
 
+    fun setVoiceConsent(granted: Boolean) {
+        mutableState.update { it.copy(voiceConsentGranted = granted && it.consentGranted) }
+        saveSettings()
+    }
+
+    internal fun setVoiceReady(ready: Boolean) {
+        mutableState.update { it.copy(voiceReady = ready) }
+    }
+
+    internal fun setVoiceStatus(status: String) {
+        mutableState.update { it.copy(voiceStatus = status) }
+    }
+
+    internal fun setWarningActive(active: Boolean) {
+        mutableState.update {
+            if (it.warningActive == active) it else it.copy(
+                warningActive = active,
+                status = if (active) "Scam warning open. Screenshots and OCR are paused." else "Warning closed. Capture can resume.",
+                revision = it.revision + 1,
+            )
+        }
+    }
+
     internal fun setJevResult(status: String, captureId: Int?, flagged: Boolean? = null) {
         mutableState.update { it.copy(jevStatus = status, jevCaptureId = captureId, jevFlagged = flagged) }
     }
@@ -167,6 +197,7 @@ object CaptureStore {
             ?.putBoolean("consent", current.consentGranted)
             ?.putInt("consentVersion", CONSENT_VERSION)
             ?.putBoolean("enabled", current.monitoringEnabled)
+            ?.putBoolean("voiceConsent", current.voiceConsentGranted)
             ?.remove("target")
             ?.apply()
     }

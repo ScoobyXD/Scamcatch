@@ -51,7 +51,8 @@ object RunMonitor {
             scope.launch {
                 CaptureStore.state.map {
                     listOf(it.consentGranted, it.monitoringEnabled, it.serviceConnected, it.revision,
-                        it.jevReady, it.jevStatus, it.jevFlagged, it.jevCaptureId)
+                        it.jevReady, it.jevStatus, it.jevFlagged, it.jevCaptureId,
+                        it.voiceReady, it.voiceConsentGranted, it.warningActive, it.voiceStatus)
                 }.distinctUntilChanged().collect {
                     val state = CaptureStore.state.value
                     session?.let { active ->
@@ -82,7 +83,7 @@ object RunMonitor {
             if (type in CAPTURE_EVENTS && (eventSession == null || guard != eventSession.id)) return@onMain
             val payload = details - "runId"
             if (eventSession !== session) {
-                if (type in CAPTURE_RESULT_EVENTS) emitNow(type, payload, eventSession)
+                if (type in CAPTURE_RESULT_EVENTS || type == "voice_audio_summary") emitNow(type, payload, eventSession)
                 return@onMain
             }
             when (type) {
@@ -140,13 +141,17 @@ object RunMonitor {
             return@onMain
         }
         when (message.optString("command")) {
-            "jev_key" -> {
+            "jev_key", "openai_key" -> {
+                val isVoice = message.optString("command") == "openai_key"
+                val provider = if (isVoice) "openai" else "jev"
                 val key = message.opt("apiKey") as? String
                 when {
-                    !JevAnalysis.available -> emitNow("command_error", mapOf("reason" to "jev_unavailable"))
-                    key == null -> emitNow("command_error", mapOf("reason" to "invalid_jev_key"))
-                    key.isEmpty() -> JevAnalysis.clearKey()
-                    !JevAnalysis.setKey(key) -> emitNow("command_error", mapOf("reason" to "invalid_jev_key"))
+                    !(if (isVoice) LiveVoice.available else JevAnalysis.available) ->
+                        emitNow("command_error", mapOf("reason" to "${provider}_unavailable"))
+                    key == null -> emitNow("command_error", mapOf("reason" to "invalid_${provider}_key"))
+                    key.isEmpty() -> if (isVoice) LiveVoice.clearKey() else JevAnalysis.clearKey()
+                    !(if (isVoice) LiveVoice.setKey(key) else JevAnalysis.setKey(key)) ->
+                        emitNow("command_error", mapOf("reason" to "invalid_${provider}_key"))
                 }
                 // Only readiness enters the event stream. Never include the received command.
                 emitNow("state_changed", emptyMap())
@@ -215,8 +220,12 @@ object RunMonitor {
             put("lastExternalApp", lastExternalApp)
             put("typing", typing)
             put("lastInteraction", lastInteraction)
-            put("captureStatus", captureStatus)
-            put("ocrStatus", ocrStatus)
+            put("captureStatus", if (config.warningActive) "paused_for_warning" else captureStatus)
+            put("ocrStatus", if (config.warningActive) "paused_for_warning" else ocrStatus)
+            put("voiceReady", config.voiceReady)
+            put("voiceConsentGranted", config.voiceConsentGranted)
+            put("warningActive", config.warningActive)
+            put("voiceStatus", config.voiceStatus)
             put("jevReady", config.jevReady)
             put("jevStatus", config.jevStatus)
             put("jevFlagged", config.jevFlagged ?: JSONObject.NULL)

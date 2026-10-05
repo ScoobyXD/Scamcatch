@@ -1,6 +1,6 @@
 # Antiscam run console
 
-An Android capture service with direct Jev analysis, a separate desktop dashboard, and saved run records.
+An Android capture service with Jev analysis, automatic voice warnings, a desktop dashboard, and saved run records.
 
 The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 
@@ -13,11 +13,14 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
 7. Select the device and choose **Connect** or **Switch device**.
-8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key, send it, and wait for Jev readiness before **Start run**.
-9. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
-10. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
-11. Select **Stop run**. The saved folder under `runs` contains the record for analysis.
-12. Select **Export ZIP** to share the saved run for analysis.
+8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key and send it to the phone.
+9. Select **OpenAI key** and send the OpenAI API key. Key indicators confirm loading only. They do not confirm valid credentials or permissions.
+10. In Android setup, allow automatic voice warnings and microphone access. Then select **Start run** in the dashboard.
+11. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
+12. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
+13. A flagged check opens a centered warning and starts voice automatically when setup is complete. The red X closes it and resumes capture.
+14. Select **Stop**. The saved folder under `runs` contains the record for analysis.
+15. Select **Export ZIP** to share the saved run for analysis.
 
 ```powershell
 .\scripts\build.ps1
@@ -61,6 +64,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 11. Source labels use window estimates where possible. Ambiguous sources remain uncertain. The triggering app is recorded separately as context.
 12. Android reports interactive windows, so accessibility metadata does not guarantee identification of every visible overlay. Missing privacy metadata does not add masks or block capture.
 13. Keep detailed masking behavior in [docs/masking-rules.md](docs/masking-rules.md). See [the current requirements](current-task/requirements.txt) for the full task scope.
+14. An active scam warning pauses new screenshots and OCR. Discard screenshot and OCR work that crosses a warning boundary.
 
 ## Run records
 
@@ -88,12 +92,16 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 9. Enter the key in the desktop **Jev key** dialog. Its masked input clears after submission or dismissal.
 10. This development path needs no AWS service, OVH server, or managed database.
 11. Any new Jev question requires the user's audit before implementation.
-12. A completed flagged check from the active run shows a silent **Probably scam** notification with its original capture number. It contains no OCR text.
-13. Android 13 and later need notification permission. Enable it from Android setup if phone warnings are wanted.
+12. A completed flagged check from the active run opens the centered scam warning. Old Jev results cannot reopen a dismissed warning.
+13. If Android blocks the warning launch, a notification can reopen it. Android 13 and later require notification permission for this fallback.
 14. Stopping a run clears the phone warning. Checks continue, and late results remain attached to the stopped run.
 15. The local dashboard forwards the key once through the ADB debug bridge to phone memory. It does not save or echo the key.
-16. Successful delivery is not confirmation that Jev is ready. The phone's readiness state confirms key setup.
+16. The phone's Jev readiness state confirms a loaded key. It does not validate credentials.
 17. Clearing the key prevents new Jev submissions. Already submitted requests continue with their original key. Ending the phone process ends in-memory work.
+
+## Voice warning rules
+
+Voice setup, warning behavior, WebRTC connections, shutdown, and data handling are documented in [docs/voice.md](docs/voice.md).
 
 ## Data boundary
 
@@ -103,22 +111,24 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 4. OCR text never goes to Logcat or console diagnostics.
 5. Stop and consent withdrawal prevent future capture. They do not erase records already saved on the computer.
 6. ML Kit runs OCR on the device. With consent and a configured key, the debug app sends extracted text to TypeSafe for Jev analysis.
-7. The debug app has Internet access for Jev. The updated disclosure requires consent to this cloud text transfer.
+7. The debug app has Internet access for Jev and OpenAI voice. Each cloud use requires its disclosed consent.
 8. The debug bridge uses an ADB-forwarded local socket. Release builds expose no dashboard socket.
 9. The desktop server binds only to this computer. Browser updates use a pushed event stream.
 10. Android does not expose every physical touch as an accessibility event. Unknown states must remain explicit.
 11. `isAccessibilityTool` remains false. This is not a Google Play approval claim.
-12. After delivery, the key remains only in phone process memory. Browser and server memory hold it briefly during delivery.
-13. Do not store the key in preferences, source files, APK resources, run files, browser storage, or diagnostics.
-14. Enter the key in the dashboard beside the chat. Do not send it in chat messages or scripts.
-15. The phone uses the key as the TypeSafe HTTPS authorization credential. The recorder never includes it in events or exports.
+12. After delivery, API keys remain only in phone process memory. Browser and server memory hold them briefly during delivery.
+13. Do not store API keys in preferences, source files, APK resources, run files, browser storage, or diagnostics.
+14. Enter API keys in the dashboard beside the chat. Do not send them in chat messages or scripts.
+15. The phone uses each key only with its provider. The recorder never includes keys in events or exports.
+16. Voice sends the flagged text, detection context, and microphone audio directly to OpenAI. The app does not save voice audio or transcripts locally.
+17. Jev and OpenAI use one masked key dialog and the same validation and ADB forwarding path. The input clears after submission or dismissal.
 
 ## Code
 
-1. `app` contains the accessibility service, local OCR, direct debug Jev client, event stream, and consent/accessibility setup.
+1. `app` contains capture, OCR, Jev analysis, the warning activity, debug voice, the event stream, and consent/accessibility setup.
 2. `dashboard` contains the desktop server, recorder, and browser interface.
 3. `scripts` contains build, install, and dashboard launch helpers for Antiscam only.
 4. The default build creates the debug app and runs Android lint. It does not run unit tests under the current project instructions.
 5. Device checks use real apps. The demo app and its module were removed.
 6. AGP 8.13.2, Gradle 8.13, Kotlin/Compose compiler 2.3.10, ML Kit text recognition 16.0.1, target/compile SDK 36.
-7. Voice and public-release credential distribution remain outside this development version.
+7. Live voice requires an OpenAI key with `gpt-live-1` access. Syntax checks and builds do not verify a live voice session.

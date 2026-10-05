@@ -51,7 +51,7 @@ select:disabled { opacity: .75; }
 .badge.error { background: var(--error-surface); color: var(--error); }
 .dot { inline-size: 6px; block-size: 6px; border-radius: 50%; background: currentColor; }
 #run-elapsed { font: .75rem ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--muted); }
-.live-status { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) minmax(0, .8fr) minmax(0, .9fr) minmax(0, .9fr); gap: 14px; padding: 7px 12px 5px; }
+.live-status { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) repeat(4, minmax(0, .9fr)); gap: 14px; padding: 7px 12px 5px; }
 .live-status > div { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 6px; row-gap: 1px; min-inline-size: 0; }
 .status-label { font-size: .6875rem; color: var(--muted); }
 .live-status strong { font-size: .75rem; font-weight: 600; overflow-wrap: anywhere; }
@@ -123,7 +123,7 @@ h2 { font-size: .8125rem; font-weight: 650; }
 .key-dialog .key-message { min-block-size: 1.5em; color: var(--accent); }
 .key-dialog .key-message.error { color: var(--error); }
 .key-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-#jev-key-clear { margin-inline-end: auto; }
+#api-key-clear { margin-inline-end: auto; }
 .disabled { opacity: .45; pointer-events: none; }
 [hidden] { display: none !important; }
 .visually-hidden { position: absolute; inline-size: 1px; block-size: 1px; clip-path: inset(50%); white-space: nowrap; }

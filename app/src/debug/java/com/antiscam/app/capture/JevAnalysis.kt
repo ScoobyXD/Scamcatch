@@ -48,6 +48,8 @@ object JevAnalysis {
     private class Pending(
         val captureId: Int,
         val runId: String,
+        val text: String,
+        val warningGeneration: Long = ScamIntervention.generation,
         val startedAt: Long = SystemClock.elapsedRealtime(),
     )
 
@@ -74,7 +76,7 @@ object JevAnalysis {
 
     fun evaluate(text: String, captureId: Int, runId: String) {
         checkMainThread()
-        val pending = Pending(captureId, runId)
+        val pending = Pending(captureId, runId, text)
         val key = apiKey
         val reason = when {
             key == null -> "No development API key is loaded."
@@ -168,6 +170,16 @@ object JevAnalysis {
         val flagged = answers?.values?.any { (it.getValue("noul") as Double) >= THRESHOLD }
         if (CaptureStore.state.value.runId == pending.runId) {
             CaptureStore.setJevResult(status, pending.captureId, flagged)
+        }
+        if (flagged == true) {
+            // Reuse the exact captured evidence and approved questions. Never substitute newer OCR.
+            val signals = answers.filterValues { (it.getValue("noul") as Double) >= THRESHOLD }
+                .map { (id, answer) ->
+                    mapOf("question" to questions.getValue(id).getValue("instructions"), "probability" to answer.getValue("noul"))
+                }
+            val evidence = JSONObject().put("flaggedChecks", org.json.JSONArray(signals))
+                .put("capturedText", pending.text).toString()
+            ScamIntervention.offer(pending.runId, pending.captureId, evidence, pending.warningGeneration)
         }
         val data = linkedMapOf<String, Any?>(
             "runId" to pending.runId,

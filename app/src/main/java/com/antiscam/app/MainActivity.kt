@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -31,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,11 +43,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.antiscam.app.capture.CaptureState
 import com.antiscam.app.capture.CaptureStore
 import com.antiscam.app.capture.JevAnalysis
 import com.antiscam.app.capture.JevWarning
+import com.antiscam.app.capture.LiveVoice
+import com.antiscam.app.capture.ScamIntervention
 import com.antiscam.app.capture.RunMonitor
 
 class MainActivity : ComponentActivity() {
@@ -116,7 +125,83 @@ private fun SetupScreen(
                     Text("Withdraw capture consent")
                 }
             }
+            if (state.warningActive) {
+                val context = LocalContext.current
+                Button(onClick = { context.startActivity(Intent(context, ScamWarningActivity::class.java)) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Return to scam warning") }
+            }
+            if (LiveVoice.available) VoiceConsentCard(state)
             if (JevAnalysis.available) JevStatusCard(state)
+        }
+    }
+}
+
+@Composable
+private fun VoiceConsentCard(state: CaptureState) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var microphoneAllowed by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    }
+    var permissionDenied by rememberSaveable { mutableStateOf(false) }
+    var accepted by rememberSaveable { mutableStateOf(false) }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        microphoneAllowed = granted
+        permissionDenied = !granted
+    }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                microphoneAllowed = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Automatic voice warnings", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "When Jev flags a capture, Antiscam pauses screen capture and OCR, vibrates twice, and opens a centered warning. " +
+                    "With your permission, an OpenAI voice assistant starts automatically and explains the concern. " +
+                    "OpenAI receives the flagged screen text, the Jev results, and microphone audio during the conversation.",
+            )
+            Text("The red X stops the voice conversation and microphone, closes the warning, and resumes screen checks. You can withdraw voice consent here.")
+            Text(if (state.voiceReady) "OpenAI key is set for this app session." else "Set the OpenAI API key with the OpenAI key button in the desktop console.")
+            if (!state.voiceConsentGranted) {
+                if (!state.consentGranted) Text("Allow screen capture above before you enable automatic voice warnings.")
+                Row {
+                    Checkbox(checked = accepted, onCheckedChange = { accepted = it })
+                    Text(
+                        "I allow automatic voice conversations and sending flagged screen text, Jev results, and microphone audio to OpenAI.",
+                        modifier = Modifier.weight(1f).padding(top = 12.dp),
+                    )
+                }
+                Button(
+                    onClick = {
+                        CaptureStore.setVoiceConsent(true)
+                        if (!microphoneAllowed) microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    enabled = accepted && state.consentGranted,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Allow automatic voice warnings") }
+            } else {
+                Text(if (microphoneAllowed) "Microphone permission is allowed." else "Voice cannot start until microphone permission is allowed.")
+                if (!microphoneAllowed) {
+                    OutlinedButton(onClick = { microphonePermission.launch(Manifest.permission.RECORD_AUDIO) }) {
+                        Text("Allow microphone")
+                    }
+                    if (permissionDenied) {
+                        Text("If Android does not show the permission request, allow Microphone in the app settings.")
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                        }) { Text("Open app settings") }
+                    }
+                }
+                TextButton(onClick = { CaptureStore.setVoiceConsent(false) }) {
+                    Text("Withdraw voice consent")
+                }
+            }
         }
     }
 }
@@ -169,7 +254,7 @@ private fun JevStatusCard(state: CaptureState) {
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. Flags remain in the console."
-        if (granted) JevWarning.update(context, CaptureStore.state.value.let { if (it.jevFlagged == true) it.jevCaptureId else null })
+        if (granted) JevWarning.update(context, ScamIntervention.incident.value?.captureId)
     }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
