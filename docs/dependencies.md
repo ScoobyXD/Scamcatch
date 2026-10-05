@@ -1,7 +1,7 @@
-Dependencies:
+Components:
 1. Google ML Kit OCR — extracts text from those images.
 
-Accessibility:
+Accessibility Methods:
 1. Android AccessibilityService — receives interactions and screen changes.
 2. AccessibilityEvent — reports typing, scrolling, focus, and other changes.
 3. AccessibilityNodeInfo — reads accessible controls and field properties.

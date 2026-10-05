@@ -5,7 +5,12 @@ import android.app.KeyguardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.Region
+import android.graphics.RegionIterator
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
@@ -14,7 +19,6 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.text.InputType
 import android.view.Display
-import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -75,7 +79,34 @@ class TypingCaptureService : AccessibilityService() {
         val windowId: Int,
         val trigger: String,
         val needsEditableFocus: Boolean,
+        val sensitiveInteraction: Boolean = false,
+        val sensitiveInteractionBounds: Rect? = null,
     )
+
+    private data class WindowRegion(
+        val id: Int,
+        val layer: Int,
+        val type: Int,
+        val bounds: Rect,
+        val packageName: String?,
+        val appLabel: String?,
+        val sourceKind: String,
+    )
+
+    private data class MaskedRegion(val bounds: Rect, val reason: String) {
+        fun details(): Map<String, Any?> = mapOf("bounds" to bounds.details(), "reason" to reason)
+    }
+
+    private data class DisplayPlan(
+        val bounds: Rect,
+        val rotation: Int,
+        val targetBounds: Rect,
+        val windows: List<WindowRegion>,
+        val maskedRegions: List<MaskedRegion>,
+    )
+
+    private data class InspectionBudget(var remaining: Int = MAX_INSPECTED_NODES)
+    private data class NodeFrame(val node: AccessibilityNodeInfo, var childIndex: Int = -1)
 
     override fun onCreate() {
         super.onCreate()
@@ -201,28 +232,34 @@ class TypingCaptureService : AccessibilityService() {
         if (kind == "content" && passiveCaptureBlocked) {
             // A new content event can resume capture once the window becomes eligible.
             // An unchanged blocked window must not restart waiting and skipped records.
-            val bounds = targetBounds(request) ?: return null
-            if (Build.VERSION.SDK_INT < 34 && legacyCrop(request, bounds) == null) return null
+            if (targetBounds(request) == null) return null
         }
         // Event text is never read. Inferred edits already checked the actual focused input.
         val source = event.source
+        var sensitiveInteraction = event.isSensitive()
+        var sensitiveBounds: Rect? = null
         val safeSource = try {
-            !event.isSensitive() && (source == null && (kind != "typing" || inferredEdit) || source != null &&
-                source.packageName?.toString() == target && !source.isSensitive() &&
-                (kind != "typing" || inferredEdit || source.isFocused && source.isEditable))
+            if (source != null && (sensitiveInteraction || source.isSensitive())) {
+                sensitiveInteraction = true
+                sensitiveBounds = Rect().also(source::getBoundsInScreen).takeUnless { it.isEmpty }
+            }
+            source == null && (kind != "typing" || inferredEdit) || source != null &&
+                source.packageName?.toString() == target &&
+                (kind != "typing" || inferredEdit || source.isFocused && source.isEditable)
         } finally {
             source?.recycleCompat()
         }
         if (!safeSource) {
             if (kind == "content" && passiveCaptureBlocked) return null
-            invalidate("The interaction is in a protected or unavailable field.")
+            invalidate("The interaction field is unavailable.")
             passiveCaptureBlocked = true
-            CaptureStore.report("Capture skipped. The field is protected or unavailable.")
+            CaptureStore.report("Capture skipped. The interaction field is unavailable.")
             RunMonitor.emit("capture_skipped", mapOf("runId" to state.runId,
-                "reason" to "Protected or unavailable field.", "trigger" to trigger))
+                "reason" to "The interaction field is unavailable.", "trigger" to trigger))
             return null
         }
-        return request
+        return request.copy(sensitiveInteraction = sensitiveInteraction,
+            sensitiveInteractionBounds = sensitiveBounds)
     }
 
     private fun scheduleSettled(request: Request) {
@@ -405,7 +442,7 @@ class TypingCaptureService : AccessibilityService() {
             request.target == foregroundPackage && request.windowId == foregroundWindowId
     }
 
-    /** Recheck app, field sensitivity, and visible content before capture and OCR publication. */
+    /** Preserve run and interaction ownership. Privacy is checked across the display separately. */
     private fun targetBounds(request: Request): Rect? {
         if (!isCurrent(request)) return null
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked ||
@@ -414,16 +451,15 @@ class TypingCaptureService : AccessibilityService() {
         try {
             if (root.packageName?.toString() != request.target || root.windowId != request.windowId) return null
             val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            val safeFocus = try {
-                if (request.needsEditableFocus) focused != null && focused.isEditable && !focused.isSensitive()
-                else focused == null || !focused.isSensitive()
+            val matchingFocus = try {
+                !request.needsEditableFocus || focused != null && focused.isEditable
             } finally {
                 focused?.recycleCompat()
             }
-            if (!safeFocus || containsSensitiveContent(root)) return null
+            if (!matchingFocus) return null
             val window = root.window ?: return null
             try {
-                if (window.id != request.windowId || window.type != AccessibilityWindowInfo.TYPE_APPLICATION ||
+                if (window.id != request.windowId ||
                     (!window.isActive && !window.isFocused)) return null
                 val bounds = Rect().also(window::getBoundsInScreen)
                 return bounds.takeUnless { it.isEmpty }
@@ -441,26 +477,20 @@ class TypingCaptureService : AccessibilityService() {
         if (!isCurrent(request)) return
         // Failed eligibility checks are attempts too and must respect capture spacing.
         lastAttemptAt = SystemClock.elapsedRealtime()
-        val bounds = targetBounds(request)
-        if (bounds == null) {
+        val plan = displayPlan(request)
+        if (plan == null) {
             passiveCaptureBlocked = true
-            CaptureStore.report("Capture skipped. The app, field, or screen is unavailable or protected.")
-            RunMonitor.emit("capture_skipped", request.details("reason" to "The active window is unavailable or contains protected content."))
-            return
-        }
-        val windowCapture = Build.VERSION.SDK_INT >= 34
-        val crop = if (windowCapture) null else legacyCrop(request, bounds)
-        if (!windowCapture && crop == null) {
-            passiveCaptureBlocked = true
-            CaptureStore.report("Capture skipped. Another window covers the current app.")
-            RunMonitor.emit("capture_skipped", request.details("reason" to "Another window covers the current app."))
+            CaptureStore.report("Capture skipped. The active app or display information is unavailable.")
+            RunMonitor.emit("capture_skipped", request.details(
+                "reason" to "The active app or display information is unavailable."))
             return
         }
         passiveCaptureBlocked = false
         inFlight = true
         lastAttemptAt = SystemClock.elapsedRealtime()
         val captureId = RunMonitor.nextCaptureId()
-        RunMonitor.emit("capture_requested", request.details("captureId" to captureId))
+        RunMonitor.emit("capture_requested", request.details("captureId" to captureId,
+            "maskedRegions" to plan.maskedRegions.map { it.details() }))
         CaptureStore.report("Capturing screenshot #$captureId.")
         val callback = object : TakeScreenshotCallback {
             override fun onSuccess(screenshot: ScreenshotResult) {
@@ -469,23 +499,23 @@ class TypingCaptureService : AccessibilityService() {
                 var softwareBitmap: Bitmap? = null
                 try {
                     RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
-                    if (targetBounds(request) != bounds || (!windowCapture && legacyCrop(request, bounds) != crop)) {
+                    if (displayPlan(request) != plan) {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
                             "reason" to "The run, app, window, or protected content changed before screenshot processing."))
                         finishCapture()
                         return
                     }
                     hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
-                    softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                    softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, true)
                     val bitmap = softwareBitmap ?: error("Screenshot conversion failed")
-                    val image = if (crop == null) bitmap else {
-                        val clipped = Rect(crop)
-                        check(clipped.intersect(0, 0, bitmap.width, bitmap.height))
-                        Bitmap.createBitmap(bitmap, clipped.left, clipped.top, clipped.width(), clipped.height())
-                    }
-                    if (image !== bitmap) bitmap.recycle()
+                    // Node bounds and OCR bounds must use the same display coordinate system.
+                    check(plan.bounds.left == 0 && plan.bounds.top == 0 &&
+                        bitmap.width == plan.bounds.width() && bitmap.height == plan.bounds.height())
+                    val canvas = Canvas(bitmap)
+                    val paint = Paint().apply { color = Color.BLACK }
+                    plan.maskedRegions.forEach { canvas.drawRect(it.bounds, paint) }
                     softwareBitmap = null // OCR owns the bitmap until its task completes.
-                    recognize(request, captureId, image, System.currentTimeMillis())
+                    recognize(request, captureId, bitmap, System.currentTimeMillis(), plan)
                 } catch (_: Exception) {
                     captureFailed(request, captureId, "Android could not prepare the screenshot for OCR.")
                     finishCapture()
@@ -502,8 +532,7 @@ class TypingCaptureService : AccessibilityService() {
             }
         }
         try {
-            if (Build.VERSION.SDK_INT >= 34) takeScreenshotOfWindow(request.windowId, mainExecutor, callback)
-            else takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
         } catch (_: Exception) {
             captureFailed(request, captureId, "Android rejected the screenshot request. Check accessibility access.")
             finishCapture()
@@ -515,17 +544,35 @@ class TypingCaptureService : AccessibilityService() {
         if (isCurrent(request)) CaptureStore.report("Capture failed.", reason)
     }
 
-    private fun recognize(request: Request, captureId: Int, bitmap: Bitmap, capturedAt: Long) {
+    private fun recognize(request: Request, captureId: Int, bitmap: Bitmap, capturedAt: Long, plan: DisplayPlan) {
         val startedAt = SystemClock.elapsedRealtime()
         CaptureStore.report("Reading text from screenshot #$captureId on this device.")
-        RunMonitor.emit("ocr_started", request.details("captureId" to captureId))
+        RunMonitor.emit("ocr_started", request.details("captureId" to captureId,
+            "maskedRegions" to plan.maskedRegions.map { it.details() }))
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    if (targetBounds(request) != null) {
+                    if (displayPlan(request) == plan) {
+                        val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
+                            textRegion(line.text, line.boundingBox, plan)
+                        } }
+                        val uncertain = regions.isEmpty() || regions.any { it["sourceAttribution"] == "uncertain" }
+                        val distinctWindows = regions.mapNotNull { it["windowId"] as? Int }.distinct()
+                        val attribution = when {
+                            uncertain -> "uncertain"
+                            distinctWindows.size == 1 -> "single_window"
+                            else -> "mixed"
+                        }
+                        val sourceLabel = when (attribution) {
+                            "single_window" -> "${regions.first()["appLabel"] ?: "Unknown"} (window estimate)"
+                            "mixed" -> "Visible screen: multiple windows (window estimates)"
+                            else -> "Visible screen: source uncertain"
+                        }
                         CaptureStore.result(text.text, capturedAt)
                         RunMonitor.emit("ocr_completed", request.details("captureId" to captureId,
-                            "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt))
+                            "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt,
+                            "sourceAttribution" to attribution, "sourceLabel" to sourceLabel,
+                            "textRegions" to regions, "maskedRegions" to plan.maskedRegions.map { it.details() }))
                     } else {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
                             "reason" to "The run, app, window, or protected content changed before OCR completed."))
@@ -552,34 +599,71 @@ class TypingCaptureService : AccessibilityService() {
 
     private fun Request.details(vararg values: Pair<String, Any?>): Map<String, Any?> =
         mapOf("runId" to runId, "trigger" to trigger, "packageName" to target,
-            "appLabel" to appLabel(target), "windowId" to windowId) + values
+            "appLabel" to appLabel(target), "windowId" to windowId,
+            "captureScope" to "display", "sourceAttribution" to "uncertain",
+            "sourceLabel" to "Visible screen: source uncertain") + values
 
-    /** API 30-33 capture the display. Exclude system bars, cutouts, and the keyboard. */
-    private fun legacyCrop(request: Request, bounds: Rect): Rect? {
-        val allWindows = windows
+    /** Window overlap is allowed. Only excluded or uninspectable regions become masks. */
+    private fun displayPlan(request: Request): DisplayPlan? {
+        val target = targetBounds(request) ?: return null
+        val allWindows = try { windows } catch (_: RuntimeException) { return null }
         try {
-            val targetLayer = allWindows.firstOrNull { it.id == request.windowId }?.layer ?: return null
-            val crop = Rect(bounds)
-            val metrics = captureWindowManager?.maximumWindowMetrics ?: return null
-            val insets = metrics.windowInsets.getInsetsIgnoringVisibility(
-                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
-            )
-            val displayContent = Rect(metrics.bounds).apply {
-                left += insets.left
-                top += insets.top
-                right -= insets.right
-                bottom -= insets.bottom
+            val display = captureWindowManager?.maximumWindowMetrics?.bounds?.let(::Rect) ?: return null
+            val rotation = getSystemService(DisplayManager::class.java)
+                .getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: return null
+            if (display.isEmpty) return null
+            val reported = mutableListOf<WindowRegion>()
+            val masks = mutableListOf<MaskedRegion>()
+            if (request.sensitiveInteraction) {
+                val bounds = request.sensitiveInteractionBounds?.let(::Rect)
+                if (bounds == null || !bounds.intersect(target)) {
+                    masks += MaskedRegion(Rect(target), "Sensitive interaction bounds are unavailable.")
+                } else {
+                    masks += MaskedRegion(bounds, "Sensitive interaction excluded.")
+                }
             }
-            if (!crop.intersect(displayContent)) return null
-            for (window in allWindows) {
-                if (window.id == request.windowId || window.layer <= targetLayer) continue
-                val other = Rect().also(window::getBoundsInScreen)
-                if (!Rect.intersects(crop, other)) continue
-                if (window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD && other.bottom >= crop.bottom) {
-                    crop.bottom = minOf(crop.bottom, other.top)
-                } else return null
+            val budget = InspectionBudget()
+            val uncovered = Region(display)
+            for (window in allWindows.sortedWith(compareByDescending<AccessibilityWindowInfo> { it.layer }.thenBy { it.id })) {
+                if (window.displayId != Display.DEFAULT_DISPLAY) continue
+                val bounds = Rect().also(window::getBoundsInScreen)
+                if (!bounds.intersect(display)) continue
+                uncovered.op(bounds, Region.Op.DIFFERENCE)
+                val keyboard = window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                var root: AccessibilityNodeInfo? = null
+                try {
+                    val windowPackage = try {
+                        if (!keyboard) root = window.root
+                        root?.packageName?.toString()
+                    } catch (_: RuntimeException) { null }
+                    val kind = when {
+                        keyboard || window.type == AccessibilityWindowInfo.TYPE_SYSTEM -> "system"
+                        window.id == request.windowId -> "app"
+                        else -> "overlay"
+                    }
+                    reported += WindowRegion(window.id, window.layer, window.type, Rect(bounds),
+                        windowPackage, windowPackage?.let(::appLabel), kind)
+                    when {
+                        keyboard -> masks += MaskedRegion(Rect(bounds), "Keyboard excluded.")
+                        root == null -> masks += MaskedRegion(Rect(bounds), "Window content is unavailable for privacy inspection.")
+                        else -> {
+                            val inspectedRoot = root
+                            root = null // The traversal now owns this root, including exceptional paths.
+                            inspectSensitiveRegions(inspectedRoot, bounds, masks, budget)
+                        }
+                    }
+                } finally {
+                    root?.recycleCompat()
+                }
             }
-            return crop.takeUnless { it.isEmpty }
+            // Accessibility can omit a window behind a modal. Do not inspect its exposed pixels as known content.
+            val gaps = RegionIterator(uncovered)
+            val gap = Rect()
+            while (gaps.next(gap)) masks += MaskedRegion(Rect(gap), "No accessible window information.")
+            return DisplayPlan(display, rotation, target, reported, masks.distinct().sortedWith(
+                compareBy<MaskedRegion> { it.bounds.top }.thenBy { it.bounds.left }
+                    .thenBy { it.bounds.bottom }.thenBy { it.bounds.right }.thenBy { it.reason },
+            ))
         } catch (_: RuntimeException) {
             return null
         } finally {
@@ -587,27 +671,72 @@ class TypingCaptureService : AccessibilityService() {
         }
     }
 
-    private fun containsSensitiveContent(root: AccessibilityNodeInfo): Boolean {
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        var visited = 0
-        // The caller owns root. Every child belongs to this traversal.
-        for (index in 0 until root.childCount) root.getChild(index)?.let(queue::addLast)
+    /** This traversal owns root and children. The existing node ceiling applies across all windows. */
+    private fun inspectSensitiveRegions(
+        root: AccessibilityNodeInfo,
+        windowBounds: Rect,
+        masks: MutableList<MaskedRegion>,
+        budget: InspectionBudget,
+    ) {
+        val stack = ArrayDeque<NodeFrame>()
+        stack.addLast(NodeFrame(root))
         try {
-            if (root.isSensitive()) return true
-            while (queue.isNotEmpty()) {
-                val node = queue.removeFirst()
-                try {
-                    if (++visited > MAX_INSPECTED_NODES) return true
-                    if (node.isVisibleToUser && node.isSensitive()) return true
-                    for (index in 0 until node.childCount) node.getChild(index)?.let(queue::addLast)
-                } finally {
-                    node.recycleCompat()
+            while (stack.isNotEmpty()) {
+                val frame = stack.last()
+                val node = frame.node
+                if (frame.childIndex == -1) {
+                    if (budget.remaining == 0) {
+                        masks += MaskedRegion(Rect(windowBounds), "Privacy inspection reached the 1,000-node limit.")
+                        return
+                    }
+                    budget.remaining--
+                    frame.childIndex = 0
+                    if ((node === root || node.isVisibleToUser) && node.isSensitive()) {
+                        val bounds = Rect().also(node::getBoundsInScreen)
+                        if (bounds.isEmpty || !bounds.intersect(windowBounds)) {
+                            masks += MaskedRegion(Rect(windowBounds), "Sensitive field bounds are unavailable.")
+                        } else {
+                            masks += MaskedRegion(bounds, "Sensitive field excluded.")
+                        }
+                        stack.removeLast().node.recycleCompat()
+                        continue
+                    }
                 }
+                if (frame.childIndex >= node.childCount) {
+                    stack.removeLast().node.recycleCompat()
+                    continue
+                }
+                // Fetch one child at a time. A wide tree cannot allocate beyond the inspection ceiling.
+                if (budget.remaining == 0) {
+                    masks += MaskedRegion(Rect(windowBounds), "Privacy inspection reached the 1,000-node limit.")
+                    return
+                }
+                val child = node.getChild(frame.childIndex++)
+                if (child == null) {
+                    masks += MaskedRegion(Rect(windowBounds), "A field is unavailable for privacy inspection.")
+                    return
+                }
+                stack.addLast(NodeFrame(child))
             }
-            return false
+        } catch (_: RuntimeException) {
+            masks += MaskedRegion(Rect(windowBounds), "Window privacy inspection failed.")
         } finally {
-            queue.forEach { it.recycleCompat() }
+            stack.forEach { it.node.recycleCompat() }
         }
+    }
+
+    private fun textRegion(text: String, bounds: Rect?, plan: DisplayPlan): Map<String, Any?> {
+        val candidates = if (bounds == null || bounds.isEmpty) emptyList() else
+            plan.windows.filter { Rect.intersects(it.bounds, bounds) }
+        // Bounds do not establish opacity. Never choose the top layer when windows overlap.
+        val source = candidates.singleOrNull()?.takeIf {
+            bounds != null && it.bounds.contains(bounds) && it.packageName != null &&
+                plan.maskedRegions.none { mask -> Rect.intersects(mask.bounds, bounds) }
+        }
+        return mapOf("text" to text, "bounds" to bounds?.details(),
+            "packageName" to source?.packageName, "appLabel" to source?.appLabel,
+            "windowId" to source?.id, "sourceKind" to (source?.sourceKind ?: "unknown"),
+            "sourceAttribution" to if (source == null) "uncertain" else "window_bounds")
     }
 
     private fun AccessibilityNodeInfo.isSensitive(): Boolean {
@@ -677,3 +806,6 @@ class TypingCaptureService : AccessibilityService() {
         )
     }
 }
+
+private fun Rect.details(): Map<String, Int> =
+    mapOf("left" to left, "top" to top, "right" to right, "bottom" to bottom)

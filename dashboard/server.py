@@ -386,12 +386,14 @@ class Console:
     def activity_entry(event):
         data = event.get("data") or {}
         state = event.get("state") or {}
-        # Keep capture attribution from its request, even if the user changes apps during OCR.
+        # The triggering app is context, not ownership of every display pixel.
         return {"type": event.get("type", "event"), "timestampMs": event.get("timestampMs"),
                 "elapsedMs": event.get("elapsedMs"), "reason": data.get("reason"),
                 "captureId": data.get("captureId"), "interaction": data.get("kind"),
                 "value": data.get("value"), "trigger": data.get("trigger"),
                 "durationMs": data.get("durationMs"), "phase": data.get("phase"),
+                "captureScope": data.get("captureScope"), "sourceLabel": data.get("sourceLabel"),
+                "sourceAttribution": data.get("sourceAttribution"),
                 "appLabel": data.get("appLabel") or state.get("currentApp"),
                 "packageName": data.get("packageName") or state.get("currentPackage")}
 
@@ -409,7 +411,7 @@ class Console:
             folder = self.runs / run_id
             (folder / "ocr").mkdir(parents=True)
             self.run = {"id": run_id, "status": "starting", "startedAt": utc_now(), "endedAt": None,
-                        "device": self.selected_device, "captureScope": "foreground",
+                        "device": self.selected_device, "captureScope": self.state.get("captureScope", "foreground"),
                         "appVersion": self.state.get("appVersion"), "androidApi": self.state.get("androidApi"),
                         "counters": {}, "eventCount": 0, "ocr": [], "reason": None,
                         "folder": str(folder)}
@@ -462,6 +464,9 @@ class Console:
                 "elapsedMs": event.get("elapsedMs"), "durationMs": data.get("durationMs"),
                 "packageName": data.get("packageName"), "appLabel": data.get("appLabel"),
                 "windowId": data.get("windowId"), "characters": len(text)}
+        for key in ("captureScope", "sourceAttribution", "sourceLabel", "textRegions", "maskedRegions"):
+            if key in data:
+                item[key] = data[key]
         self.run["ocr"].append(item)
         self.ocr.append({**item, "text": text})
         self.publish("ocr", self.ocr[-1])
@@ -475,11 +480,13 @@ class Console:
             return
         run = self.run
         counters = run.get("counters", {})
+        scope = {"foreground": "Current foreground app", "display": "Visible display with excluded regions masked"}.get(
+            run.get("captureScope"), run.get("targetPackage") or "Unknown")
         lines = ["Antiscam run", f"Run: {run['id']}", f"Status: {run['status']}",
                  f"Started: {run['startedAt']}", f"Ended: {run.get('endedAt') or 'Not ended'}",
                  f"Device: {run.get('device') or 'Unknown'}", f"App version: {run.get('appVersion') or 'Unknown'}",
                  f"Android API: {run.get('androidApi') or 'Unknown'}",
-                 f"Capture scope: {'Current foreground app' if run.get('captureScope') == 'foreground' else run.get('targetPackage') or 'Unknown'}",
+                 f"Capture scope: {scope}",
                  f"Events saved: {run.get('eventCount', 0)}", f"OCR files: {len(run.get('ocr', []))}"]
         lines += [f"{label}: {counters.get(key, 0)}" for key, label in [("requests", "Capture requests"), ("screenshots", "Screenshots received"), ("failed", "Screenshot failures"), ("ocrCompleted", "OCR completed"), ("ocrFailed", "OCR failures"), ("skipped", "Captures skipped")]]
         lines += [f"Reason: {run.get('reason') or 'Run in progress'}", "", "Full OCR text is in ocr/. Events are in events.jsonl. No screenshot files are saved."]

@@ -145,6 +145,14 @@ function updateTextToggle(text) {
   result.querySelector(".result-toggle").hidden = !expanded && text.scrollHeight <= text.clientHeight;
 }
 
+function regionSourceLabel(region) {
+  if (region.sourceAttribution !== "window_bounds") return "Source uncertain";
+  const source = region.appLabel || region.packageName;
+  if (!source) return "Source uncertain";
+  const kind = region.sourceKind === "overlay" ? "Overlay · " : region.sourceKind === "system" ? "System · " : "";
+  return `${kind}${source} (estimated)`;
+}
+
 function prependOcr(item, index, preserveScroll = true) {
   const pane = byId("text-scroll");
   const position = preserveScroll ? scrollPosition(pane) : null;
@@ -158,7 +166,8 @@ function prependOcr(item, index, preserveScroll = true) {
   label.textContent = `Capture ${item.captureId}`;
   const app = document.createElement("span");
   app.className = "result-app";
-  app.textContent = item.appLabel || item.packageName || item.targetPackage || "Unknown app";
+  const displayCapture = item.captureScope === "display";
+  app.textContent = displayCapture ? item.sourceLabel || "Visible screen · source uncertain" : item.appLabel || item.packageName || item.targetPackage || "Unknown app";
   const meta = document.createElement("span");
   meta.className = "result-meta";
   meta.textContent = `${timestamp(item.timestampMs)}${item.durationMs != null ? ` · ${item.durationMs} ms OCR` : ""}`;
@@ -166,11 +175,30 @@ function prependOcr(item, index, preserveScroll = true) {
   const text = document.createElement("pre");
   text.id = `capture-text-${index}`;
   // Captured text is untrusted. It is never interpreted as HTML.
-  text.textContent = item.text || "No text found in this capture.";
+  const completeRegions = Array.isArray(item.textRegions) && item.textRegions.length &&
+    item.textRegions.map((region) => region.text).join("\n") === item.text;
+  if (displayCapture && completeRegions) {
+    let previousSource = "";
+    for (const region of item.textRegions) {
+      const source = regionSourceLabel(region);
+      if (source !== previousSource) {
+        const attribution = document.createElement("span");
+        attribution.className = "result-source";
+        attribution.textContent = source;
+        text.append(attribution);
+        previousSource = source;
+      }
+      text.append(document.createTextNode(`${region.text || ""}\n`));
+    }
+  } else {
+    text.textContent = item.text || "No text found in this capture.";
+  }
   const footer = document.createElement("div");
   footer.className = "result-footer";
   const detail = document.createElement("span");
-  detail.textContent = `${item.characters ?? item.text.length} characters · ${item.packageName || item.targetPackage || "Unknown package"}`;
+  const context = displayCapture ? `Trigger: ${item.appLabel || item.packageName || "Unknown app"}` : item.packageName || item.targetPackage || "Unknown package";
+  const maskCount = Array.isArray(item.maskedRegions) ? item.maskedRegions.length : 0;
+  detail.textContent = `${item.characters ?? item.text.length} characters · ${context}${maskCount ? ` · ${maskCount} regions excluded` : ""}`;
   const actions = document.createElement("div");
   actions.className = "result-actions";
   const toggle = document.createElement("button");
@@ -240,7 +268,8 @@ function prependActivity(entry, preserveScroll = true) {
   eventName.textContent = `${labels[entry.type] || title(entry.type)}${interaction ? ` · ${title(interaction)}` : ""}${entry.captureId != null ? ` #${entry.captureId}` : ""}`;
   const detail = document.createElement("span");
   detail.className = "activity-detail";
-  detail.textContent = [entry.appLabel || entry.packageName, entry.trigger && title(entry.trigger), entry.reason && title(entry.reason), entry.phase && title(entry.phase), entry.durationMs != null && `${entry.durationMs} ms`].filter(Boolean).join(" · ");
+  const source = entry.captureScope === "display" ? entry.sourceLabel || "Visible screen" : entry.appLabel || entry.packageName;
+  detail.textContent = [source, entry.trigger && title(entry.trigger), entry.reason && title(entry.reason), entry.phase && title(entry.phase), entry.durationMs != null && `${entry.durationMs} ms`].filter(Boolean).join(" · ");
   description.append(eventName, detail);
   item.append(time, description);
   byId("activity").prepend(item);

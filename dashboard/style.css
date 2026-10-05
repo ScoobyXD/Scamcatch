@@ -81,6 +81,8 @@ h2 { font-size: .8125rem; font-weight: 650; }
 .result-meta { font: .6875rem ui-monospace, Consolas, monospace; color: var(--muted); margin-inline-start: auto; }
 .result pre { margin: 13px 16px; max-block-size: 16.8rem; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font: .875rem/1.6 "Segoe UI", Arial, sans-serif; color: var(--text); }
 .result-expanded pre { max-block-size: none; overflow: visible; }
+.result-source { display: block; margin-block: 8px 2px; font: 600 .6875rem/1.5 "Segoe UI", Arial, sans-serif; color: var(--accent); }
+.result-source:first-child { margin-block-start: 0; }
 .result-footer { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 5px; padding: 0 14px 9px; font-size: .625rem; color: var(--muted); overflow-wrap: anywhere; }
 .result-actions { display: flex; align-items: center; gap: 12px; }
 .result-footer button { border: 0; background: transparent; color: var(--accent); font-size: .6875rem; padding: 2px; }

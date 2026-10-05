@@ -40,7 +40,7 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 2. JDK 21 recommended. The pinned Gradle/AGP versions support JDK 17 through 23.
 3. Python 3.11 or later for the dashboard. It uses the standard library and needs no pip packages.
 4. A current desktop browser for the local dashboard.
-5. Android 11/API 30 or later. API 34+ provides target-window screenshots.
+5. Android 11/API 30 or later. All supported versions use accessibility display screenshots.
 6. Set `JAVA_HOME` and `ANDROID_HOME` when the helper scripts cannot find your tools.
 7. Select the supported JDK in Android Studio's Gradle settings. The IDE runtime can differ from the build runtime.
 8. The first Gradle build needs access to download dependencies.
@@ -48,15 +48,18 @@ The agreed task scope is in [current-task/requirements.txt](current-task/require
 ## Capture rules
 
 1. An active run, consent, enabled monitoring, and a connected accessibility service are required.
-2. Screenshot capture follows the foreground app. There is no app selector or app allowlist.
+2. Screenshots capture the visible default display. Foreground app interactions trigger capture. There is no app selector or app allowlist.
 3. Typing requests one initial screenshot and one after a one-second pause.
 4. Taps, long presses, scrolling, focus, selection, and screen changes request capture after 600 milliseconds of settling, with a three-second maximum wait.
 5. Repeated events reset timers instead of producing a screenshot for every character or scroll event.
 6. Direct-action capture attempts stay at least 1.5 seconds apart. Passive content changes use a five-second minimum interval. Only one screenshot/OCR operation runs at a time.
 7. Stop, pause, app/window changes, consent withdrawal, and connection loss cancel pending work. A settled new foreground window requests a capture during a run.
-8. Password fields, Android-marked sensitive content, and secure windows prevent capture.
+8. Keyboard windows and sensitive regions are masked before OCR. Reported windows with unavailable privacy information are masked. Android secure-content restrictions remain enforced.
 9. When stopped, interactions update live status without creating capture requests or skipped-capture noise.
-10. See [all run rules](docs/run-rules.md) and [validation results](docs/run-validation.md).
+10. Overlapping windows do not automatically cancel capture. The inspection ceiling remains 1,000 nodes across the reported windows in each inspection.
+11. Source labels use window estimates where possible. Ambiguous sources remain uncertain. The triggering app is recorded separately as context.
+12. Android reports interactive windows, so accessibility metadata does not guarantee identification of every visible overlay.
+13. See [the current requirements](current-task/requirements.txt).
 
 ## Run records
 

@@ -217,7 +217,7 @@ object RunMonitor {
             put("captureStatus", captureStatus)
             put("ocrStatus", ocrStatus)
             put("counters", JSONObject(counters.toMap()))
-            put("captureScope", "foreground")
+            put("captureScope", "display")
             put("consentGranted", config.consentGranted)
             put("monitoringEnabled", config.monitoringEnabled)
             put("serviceConnected", config.serviceConnected)
@@ -234,7 +234,7 @@ object RunMonitor {
             put("elapsedMs", eventSession?.let { SystemClock.elapsedRealtime() - it.startedAt } ?: 0L)
             put("runId", eventSession?.id ?: JSONObject.NULL)
             put("type", type)
-            put("data", JSONObject().apply { details.forEach { (key, value) -> put(key, value ?: JSONObject.NULL) } })
+            put("data", JSONObject().apply { details.forEach { (key, value) -> put(key, JSONObject.wrap(value)) } })
             put("state", snapshot())
         }
         RunBridge.send(event.toString())

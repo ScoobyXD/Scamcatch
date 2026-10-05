@@ -120,7 +120,8 @@ private fun ConsentCard() {
             Text("Allow screen capture", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Antiscam uses Android Accessibility to observe app changes, typing, taps, and scrolling. " +
-                    "During a dashboard run, it captures the app on your screen and extracts text with ML Kit on this device.",
+                    "During a dashboard run, it captures the visible screen, including overlapping windows, " +
+                    "and extracts text with ML Kit on this device.",
             )
             Text(
                 "Screens can contain private messages and typed text. Screenshot images stay in device memory. " +
