@@ -1,0 +1,29 @@
+1. Status: DRAFT. Do not submit until all pending facts are complete.
+2. Legal company: MIRAE OPUS LLC, California, SOS entity B20250299103, formed September 15, 2025. On October 8, 2026, status is Active and SOS, FTB, Agent and VCFCF standing are Good. LLC eligibility under the application's incorporated-organization wording still needs clarification.
+3. Product: ScamCatch.
+4. Website: https://scamcatch.io. Domain registered October 8, 2026. The site uses AWS hosting.
+5. Primary contact: Jonathan Kim, Founder. Phone: 909-657-6129. Selected application email: jonathan.kim@scamcatchtech.com. Email hosting is paid and DNS is configured. User password entry and mailbox creation remain pending. Keep contact details off the public website.
+6. Corporate address: 22914 Colombard Ln, Unit 5, Diamond Bar, CA 91765, United States. Founder supplied this address for the application. Keep it off the public website and deck.
+7. Two-sentence description: ScamCatch is an AI voice assistant in development that helps older adults pause and assess a possible scam. Our Android prototype supports voice intervention after a flagged check, and we are exploring bank-triggered conversations with permission to involve trusted contacts and fraud specialists.
+8. Product stage: Prototype. The current implementation is an Android development build.
+9. Revenue status: Pre-revenue. Founder reported $0 revenue.
+10. Categories: Artificial Intelligence and Fintech. Both are exact choices in the live form. Monitoring is another optional matching choice.
+11. Previous AgeTech application: No. Founder stated never before.
+12. Referral source: Referral. Specify Lona Choi Allum if the form permits. Founder learned about AgeTech through an email exchange with her. This records the source, not an endorsement.
+13. Problem: A person facing a scam may need timely support to pause and verify a payment request independently.
+14. Current solution: The Android development prototype can flag a screen check and start an AI voice conversation after consent, setup and permissions.
+15. Planned solution: A bank signal starts a conversation before a risky payment. Alerts to the institution and chosen trusted contacts require permission and agreed workflows.
+16. Target user: Older adults facing suspicious payment requests. Founder identified possible buyers or channels as banks, credit unions, senior living homes, and adult children of older parents. The first paying buyer remains undecided.
+17. Competitive context: Carefull offers financial monitoring and trusted-contact support. ZoraSafe offers suspicious-content checks and next-step explanations. Our proposed focus is a voice conversation after a bank payment signal. Distinct value requires evidence.
+18. Market context: The US Census Bureau counted 61.2 million adults age 65+ in 2024. This is population context, not an addressable revenue estimate.
+19. Revenue market sizing: Pending validation of reachable institutions, users and pricing. Annual revenue opportunity equals addressable institutions multiplied by an evidence-based annual contract value, or covered users multiplied by an evidence-based annual price.
+20. Traction: An Android development prototype exists. Founder reported 0 users, 0 formal research studies, 0 pilots, 0 contracts, and 0 customer commitments. Watching victim interviews is informal background research. No measured outcome evidence was supplied.
+21. Revenue model: Institutional licensing remains a proposal. The founder listed several possible buyer groups but did not confirm a payment model or price. Validate a paid pilot, annual license, usage allowance and support costs before setting prices.
+22. Total revenue, MRR and ARR: $0, based on the founder's zero-revenue answer.
+23. Capital raised: $0. Not currently fundraising. Founder estimates ongoing runway at the current prototype scope. This is a founder estimate, not audited unlimited financial runway. Domain registration and AWS hosting have operating costs. The form does not directly require cash balance or monthly burn.
+24. Team: Jonathan Kim, sole founder and software engineer. Founder stated that the team is just him. No other team members or advisors were named.
+25. First-time founder status: Yes. Founder confirmed this is his first startup.
+26. Program request: Older-adult research participants, fraud-specialist feedback and a bank or credit union pilot partner.
+27. Deck: output/ScamCatch-application-draft-v2.pptx. Ten slides. Founder facts are complete. The deck labels market sizing and institutional licensing as proposals or estimates where applicable.
+28. Video: output/ScamCatch-30-second-explainer.mp4. Duration: 30 seconds. Synthetic narration explains current and planned capabilities. This is not a live demo or a recording of Jonathan.
+29. Terms: Founder review and acceptance pending. Do not submit this application or contact organizers without authorization.

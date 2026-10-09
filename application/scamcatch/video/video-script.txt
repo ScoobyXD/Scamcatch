@@ -1,0 +1,8 @@
+1. Format: 30-second explanation video with synthetic narration. This is not a recording of Jonathan or a live product demonstration.
+2. Scene 1: ScamCatch is a voice assistant in development, helping people pause and assess a possible scam.
+3. Scene 2: Our Android prototype can start an AI voice conversation after a screen check flags a possible scam.
+4. Scene 3: Next, we're exploring bank risk signals that could trigger a conversation before a risky payment.
+5. Scene 4: With consent, trusted contacts or fraud specialists could help. The goal is to protect people's financial independence.
+6. Current capability: Android development prototype with consented screen analysis and voice warnings.
+7. Planned capability: bank risk signals and consent-based involvement of trusted contacts or fraud specialists.
+8. Outcome: no claim of proven loss prevention.

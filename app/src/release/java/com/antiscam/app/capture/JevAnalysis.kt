@@ -3,6 +3,7 @@ package com.antiscam.app.capture
 /** Production credentials and direct TypeSafe access are not part of the release app. */
 object JevAnalysis {
     val available = false
+    val keyRevision = 0L
 
     @Suppress("UNUSED_PARAMETER")
     fun setKey(value: String): Boolean = false

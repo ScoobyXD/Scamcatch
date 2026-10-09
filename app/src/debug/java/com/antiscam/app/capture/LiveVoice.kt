@@ -49,10 +49,12 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.audio.JavaAudioDeviceModule
 
-/** Development BYOK only. Credentials, evidence, and audio are never written to local storage. */
+/** Development BYOK only. PhoneCredentials manages optional encrypted key persistence separately. */
 object LiveVoice {
     val available = true
     val ready: Boolean get() = apiKey != null
+    var keyRevision = 0L
+        private set
     private const val MAX_EVENT_BYTES = 128 * 1024
     private const val START_TIMEOUT_MS = 35_000L
     private const val ICE_TIMEOUT_MS = 10_000L
@@ -78,6 +80,7 @@ object LiveVoice {
         if (value.length > 2048 || value.any { it.code !in 32..126 } ||
             candidate.isEmpty() || candidate.any { it.code !in 33..126 }) return false
         apiKey = candidate
+        keyRevision++
         CaptureStore.setVoiceReady(true)
         return true
     }
@@ -85,6 +88,7 @@ object LiveVoice {
     fun clearKey() {
         checkMainThread()
         apiKey = null
+        keyRevision++
         CaptureStore.setVoiceReady(false)
         active?.close {}
     }
@@ -99,7 +103,7 @@ object LiveVoice {
         val key = apiKey
         val problem = when {
             active != null -> "A voice session is already active."
-            key == null -> "Add your OpenAI key in the console to enable voice."
+            key == null -> "Add your OpenAI key on this phone or in the console to enable voice."
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
                 "Microphone permission is required for voice."
             else -> null
@@ -617,7 +621,7 @@ object LiveVoice {
                 else if (clientEvent == "antiscam_greeting") "session.instructions.append" else null
             val explanation = when {
                 code in setOf("invalid_api_key", "invalid_authentication", "authentication_error") || type == "authentication_error" || httpStatus == 401 ->
-                    "OpenAI rejected authentication. Check the OpenAI API key in the console."
+                    "OpenAI rejected authentication. Check the OpenAI API key on this phone or in the console."
                 code in setOf("insufficient_quota", "billing_hard_limit_reached", "billing_not_active") || type == "insufficient_quota" ->
                     "OpenAI voice has no available API quota. Check the API project's billing and credits."
                 code in setOf("forbidden", "model_not_found", "model_not_allowed", "permission_denied", "access_denied") || type == "permission_error" || httpStatus == 403 ->
@@ -637,7 +641,7 @@ object LiveVoice {
 
         private fun httpError(status: Int) {
             val explanation = when (status) {
-                401 -> "OpenAI rejected authentication. Check the OpenAI API key in the console."
+                401 -> "OpenAI rejected authentication. Check the OpenAI API key on this phone or in the console."
                 403 -> "OpenAI denied voice access. Check the API key's permissions and project access to $VOICE_MODEL."
                 429 -> "OpenAI voice reached a usage limit. Check API billing and rate limits."
                 else -> "OpenAI could not start the voice connection."

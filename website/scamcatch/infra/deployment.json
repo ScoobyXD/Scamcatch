@@ -1,0 +1,55 @@
+{
+  "domain": "scamcatch.io",
+  "websiteUrl": "https://scamcatch.io",
+  "cloudFrontStatus": "Deployed",
+  "stackStatus": "UPDATE_COMPLETE",
+  "httpsVerifiedUtc": "2026-10-09T07:04:15Z",
+  "verification": {"apexHttps": 200, "wwwHttps": 200, "httpRedirect": 301, "certificateStatus": "ISSUED"},
+  "registrar": "Namecheap",
+  "firstYearPriceUSD": 34.98,
+  "namecheapOrder": "216238301",
+  "registrationExpires": "2027-10-09",
+  "domainAutoRenew": true,
+  "domainPrivacy": true,
+  "domainPrivacyAutoRenew": false,
+  "awsProfile": "mangorts-dev",
+  "awsRegion": "us-east-1",
+  "stackName": "scamcatch-site",
+  "bucket": "scamcatch-site-686458136219",
+  "distributionId": "E1FTFPRB048HY",
+  "distributionDomain": "d3gr2wf5lmo9f2.cloudfront.net",
+  "hostedZoneId": "Z01377241I2U5CS0WC4NA",
+  "certificateArn": "arn:aws:acm:us-east-1:686458136219:certificate/5d8de856-f052-4896-91ec-3adb4f8afc72",
+  "previousCertificateArn": "arn:aws:acm:us-east-1:686458136219:certificate/ee2947a8-7e53-4757-a141-286c52ed462a",
+  "redirect": {
+    "domain": "scamcatchtech.com",
+    "destination": "https://scamcatch.io",
+    "dnsProvider": "Namecheap BasicDNS",
+    "status": "Deployed and verified",
+    "verifiedUtc": "2026-10-09T07:04:15Z",
+    "functionArn": "arn:aws:cloudfront::686458136219:function/scamcatch-domain-redirect-686458136219",
+    "verification": {
+      "apexHttps": 301,
+      "wwwHttps": 301,
+      "apexHttp": 301,
+      "wwwHttp": 301,
+      "httpRedirectBehavior": "HTTP redirects to the same host over HTTPS, then HTTPS redirects to scamcatch.io",
+      "pathAndRepeatedQueryPreserved": true,
+      "request": "https://scamcatchtech.com/index.html?source=email&tag=a&tag=b",
+      "location": "https://scamcatch.io/index.html?source=email&tag=a&tag=b"
+    },
+    "dnsRecords": [
+      { "type": "ALIAS", "host": "@", "value": "d3gr2wf5lmo9f2.cloudfront.net" },
+      { "type": "CNAME", "host": "www", "value": "d3gr2wf5lmo9f2.cloudfront.net" },
+      { "type": "CNAME", "host": "_d1a3814e763d837f883e31b2567a7c83", "value": "_5ae58493b74d204ce60afa11eca300c8.wzccmgtwzk.acm-validations.aws" },
+      { "type": "CNAME", "host": "_1e8ae2aee83b577acf9d4b1545c1119f.www", "value": "_132962367dd88dba7317a4fd419bf6dc.wzccmgtwzk.acm-validations.aws" }
+    ]
+  },
+  "nameservers": [
+    "ns-108.awsdns-13.com",
+    "ns-1320.awsdns-37.org",
+    "ns-2034.awsdns-62.co.uk",
+    "ns-651.awsdns-17.net"
+  ],
+  "publishDirectory": "website/scamcatch/public"
+}

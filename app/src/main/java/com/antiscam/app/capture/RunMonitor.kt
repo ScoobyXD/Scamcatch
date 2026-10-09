@@ -1,6 +1,8 @@
 package com.antiscam.app.capture
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -13,12 +15,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.util.UUID
 
 /** One event model serves the live dashboard and its saved run record. No events go to Logcat. */
 object RunMonitor {
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var initialized = false
+    private lateinit var appContext: Context
     private var appVersion = "unknown"
     private var sequence = 0L
     private var captureId = 0
@@ -33,20 +37,28 @@ object RunMonitor {
     private var ocrStatus = "idle"
     private val counters = linkedMapOf("requests" to 0, "screenshots" to 0, "failed" to 0, "ocrCompleted" to 0, "ocrFailed" to 0, "skipped" to 0)
 
-    private data class RunSession(val id: String, val startedAt: Long)
+    private data class RunSession(val id: String, val startedAt: Long, val mode: RunMode)
 
     fun initialize(context: Context) {
         CaptureStore.initialize(context)
         onMain {
             if (initialized) return@onMain
             initialized = true
+            appContext = context.applicationContext
+            PhoneCredentials.initialize(appContext)
             @Suppress("DEPRECATION")
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             appVersion = "${packageInfo.versionName ?: "unknown"} (${packageInfo.longVersionCode})"
             RunBridge.initialize(
-                onConnect = { emit("snapshot") },
+                onConnect = {
+                    CaptureStore.setDashboardConnected(true)
+                    emit("snapshot")
+                },
                 onCommand = ::command,
-                onDisconnect = { reason -> onMain { stop(reason) } },
+                onDisconnect = { reason -> onMain {
+                    CaptureStore.setDashboardConnected(false)
+                    if (session?.mode == RunMode.DASHBOARD) stop(reason)
+                } },
             )
             scope.launch {
                 CaptureStore.state.map {
@@ -156,12 +168,23 @@ object RunMonitor {
                 // Only readiness enters the event stream. Never include the received command.
                 emitNow("state_changed", emptyMap())
             }
-            "start" -> start(message)
-            "stop" -> if (session == null) emitNow("command_error", mapOf("reason" to "no_active_run")) else stop("user_stopped")
+            "start" -> {
+                val reason = start(message.optString("runId"), RunMode.DASHBOARD, message.opt("recordOcr") == true)
+                if (reason != null) emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
+            }
+            "stop" -> when {
+                session?.mode == RunMode.STANDALONE -> emitNow("command_error", mapOf("reason" to "Stop the phone run in Antiscam."))
+                session == null -> emitNow("command_error", mapOf("reason" to "no_active_run"))
+                else -> stop("user_stopped")
+            }
             "snapshot" -> emitNow("snapshot", emptyMap())
             "pause" -> {
-                stop("capture_paused")
-                CaptureStore.setEnabled(false)
+                if (session?.mode == RunMode.STANDALONE) {
+                    emitNow("command_error", mapOf("reason" to "Stop the phone run in Antiscam."))
+                } else {
+                    stop("capture_paused")
+                    CaptureStore.setEnabled(false)
+                }
             }
             "resume" -> {
                 if (!CaptureStore.state.value.consentGranted) emitNow("command_error", mapOf("reason" to "consent_required"))
@@ -171,32 +194,55 @@ object RunMonitor {
         }
     }
 
-    private fun start(message: JSONObject) {
+    fun startStandalone(): String? {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (!initialized) return "Reopen Antiscam before starting a run."
         val state = CaptureStore.state.value
-        val id = message.optString("runId")
+        val setupError = when {
+            !JevAnalysis.available || !LiveVoice.available -> "Install Antiscam Dev to use Jev and voice."
+            !state.jevReady -> "Set the Jev API key in phone setup."
+            !state.voiceReady -> "Set the OpenAI API key in phone setup."
+            !state.voiceConsentGranted -> "Allow automatic voice warnings in phone setup."
+            appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
+                "Allow microphone access in phone setup."
+            else -> null
+        }
+        if (setupError != null) return setupError
+        return when (val reason = start("phone_${UUID.randomUUID()}", RunMode.STANDALONE, false)) {
+            null -> null
+            "run_already_active" -> "Stop the current run before starting another."
+            "consent_required" -> "Allow screen capture and Jev analysis first."
+            "capture_paused" -> "Resume monitoring before starting a run."
+            "service_disconnected" -> "Enable Antiscam in Android Accessibility settings."
+            else -> "Could not start the run: $reason"
+        }
+    }
+
+    fun stopRun() = onMain { stop("user_stopped") }
+
+    private fun start(id: String, mode: RunMode, recordOcr: Boolean): String? {
+        val state = CaptureStore.state.value
         val reason = when {
             session != null -> "run_already_active"
             !RUN_ID.matches(id) -> "invalid_run_id"
             id in sessions -> "run_id_already_used"
-            message.opt("recordOcr") != true -> "ocr_recording_acknowledgment_required"
+            mode == RunMode.DASHBOARD && !recordOcr -> "ocr_recording_acknowledgment_required"
             !state.consentGranted -> "consent_required"
             !state.monitoringEnabled -> "capture_paused"
             !state.serviceConnected -> "service_disconnected"
             else -> null
         }
-        if (reason != null) {
-            emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
-            return
-        }
+        if (reason != null) return reason
         captureId = 0
         counters.keys.forEach { counters[it] = 0 }
         typing = "idle"
         lastInteraction = "none"
         captureStatus = "idle"
         ocrStatus = "idle"
-        session = RunSession(id, SystemClock.elapsedRealtime()).also { sessions[id] = it }
-        CaptureStore.setRunId(id)
-        emitNow("run_started", mapOf("recordOcr" to true))
+        session = RunSession(id, SystemClock.elapsedRealtime(), mode).also { sessions[id] = it }
+        CaptureStore.setRunId(id, mode)
+        emitNow("run_started", mapOf("recordOcr" to recordOcr, "runMode" to mode.wireName))
+        return null
     }
 
     private fun stop(reason: String) {
@@ -215,6 +261,8 @@ object RunMonitor {
         val config = CaptureStore.state.value
         return JSONObject().apply {
             put("runId", config.runId ?: JSONObject.NULL)
+            put("runMode", config.runMode?.wireName ?: JSONObject.NULL)
+            put("dashboardConnected", config.dashboardConnected)
             put("currentApp", currentApp)
             put("currentPackage", currentPackage ?: JSONObject.NULL)
             put("lastExternalApp", lastExternalApp)
@@ -241,14 +289,18 @@ object RunMonitor {
     }
 
     private fun emitNow(type: String, details: Map<String, Any?>, eventSession: RunSession? = session) {
+        // Phone runs expose live status only. A desktop run must explicitly allow OCR recording.
+        val phoneEvent = eventSession?.mode == RunMode.STANDALONE
         val event = JSONObject().apply {
             put("protocol", 1)
             put("seq", ++sequence)
             put("timestampMs", System.currentTimeMillis())
             put("elapsedMs", eventSession?.let { SystemClock.elapsedRealtime() - it.startedAt } ?: 0L)
             put("runId", eventSession?.id ?: JSONObject.NULL)
-            put("type", type)
-            put("data", JSONObject().apply { details.forEach { (key, value) -> put(key, JSONObject.wrap(value)) } })
+            put("type", if (phoneEvent && type != "snapshot" && type != "command_error") "state_changed" else type)
+            put("data", JSONObject().apply {
+                if (!phoneEvent || type == "command_error") details.forEach { (key, value) -> put(key, JSONObject.wrap(value)) }
+            })
             put("state", snapshot())
         }
         RunBridge.send(event.toString())

@@ -1,0 +1,38 @@
+{
+  "domain": "scamcatchtech.com",
+  "registrar": "Namecheap",
+  "purchasedAtLocalDate": "2026-10-08",
+  "orderId": "216241100",
+  "registrationYears": 1,
+  "registrationTotalUSD": 11.18,
+  "domainPrivacy": true,
+  "domainPrivacyAutoRenew": false,
+  "domainAutoRenew": true,
+  "dnsProvider": "Namecheap BasicDNS",
+  "websiteDestination": "https://scamcatch.io",
+  "websiteStatus": "Live; apex and www HTTP/HTTPS redirects to https://scamcatch.io verified October 9, 2026",
+  "requestedMailbox": "jonathan.kim@scamcatchtech.com",
+  "mailboxStatus": "Create Mailbox form prepared with jonathan.kim and 5 GB; user password entry and submission pending",
+  "emailOrderStatus": "Completed; $11.88 charged with user approval",
+  "emailOrderId": "216243056",
+  "emailSubscriptionId": "4440869",
+  "emailPurchasedAtLocalDate": "2026-10-09",
+  "emailExpires": "2027-10-09",
+  "emailPlan": "Namecheap Private Email Launch",
+  "emailFirstYearUSD": 11.88,
+  "emailStandardAnnualRenewalUSD": 14.88,
+  "emailAutoRenew": false,
+  "emailPromoCode": "MAILDEAL",
+  "emailDns": {
+    "verificationDate": "2026-10-09",
+    "verificationScope": "MX, SPF, DKIM and DMARC resolve through the system DNS resolver; mail delivery not tested",
+    "mx": [
+      {"host": "mx1.privateemail.com", "priority": 10},
+      {"host": "mx2.privateemail.com", "priority": 10}
+    ],
+    "spf": "v=spf1 include:spf.privateemail.com ~all",
+    "dkimHost": "privateemail._domainkey",
+    "dkimStatus": "Published and matches subscription public key",
+    "dmarc": "v=DMARC1; p=none"
+  }
+}

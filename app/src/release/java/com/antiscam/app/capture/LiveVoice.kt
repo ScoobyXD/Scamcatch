@@ -8,6 +8,7 @@ import android.os.Looper
 object LiveVoice {
     val available = false
     val ready = false
+    val keyRevision = 0L
 
     @Suppress("UNUSED_PARAMETER")
     fun setKey(value: String): Boolean = false

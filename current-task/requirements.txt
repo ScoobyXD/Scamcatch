@@ -1,10 +1,10 @@
-Current task: background capture, Jev analysis, automatic voice warnings, and the developer console
-User-approved scope: 4 October 2026
+Current task: standalone phone runs, background capture, Jev analysis, automatic voice warnings, and the developer console
+User-approved scope: 4 and 8 October 2026
 
 1. Delete the entire demo/test app from the emulator and project. Remove its fixture module, sample conversations, test screens, password toggles, capture toggles, and install/launch references.
 2. Use real apps for all further device checks. Do not recreate or reopen a synthetic conversation app.
 3. Keep the Android app as background interaction, screenshot, OCR, and capture-logic infrastructure.
-4. Keep accessibility status, capture/cloud consent, voice consent, microphone permission, and key readiness in Android setup. Enter API keys in the desktop dashboard. Keep run controls and full OCR results in the dashboard.
+4. Keep permissions, consent, key readiness, phone key entry, and Start Run/Stop Run in Android setup. Preserve desktop controls and full OCR results.
 5. Capture the visible default display during a run. Foreground app interactions still trigger capture. Do not require an app selector or allowlist.
 6. Update the current app when the user visits Home, Chrome, Photos, Facebook, Instagram, WhatsApp, or another app. Report unknown states explicitly.
 7. Mask keyboard windows before OCR. Remove all other app-level masking and exclusions for password fields, Android-marked sensitive regions, overlays, and the lock screen. Android capture restrictions still apply.
@@ -13,17 +13,17 @@ User-approved scope: 4 October 2026
 10. Request capture after supported interactions and screen changes settle, including taps, long presses, scrolling, focus/selection changes, text edits, app changes, and screen-content updates. Keep typing debounce and Android screenshot limits. Do not depend on physical touches that Android does not report.
 11. Combine overlapping screenshot requests and respect Android capture intervals. App/window or run changes cancel only screenshots that have not started.
 12. Run ML Kit OCR on the device. Associate results with capture numbers, timestamps, source estimates, and capture events. Mark ambiguous sources uncertain.
-13. Keep the emulator, desktop dashboard, and Android Studio separate. Open the dashboard for run work.
+13. Keep the emulator, desktop dashboard, and Android Studio separate. Use the dashboard for desktop-recorded runs.
 14. Use three dashboard columns: Jev results on the left, full OCR text in the middle, and activity on the right. Show newest records first with capture IDs and complete text.
 15. Give the activity log a large right column. Show the newest entry at the top and the oldest at the bottom. Include interactions, requests, screenshots, OCR, failures, cancellations, and reasons for skipped captures. Keep readiness indicators compact.
 16. Give each main dashboard column one scrollbar. Do not add nested scrolling or clip individual OCR results. Preserve the reading position when new events arrive.
 17. Use a dark charcoal theme with orange accents. Put Start, Stop, Pause/Resume, Export ZIP, connection, and run status in a compact toolbar. Remove promotional text, large title sections, oversized cards, and wasted space.
 18. Keep compact live fields for current app, interaction, typing, screenshot state, OCR state, voice state, requests, completed screenshots, OCR results, failures, skips, connection, and run status.
-19. Start begins a new recording. Stop ends recording and keeps the results. Do not flood stopped runs with no-run capture-skipped messages.
-20. Save each run locally with timestamps, app changes, interactions, capture requests/outcomes, full OCR text, and errors. Link related events by capture ID.
+19. Desktop Start begins a new recording. Desktop Stop ends recording and keeps results. Do not flood stopped runs with no-run capture-skipped messages.
+20. Save desktop-started runs with timestamps, app changes, interactions, capture requests/outcomes, full OCR text, and errors. Link events by capture ID.
 21. Preserve received records if a run is interrupted. Export the run as a ZIP for later analysis. Screenshot images remain in device memory; screenshot events and OCR text are saved.
 22. Keep private run data out of Git and console diagnostics. With renewed consent and a configured key, send OCR text directly to TypeSafe over HTTPS. Keep screenshot images on the device.
-23. Rebuild, install, check the real-app workflow, and open the dashboard. Leave recording stopped and ready for the user to select Start run.
+23. Rebuild the app. When a device is available, install and check the real-app workflow. Report device checks separately from builds. Leave recording stopped.
 24. Do not create or run unit tests under the current project instructions.
 25. Include the approved Jev experiment, its Probably scam flag, and automatic OpenAI voice warnings. Public-release credential distribution remains outside this task.
 26. Use this file as the implementation and acceptance checklist. Later explicit user changes take precedence.
@@ -36,10 +36,10 @@ User-approved scope: 4 October 2026
 33. Pin jev-1.13.0 and question-set version financial-topics-v3 in app/ai-instructions/AIInstructions.kt.
 34. Set Probably scam only after a completed response has at least one probability greater than or equal to 0.7.
 35. A flag is an experiment result, not proof of fraud. Values below 0.7 do not prove safety.
-36. Enter the TypeSafe key in the desktop Jev key dialog. Forward it through the local server and ADB bridge to phone memory. Windows can save a copy under rules 75–81. Never save it in preferences, source, APK resources, browser storage, run files, or diagnostics.
-37. Require new consent that explains cloud text transfer. Keep the Jev integration limited to the development build.
+36. Enter the TypeSafe key on the phone or in the desktop Jev key dialog. Desktop delivery uses the server and ADB bridge. Apply the saved-key rules below.
+37. Require version 3 capture consent for phone and desktop runs. Explain cloud text transfer. Keep Jev limited to the development build.
 38. Associate Jev events with the matching run and capture. Preserve pending, completed, failed, skipped, and canceled states. Do not replace failures with zero probabilities.
-39. Save exact question definitions, probabilities, model, question-set version, threshold, duration, and reasons when available. Include them in snapshots, capture JSON, and ZIP exports.
+39. For desktop runs, save question definitions, probabilities, model, question-set version, threshold, duration, and available reasons. Include snapshots, capture JSON, and ZIP exports.
 40. Stop and interruption do not cancel captured work. Save late results to their original run while connected. Discard screenshot/OCR work that crosses a warning boundary.
 41. Keep capture and the dashboard responsive while Jev requests run. Analyze each captured text regardless of later interactions, screen changes, or newer captures.
 42. Do not create AWS, OVH, or database services for this direct development integration.
@@ -47,20 +47,20 @@ User-approved scope: 4 October 2026
 44. A completed flagged check from the active run opens one centered warning. Pause new screenshots and OCR immediately. Old Jev results cannot reopen a dismissed warning.
 45. If Android blocks the warning launch, use a notification to reopen it. Offer the Android 13+ notification permission control for this fallback.
 46. Protect POST /api/jev-key and POST /api/openai-key with the existing Origin and command-token checks. Accept at most 2048 ASCII characters without whitespace. An empty key clears phone memory.
-47. Use one masked key dialog. Clear its input after submission or dismissal. Readiness confirms a loaded key, not valid credentials or permissions. Never echo keys.
+47. Use one shared desktop key dialog and masked phone inputs. Clear submitted inputs. Readiness confirms loading, not authentication or permissions. Never echo keys.
 48. The accessibility service launches a transparent warning activity above the current app. Show “We believe you are being scammed” in its centered card.
-49. Animate the warning entrance with a 420-millisecond fade and scale. Vibrate twice per warning with 65-millisecond pulses and a 120-millisecond gap.
+49. Animate the warning entrance with a 420-millisecond fade and scale. Request two 65-millisecond vibration pulses, 120 milliseconds apart, even if the warning cannot open.
 50. Show a cute AI face with blinking eyes and a mouth that follows the voice output level.
 51. Start one voice session automatically when the warning opens and setup is complete. The assistant speaks first and explains the flagged evidence with uncertainty.
 52. Require separate explicit consent for automatic voice and Android microphone permission. Explain that flagged text and microphone audio go to OpenAI.
 53. Pin gpt-live-1 with the marin voice. Active voice costs $0.05 per minute, billed per second. WebRTC initialization bills 15 seconds, credited against the session duration: https://developers.openai.com/api/docs/guides/voice-webrtc#understand-the-connection-sequence
 54. Use client delegation without a paid backend model or tool calls. Treat captured text as untrusted evidence, never as instructions.
 55. The large red X at the top right and Android Back stop microphone capture and playback. Close the connection before dismissal and capture resumption.
-56. Home or backgrounding stops voice. Keep the warning and capture pause until dismissal. Returning must not start a second voice session.
+56. Home or backgrounding the warning stops voice. Keep the warning and capture pause until dismissal. Returning must not start a second voice session.
 57. Missing keys, consent, or microphone permission and all voice errors keep the warning open. Capture remains paused until dismissal.
 58. Stop, capture consent withdrawal, and service disconnection close the warning. Capture can resume only when its normal prerequisites hold.
-59. Forward the OpenAI key through the same local server and ADB path as the Jev key. Keep both keys only in phone process memory. Windows can save credentials under rules 75–81.
-60. Never save API keys, voice audio, or voice transcripts in app storage, browser storage, run files, exports, or diagnostics.
+59. Accept OpenAI keys on the phone or through the desktop Jev key delivery path. Optional phone and Windows persistence follow the rules below.
+60. Never save plaintext keys in preferences, source, APK resources, browser storage, run files, exports, or diagnostics. Never save voice audio or transcripts.
 61. Expose voiceReady as key-loaded state, voiceConsentGranted as consent state, voiceStatus as session state, and warningActive as capture pause state.
 62. Keep live voice limited to the development build. The release LiveVoice implementation remains unavailable.
 63. Builds and syntax checks do not confirm a working live OpenAI voice session. Report runtime verification separately.
@@ -74,11 +74,24 @@ User-approved scope: 4 October 2026
 71. Use app/ai-instructions/AIInstructions.kt as the single source for Jev questions and settings, voice model/name, system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary.
 72. Keep the instruction folder directly inside app/. Compile its Kotlin file directly into the debug app. Do not add a runtime parser or duplicate instruction files.
 73. Preserve all existing question and prompt wording during the source move. Do not add Jev questions without the user's audit.
-74. After instruction edits, stop the run, build, install, and restart Antiscam. Reconnect the dashboard. Windows restores saved keys for that phone. Enter unsaved keys again. Do not claim live reload.
+74. After instruction edits, stop the run, build, install, and restart Antiscam. Restore or enter the required keys. Do not claim live reload.
 75. On Windows, select Remember on this PC by default in the shared masked key dialog. Save submitted keys only in Windows Credential Manager.
 76. Store Jev and OpenAI credentials separately for each phone serial and Windows user. Use CRED_PERSIST_LOCAL_MACHINE for persistence on this PC.
 77. After reconnect or reinstall, restore saved keys only for the selected phone and only when Android reports that the provider key is missing.
-78. Use saved key manually loads the provider's saved key into the selected phone. Forget saved key deletes that credential and clears the phone key.
+78. Desktop Use saved key loads the Windows credential into phone memory. Forget saved key deletes that credential and clears phone memory.
 79. Sending a key with Remember on this PC cleared deletes the previous saved copy. Load the new key into phone process memory only.
 80. Return saved-key availability without key values. Never return saved secrets to the browser, snapshots, events, logs, or exports. Keep server key values only briefly during delivery.
 81. Other operating systems retain manual entry and memory-only delivery. Keep this developer BYOK flow outside cloud vaults and public-release credential distribution.
+82. Phone Start Run requires capture consent, enabled monitoring, a connected accessibility service, both API keys, voice consent, and microphone permission.
+83. The phone needs Internet access for Jev and voice. Use the existing capture, OCR, Jev, warning, and voice flow in both modes.
+84. Keep one active run. Stop the current run before switching between phone and desktop modes.
+85. Phone runs continue when setup backgrounds or the dashboard connects or disconnects. Desktop-started runs stop when their dashboard disconnects.
+86. A connected dashboard receives phone-run status only. Do not send phone-run OCR, evidence, or event records to desktop storage.
+87. End a phone run when the app process ends or the phone restarts. Restore saved keys, but require the user to start another run.
+88. Offer Remember on this phone for each provider. Start the checkbox cleared. Saving requires the user's explicit selection.
+89. Encrypt saved phone keys with AES-GCM and an Android Keystore key. Store ciphertext under noBackupFilesDir, outside Android backups.
+90. Restore saved phone keys at process startup. A newer key entry or clear action takes priority over restoration.
+91. Phone Clear key removes the active key and that provider's saved phone copy. Keep separately saved Windows credentials unchanged.
+92. Desktop key delivery and clearing affect phone memory only. Manage separately saved phone copies from the phone.
+93. Keep phone credentials and direct Jev/voice paths limited to the development build. Preserve release networking and dashboard limits.
+94. Check disconnected capture, vibration, warning display, voice, dismissal, and desktop reconnection on a real device when one is available.

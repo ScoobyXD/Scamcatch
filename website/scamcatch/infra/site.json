@@ -1,0 +1,113 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ScamCatch public static website with a private S3 origin and HTTPS CloudFront delivery.",
+  "Parameters": {
+    "CertificateArn": { "Type": "String", "Default": "" },
+    "DomainName": { "Type": "String", "Default": "scamcatch.io" },
+    "RedirectDomainName": { "Type": "String", "Default": "" }
+  },
+  "Conditions": {
+    "HasCustomDomain": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "CertificateArn" }, ""] }] },
+    "HasRedirectDomain": { "Fn::And": [{ "Condition": "HasCustomDomain" }, { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "RedirectDomainName" }, ""] }] }] }
+  },
+  "Resources": {
+    "SiteBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "scamcatch-site-${AWS::AccountId}" },
+        "OwnershipControls": { "Rules": [{ "ObjectOwnership": "BucketOwnerEnforced" }] },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true, "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true, "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": { "ServerSideEncryptionConfiguration": [{ "ServerSideEncryptionByDefault": { "SSEAlgorithm": "AES256" } }] },
+        "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
+      }
+    },
+    "OriginAccess": {
+      "Type": "AWS::CloudFront::OriginAccessControl",
+      "Properties": {
+        "OriginAccessControlConfig": {
+          "Name": { "Fn::Sub": "scamcatch-${AWS::AccountId}" },
+          "Description": "Read only access to the ScamCatch website origin",
+          "OriginAccessControlOriginType": "s3", "SigningBehavior": "always", "SigningProtocol": "sigv4"
+        }
+      }
+    },
+    "ResponseHeaders": {
+      "Type": "AWS::CloudFront::ResponseHeadersPolicy",
+      "Properties": {
+        "ResponseHeadersPolicyConfig": {
+          "Name": { "Fn::Sub": "scamcatch-headers-${AWS::AccountId}" },
+          "SecurityHeadersConfig": {
+            "ContentTypeOptions": { "Override": true },
+            "FrameOptions": { "FrameOption": "DENY", "Override": true },
+            "ReferrerPolicy": { "ReferrerPolicy": "strict-origin-when-cross-origin", "Override": true },
+            "StrictTransportSecurity": { "AccessControlMaxAgeSec": 31536000, "IncludeSubdomains": false, "Preload": false, "Override": true }
+          }
+        }
+      }
+    },
+    "RedirectFunction": {
+      "Type": "AWS::CloudFront::Function",
+      "Condition": "HasRedirectDomain",
+      "Properties": {
+        "Name": { "Fn::Sub": "scamcatch-domain-redirect-${AWS::AccountId}" },
+        "AutoPublish": true,
+        "FunctionConfig": {
+          "Comment": "Redirect the ScamCatch email domain to the public website",
+          "Runtime": "cloudfront-js-2.0"
+        },
+        "FunctionCode": { "Fn::Sub": "function handler(event) {\n  var request = event.request;\n  var host = request.headers.host.value.toLowerCase().split(':')[0];\n  if (host !== '${RedirectDomainName}' && host !== 'www.${RedirectDomainName}') {\n    return request;\n  }\n  var query = request.rawQueryString();\n  var location = 'https://${DomainName}' + request.uri;\n  if (query !== undefined) {\n    location += '?' + query;\n  }\n  return {\n    statusCode: 301,\n    statusDescription: 'Moved Permanently',\n    headers: { location: { value: location } }\n  };\n}\n" }
+      }
+    },
+    "Distribution": {
+      "Type": "AWS::CloudFront::Distribution",
+      "Properties": {
+        "DistributionConfig": {
+          "Enabled": true, "Comment": "ScamCatch public website", "DefaultRootObject": "index.html",
+          "HttpVersion": "http2and3", "IPV6Enabled": true, "PriceClass": "PriceClass_100",
+          "Aliases": { "Fn::If": ["HasRedirectDomain", [{ "Ref": "DomainName" }, { "Fn::Sub": "www.${DomainName}" }, { "Ref": "RedirectDomainName" }, { "Fn::Sub": "www.${RedirectDomainName}" }], { "Fn::If": ["HasCustomDomain", [{ "Ref": "DomainName" }, { "Fn::Sub": "www.${DomainName}" }], { "Ref": "AWS::NoValue" }] }] },
+          "ViewerCertificate": { "Fn::If": ["HasCustomDomain", { "AcmCertificateArn": { "Ref": "CertificateArn" }, "SslSupportMethod": "sni-only", "MinimumProtocolVersion": "TLSv1.2_2021" }, { "CloudFrontDefaultCertificate": true }] },
+          "Origins": [{
+            "Id": "ScamCatchS3",
+            "DomainName": { "Fn::GetAtt": ["SiteBucket", "RegionalDomainName"] },
+            "OriginAccessControlId": { "Ref": "OriginAccess" },
+            "S3OriginConfig": { "OriginAccessIdentity": "" }
+          }],
+          "DefaultCacheBehavior": {
+            "TargetOriginId": "ScamCatchS3", "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": ["GET", "HEAD"], "CachedMethods": ["GET", "HEAD"], "Compress": true,
+            "ForwardedValues": { "QueryString": false, "Cookies": { "Forward": "none" } },
+            "MinTTL": 0, "DefaultTTL": 300, "MaxTTL": 86400,
+            "ResponseHeadersPolicyId": { "Ref": "ResponseHeaders" },
+            "FunctionAssociations": { "Fn::If": ["HasRedirectDomain", [{ "EventType": "viewer-request", "FunctionARN": { "Fn::GetAtt": ["RedirectFunction", "FunctionMetadata.FunctionARN"] } }], { "Ref": "AWS::NoValue" }] }
+          }
+        },
+        "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
+      }
+    },
+    "SiteBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": { "Ref": "SiteBucket" },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Sid": "AllowOnlyScamCatchCloudFrontRead",
+            "Effect": "Allow", "Principal": { "Service": "cloudfront.amazonaws.com" },
+            "Action": "s3:GetObject", "Resource": { "Fn::Sub": "${SiteBucket.Arn}/*" },
+            "Condition": { "StringEquals": { "AWS:SourceArn": { "Fn::Sub": "arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}" } } }
+          }]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "BucketName": { "Value": { "Ref": "SiteBucket" } },
+    "DistributionId": { "Value": { "Ref": "Distribution" } },
+    "WebsiteUrl": { "Value": { "Fn::Sub": "https://${Distribution.DomainName}" } }
+  }
+}

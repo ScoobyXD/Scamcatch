@@ -20,9 +20,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
 
-/** Debug-only client. Credentials exist only in this process and active HTTPS calls. */
+/** Debug-only client. PhoneCredentials manages optional encrypted persistence separately. */
 object JevAnalysis {
     val available = true
+    var keyRevision = 0L
+        private set
     private const val MAX_TEXT_BYTES = 64 * 1024
     private const val MAX_RESPONSE_BYTES = 64L * 1024
     private val handler = Handler(Looper.getMainLooper())
@@ -57,6 +59,7 @@ object JevAnalysis {
         if (value.length > 2048 || value.any { it.code !in 32..126 } ||
             candidate.isEmpty() || candidate.any { it.code !in 33..126 }) return false
         apiKey = candidate
+        keyRevision++
         CaptureStore.setJevReady(true)
         return true
     }
@@ -64,6 +67,7 @@ object JevAnalysis {
     fun clearKey() {
         checkMainThread()
         apiKey = null
+        keyRevision++
         CaptureStore.setJevReady(false)
     }
 

@@ -1,0 +1,11 @@
+1. FTC, Protecting Older Consumers press release, December 2025: https://www.ftc.gov/news-events/news/press-releases/2025/12/ftc-issues-annual-report-congress-agencys-actions-protect-older-adults
+2. US Census Bureau, Vintage 2024 Population Estimates, June 26, 2025: https://www.census.gov/newsroom/press-releases/2025/older-adults-outnumber-children.html
+3. Carefull advertised product features, checked October 8, 2026: https://getcarefull.com/
+4. Carefull security and trusted-contact description, checked October 8, 2026: https://getcarefull.com/security-practices
+5. ZoraSafe advertised product features, checked October 8, 2026: https://www.zorasafe.com/
+6. Application form cited in this conversation: https://forms.monday.com/forms/embed/4fdec6d030dbdccc53e83ed2b7c1df6e
+7. Current prototype evidence: C:\Users\Jonat\antiscam\README.md and C:\Users\Jonat\antiscam\docs\voice.md, inspected October 8, 2026.
+8. Founder-supplied facts: Jonathan Kim is a software engineer, owns a California LLC called Mirae Opus, and selected the product name ScamCatch.
+9. Fraud losses and population counts do not measure market revenue, product accuracy, prevented losses or customer traction.
+10. No live product session, primary customer study, signed agreement or financial records were reviewed for this draft.
+11. California company evidence, checked October 8, 2026: application/scamcatch/company-evidence. MIRAE OPUS LLC, B20250299103, Active. SOS, FTB, Agent and VCFCF standing Good.

@@ -219,7 +219,7 @@ class Console:
                 raise ValueError("Choose an available device. Refresh the device list if needed.")
             if self.connection == "connected" and self.selected_device == serial:
                 return
-            if self.connection == "connected" and self.state.get("runId"):
+            if self.connection == "connected" and self.state.get("runId") and self.state.get("runMode") != "standalone":
                 raise ValueError("Wait for the current device to confirm Stop before changing devices.")
             previous_connector = self.connector
             self.connector_stop.set()
@@ -432,7 +432,9 @@ class Console:
                 reconnected = self.connection != "connected"
                 self.state = state
                 self.connection = "connected"
-                self.message = "Device connected. Start a run when the setup checks are complete."
+                self.message = ("Phone run active. Stop it in Antiscam before starting a recorded desktop run."
+                                if state.get("runMode") == "standalone"
+                                else "Device connected. Start a run when the setup checks are complete.")
                 if reconnected:
                     self.restore_saved_keys()
             kind = event.get("type", "event")
@@ -475,8 +477,9 @@ class Console:
                 elif self.run and self.run["status"] == "stopping":
                     self.run["status"] = "active"
                     self.persist_run()
-            # A reconnect can reveal an orphaned run. Stop it without resuming its recording.
-            if kind == "snapshot" and self.state.get("runId") and not (self.run and self.run["status"] in ACTIVE):
+            # A reconnect can reveal an orphaned desktop run. Phone runs keep their local owner.
+            if (kind == "snapshot" and self.state.get("runId") and self.state.get("runMode") != "standalone"
+                    and not (self.run and self.run["status"] in ACTIVE)):
                 self.send_command({"command": "stop"})
             if kind not in {"snapshot", "state_changed"} and (matching or kind == "command_error"):
                 entry = self.activity_entry(event)
@@ -506,6 +509,8 @@ class Console:
             if self.run and self.run["status"] in ACTIVE:
                 raise ValueError("A run is already active.")
             if self.state.get("runId"):
+                if self.state.get("runMode") == "standalone":
+                    raise ValueError("Stop the phone run in Antiscam before starting a recorded desktop run.")
                 raise ValueError("The device still has an active run. Wait for Stop to finish.")
             if not all(self.state.get(key) for key in ("consentGranted", "monitoringEnabled", "serviceConnected")):
                 raise ValueError("Allow capture and cloud text analysis, resume capture, and enable the accessibility service in Antiscam Dev.")

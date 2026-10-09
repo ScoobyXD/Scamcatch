@@ -5,7 +5,7 @@
 1. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) is the single source for all Jev questions and voice prompts.
 2. It contains the voice system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary. It also defines model settings and the Jev threshold.
 3. The debug build compiles this Kotlin file directly. It uses no runtime parser or generated instruction copy.
-4. Stop the run after edits. Build, install, and restart Antiscam. Reconnect the dashboard. Windows restores saved keys for that phone. Enter unsaved keys again. Edits do not reload live.
+4. Stop the run after edits. Build, install, and restart Antiscam. Restore or enter the required keys before another run. Edits do not reload live.
 5. Ask the user to audit any new Jev question before adding it.
 
 ## Behavior and connection rules
@@ -14,10 +14,10 @@
 2. Pause new screenshots and OCR before opening the warning. Discard screenshot and OCR work that crosses a warning boundary.
 3. Old Jev results must not reopen a dismissed warning.
 4. Show a centered card above the current app with **We believe you are being scammed**.
-5. Animate the entrance with a 420-millisecond fade and scale. Vibrate twice with 65-millisecond pulses and a 120-millisecond gap.
+5. Animate the entrance with a 420-millisecond fade and scale. Request two 65-millisecond vibration pulses with a 120-millisecond gap, even if the warning cannot open.
 6. Show an AI face with blinking eyes. Animate its mouth from remote WebRTC audio levels, sampled every 100 milliseconds.
 7. Require capture/cloud consent, separate automatic voice consent, microphone permission, and an OpenAI key before starting voice.
-8. Enter the OpenAI key in the desktop console. Forward it through the local server and ADB bridge to phone memory. Windows can save it in Credential Manager.
+8. Enter the OpenAI key in Antiscam setup or the desktop console. Desktop keys reach phone memory through the local server and ADB bridge.
 9. Key readiness confirms that a key is loaded. It does not confirm authentication, billing, or model access.
 10. Start voice automatically when the warning opens and setup is complete. Permit one connection attempt per warning.
 11. The assistant speaks first. It explains the supplied evidence, preserves uncertainty, and asks the user to pause before sending money or sensitive information.
@@ -32,7 +32,7 @@
 20. Do not automatically retry session creation. A retry can create another billable session.
 21. The large red X and Android Back mute both audio directions immediately. Stop native audio and release WebRTC before dismissing the warning and resuming capture.
 22. For a started session, send `session.close` and wait up to five seconds for `session.closed`. Record unconfirmed finalization if no confirmation arrives.
-23. Home or backgrounding stops voice. Keep the warning and capture pause until dismissal. Returning must not start another session.
+23. Home or backgrounding the warning stops voice. Keep the warning and capture pause until dismissal. Returning must not start another session.
 24. Missing setup and voice failures keep the warning open and capture paused. Keep a failure visible until the warning closes.
 25. Stop, capture consent withdrawal, or service disconnection closes the warning. Capture can resume only when its normal prerequisites hold.
 26. Start a five-second warning cooldown after dismissal finishes. Resume capture immediately when allowed. Suppress new warnings during the cooldown without queuing them.
@@ -41,6 +41,12 @@
 29. Retain `voice_audio_summary` for the original run when cleanup finishes after Stop. Remote audio energy does not prove that the user heard sound.
 30. Keep direct OpenAI voice limited to the development build. The release `LiveVoice` implementation remains unavailable.
 31. Active voice costs $0.05 per minute, billed per second. WebRTC initialization bills 15 seconds, credited against the session duration. See [OpenAI's WebRTC guide](https://developers.openai.com/api/docs/guides/voice-webrtc#understand-the-connection-sequence).
-32. Builds and lint do not verify live voice. Check speech, interruption, closing, backgrounding, and capture resumption on the phone.
+32. Builds and lint do not verify live voice. Check speech, interruption, closing, backgrounding, and capture resumption with the laptop disconnected.
 33. Update this document when voice behavior changes. Keep each rule consistent with `LiveVoice`, `ScamIntervention`, and `ScamWarningActivity`.
 34. Windows restores a saved OpenAI key after reconnect or reinstall only when the selected phone reports that its OpenAI key is missing.
+35. Start Run on the phone uses the same capture, OCR, Jev, warning, and voice flow. The phone needs Internet access.
+36. Leaving Antiscam setup does not stop a phone run. The accessibility service continues screen checks while the user uses other apps.
+37. Connecting or disconnecting the desktop does not stop a phone run. The desktop receives phone status, without its OCR or evidence records.
+38. Remember on this phone is optional and off by default. Saved keys use Android Keystore encryption and stay outside Android backups.
+39. Restore saved phone keys when the app process starts. A newer key entry or clear action takes priority over restoration.
+40. If Android blocks the warning, keep capture paused. Open the notification or select Return to scam warning in Antiscam.

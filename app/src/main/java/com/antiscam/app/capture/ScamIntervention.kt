@@ -88,11 +88,15 @@ object ScamIntervention {
         mutableIncident.value = WarningIncident(runId, captureId, evidence)
         RunMonitor.emit("warning_opened", mapOf("runId" to runId, "captureId" to captureId))
         try {
-            owner.startActivity(Intent(owner, ScamWarningActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
             @Suppress("DEPRECATION")
             val vibrator = owner.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
             vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 65, 120, 65), -1))
+        } catch (_: RuntimeException) {
+            // An unavailable vibrator must not prevent the warning from opening.
+        }
+        try {
+            owner.startActivity(Intent(owner, ScamWarningActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
             // Android can reject a background launch without throwing. Keep an actionable fallback.
             launchTimeout = Runnable {
                 if (!attempted && incident.value != null) {
@@ -118,7 +122,7 @@ object ScamIntervention {
         val state = CaptureStore.state.value
         val unavailable = when {
             !state.voiceConsentGranted -> "Allow automatic voice in Antiscam setup for future warnings."
-            !LiveVoice.ready -> "Set the OpenAI key in the console for future voice warnings."
+            !LiveVoice.ready -> "Set the OpenAI key in Antiscam setup for future voice warnings."
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
                 "Allow microphone access in Antiscam setup for future voice warnings."
             else -> null

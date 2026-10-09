@@ -7,6 +7,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+enum class RunMode(val wireName: String) {
+    DASHBOARD("dashboard"),
+    STANDALONE("standalone"),
+}
+
 data class CaptureState(
     val consentGranted: Boolean = false,
     val monitoringEnabled: Boolean = false,
@@ -24,15 +29,17 @@ data class CaptureState(
     val voiceConsentGranted: Boolean = false,
     val warningActive: Boolean = false,
     val voiceStatus: String = "idle",
-    // A run exists only while the developer dashboard owns the local connection.
+    // Runs live in this process. Only dashboard runs require the local connection.
     val runId: String? = null,
+    val runMode: RunMode? = null,
+    val dashboardConnected: Boolean = false,
     // Every change that invalidates a pending capture increments this value.
     val revision: Long = 0,
 )
 
 /** Only consent and monitoring settings persist. OCR, Jev results, and the API key do not. */
 object CaptureStore {
-    private const val CONSENT_VERSION = 2
+    private const val CONSENT_VERSION = 3
     private val mutableState = MutableStateFlow(CaptureState())
     val state: StateFlow<CaptureState> = mutableState.asStateFlow()
     private var preferences: SharedPreferences? = null
@@ -78,7 +85,7 @@ object CaptureStore {
                     !it.consentGranted -> "Allow capture before enabling monitoring."
                     !active -> "Monitoring is paused."
                     !it.serviceConnected -> "Enable Antiscam in Android accessibility settings."
-                    it.runId == null -> "Ready. Start a run in the desktop dashboard."
+                    it.runId == null -> "Ready. Start a run here or in the desktop dashboard."
                     else -> "Run active. Capture follows the current app."
                 },
                 lastError = null,
@@ -105,10 +112,10 @@ object CaptureStore {
     }
 
     fun reset() {
-        JevAnalysis.clearKey()
-        LiveVoice.clearKey()
+        PhoneCredentials.clearKey(PhoneCredentials.Provider.JEV)
+        PhoneCredentials.clearKey(PhoneCredentials.Provider.OPENAI)
         mutableState.update {
-            CaptureState(serviceConnected = it.serviceConnected, revision = it.revision + 1)
+            CaptureState(serviceConnected = it.serviceConnected, dashboardConnected = it.dashboardConnected, revision = it.revision + 1)
         }
         saveSettings()
     }
@@ -122,23 +129,30 @@ object CaptureStore {
                     !connected -> "Accessibility service is disconnected."
                     !it.consentGranted -> "Allow capture to begin."
                     !it.monitoringEnabled -> "Monitoring is paused."
-                    it.runId == null -> "Ready. Start a run in the desktop dashboard."
+                    it.runId == null -> "Ready. Start a run here or in the desktop dashboard."
                     else -> "Run active. Capture follows the current app."
                 },
             )
         }
     }
 
-    internal fun setRunId(runId: String?) {
+    internal fun setDashboardConnected(connected: Boolean) {
+        mutableState.update { it.copy(dashboardConnected = connected) }
+    }
+
+    internal fun setRunId(runId: String?, mode: RunMode? = null) {
         mutableState.update {
             if (it.runId == runId) it else it.copy(
                 runId = runId,
+                runMode = mode.takeIf { runId != null },
                 jevStatus = "idle",
                 jevCaptureId = null,
                 jevFlagged = null,
                 latestText = if (runId != null) "" else it.latestText,
                 lastCapturedAtMillis = if (runId != null) null else it.lastCapturedAtMillis,
                 captureCount = if (runId != null) 0 else it.captureCount,
+                status = if (runId != null) "Run active. Use another app to start screen checks." else "Run stopped.",
+                lastError = null,
                 revision = it.revision + 1,
             )
         }

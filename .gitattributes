@@ -3,3 +3,8 @@
 gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+*.pdf binary
+*.pptx binary
+*.mp4 binary
+*.png binary
+*.jpg binary

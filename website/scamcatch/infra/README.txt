@@ -1,0 +1,16 @@
+1. AWS profile mangorts-dev hosts this site. Region: us-east-1. Stack: scamcatch-site.
+2. The S3 origin is private. CloudFront reads public website files through its origin access control.
+3. Publish only website/scamcatch/public. Do not upload application files, company evidence, or this infra directory.
+4. Update site files from the repository root with: aws s3 sync ./website/scamcatch/public s3://scamcatch-site-686458136219/ --cache-control public,max-age=300 --profile mangorts-dev --region us-east-1
+5. Cached files expire after five minutes. For an immediate update, run: aws cloudfront create-invalidation --distribution-id E1FTFPRB048HY --paths "/*" --profile mangorts-dev
+6. site.json defines the website stack. Preserve CertificateArn and RedirectDomainName when updating it. An empty CertificateArn removes custom-domain support.
+7. Route 53 zone Z01377241I2U5CS0WC4NA and the ACM certificate are managed separately from the stack. dns-records.json records the website and certificate-validation DNS records.
+8. Keep the ACM validation CNAME records. ACM uses these records to renew the certificate.
+9. Namecheap holds the scamcatch.io registration. Domain privacy is enabled. Domain auto-renew is on. Privacy auto-renew remains off. Registration expires October 9, 2027.
+10. The scamcatch.io first registration cost $34.98. AWS hosting and DNS usage charges are separate.
+11. The bucket has a Retain deletion policy. Deleting the stack does not delete the bucket or site files.
+12. RedirectDomainName=scamcatchtech.com adds that domain and its www name to the existing distribution. A CloudFront viewer-request function returns 301 to https://scamcatch.io.
+13. The redirect preserves the request path and query string. Runtime 2.0 request.rawQueryString() preserves query order, repeated keys, and original encoding. The function leaves scamcatch.io requests unchanged.
+14. scamcatchtech.com uses Namecheap BasicDNS. Its @ ALIAS and www CNAME point to d3gr2wf5lmo9f2.cloudfront.net. Keep the two ACM validation CNAMEs for certificate renewal. No additional Route 53 zone is required.
+15. The active certificate must cover scamcatch.io, www.scamcatch.io, scamcatchtech.com, and www.scamcatchtech.com. Keep the previous certificate until a separate cleanup is authorized.
+16. Namecheap registration and mailbox details for scamcatchtech.com are in application/scamcatch/domain-evidence/scamcatchtech-setup.json. Website redirects do not change mail delivery.

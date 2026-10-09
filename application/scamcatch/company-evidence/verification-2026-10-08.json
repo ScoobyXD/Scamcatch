@@ -1,0 +1,59 @@
+{
+  "checked_date_pacific": "2026-10-08",
+  "company_name": "MIRAE OPUS LLC",
+  "ftb_entity_id": "20250299103",
+  "sos_entity_id": "B20250299103",
+  "verified": [
+    "1. California FTB lists MIRAE OPUS LLC with Entity Status ACTIVE and Exempt Status NOT EXEMPT.",
+    "2. The free FTB Entity Status Letter dated 10/8/2026 states that the entity is in good standing with FTB.",
+    "3. The FTB letter has ESL ID 5630120691 and entity ID 20250299103.",
+    "4. The FTB letter does not establish standing with other agencies.",
+    "5. California SOS lists MIRAE OPUS LLC (B20250299103) as Active.",
+    "6. California SOS lists standing as Good for SOS, FTB, Agent, and VCFCF.",
+    "7. The SOS record states an initial filing date of 09/15/2025, formation in CALIFORNIA, and entity type Limited Liability Company - CA.",
+    "8. The SOS record lists Jonathan Kim as the individual registered agent.",
+    "9. The Statement of Information due date is 09/30/2027."
+  ],
+  "unverified": [
+    "1. AgeTech acceptance of an LLC remains unconfirmed. Its rules use the term incorporated organizations.",
+    "2. The applicant must also meet the conflict-of-interest eligibility conditions.",
+    "3. No certified SOS status certificate was ordered. The official online record is a non-certified status check."
+  ],
+  "sources": [
+    {
+      "title": "California FTB Entity Status Letter service",
+      "url": "https://webapp.ftb.ca.gov/eletter/",
+      "evidence": "mirae-opus-ftb-status-2026-10-08.pdf",
+      "rendered_evidence": "mirae-opus-ftb-status-2026-10-08.png",
+      "method": "Searched Mirae Opus in the official UI, selected the matching record, and generated the free status letter."
+    },
+    {
+      "title": "California FTB description of Entity Status Letters",
+      "url": "https://www.ftb.ca.gov/help/business/entity-status-letter.asp"
+    },
+    {
+      "title": "California SOS Business Search",
+      "url": "https://bizfileonline.sos.ca.gov/search/business",
+      "evidence": "mirae-opus-sos-standing-2026-10-08.png",
+      "method": "Completed the visible hCaptcha after explicit user approval. Searched Mirae Opus and opened its record. Saved a screenshot crop that excludes the residential address."
+    },
+    {
+      "title": "California SOS entity-type descriptions",
+      "url": "https://www.sos.ca.gov/business-programs/business-entities/starting-business/types",
+      "finding": "California treats corporations and LLCs as separate entity types. LLCs file Articles of Organization; corporations file Articles of Incorporation."
+    },
+    {
+      "title": "CES ATAD 2027 Pitch Rules Final.pdf, Section 2",
+      "url": "https://drive.google.com/file/d/1G_tsbJpqXjqPYC3ocxDpcafYsNEu6-SA/view",
+      "finding": "The rules require an incorporated nonprofit or for-profit organization, good standing in its state of origin, and a principal business location in the US or DC. They do not expressly list LLCs."
+    }
+  ],
+  "unsent_eligibility_inquiry": "Hello, I am preparing an application for ScamCatch, a product of Mirae Opus LLC, a California limited liability company. Do California LLCs qualify under Section 2's incorporated-organization requirement? If so, what proof of good standing do you require?",
+  "handling": [
+    "1. Do not publish the company-evidence directory as part of the website.",
+    "2. The downloaded FTB letter and its rendered image do not contain the company's residential address.",
+    "3. No application or inquiry was submitted. No certificate was purchased.",
+    "4. FTB data proves FTB standing only. The separate SOS record confirms Active status and Good standing in all four displayed categories.",
+    "5. The SOS screenshot is a crop of the original view. Its content was not changed."
+  ]
+}

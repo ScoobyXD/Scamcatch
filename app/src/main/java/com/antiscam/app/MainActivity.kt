@@ -54,6 +54,7 @@ import com.antiscam.app.capture.JevAnalysis
 import com.antiscam.app.capture.JevWarning
 import com.antiscam.app.capture.LiveVoice
 import com.antiscam.app.capture.ScamIntervention
+import com.antiscam.app.capture.RunMode
 import com.antiscam.app.capture.RunMonitor
 
 class MainActivity : ComponentActivity() {
@@ -109,6 +110,7 @@ private fun SetupScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Antiscam", style = MaterialTheme.typography.titleLarge)
+            RunControlsCard(state)
             Text(
                 if (state.serviceConnected) "Accessibility: connected" else "Accessibility: not connected",
                 style = MaterialTheme.typography.bodyLarge,
@@ -125,6 +127,7 @@ private fun SetupScreen(
                     Text("Withdraw capture consent")
                 }
             }
+            PhoneKeysCard(state)
             if (state.warningActive) {
                 val context = LocalContext.current
                 Button(onClick = { context.startActivity(Intent(context, ScamWarningActivity::class.java)) },
@@ -132,6 +135,61 @@ private fun SetupScreen(
             }
             if (LiveVoice.available) VoiceConsentCard(state)
             if (JevAnalysis.available) JevStatusCard(state)
+        }
+    }
+}
+
+@Composable
+private fun RunControlsCard(state: CaptureState) {
+    var startError by remember(
+        state.consentGranted,
+        state.serviceConnected,
+        state.jevReady,
+        state.voiceReady,
+        state.voiceConsentGranted,
+    ) { mutableStateOf<String?>(null) }
+    val active = state.runId != null
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                when (state.runMode) {
+                    RunMode.STANDALONE -> "Phone run active"
+                    RunMode.DASHBOARD -> "Desktop run active"
+                    null -> "Start a phone run"
+                },
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text("A phone run works without a laptop. Jev and voice warnings still need an Internet connection.")
+            Button(
+                onClick = { startError = RunMonitor.startStandalone() },
+                enabled = !active,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Start Run") }
+            if (active) {
+                OutlinedButton(
+                    onClick = { RunMonitor.stopRun() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Stop Run") }
+                Text("You can leave this app and use your phone. Antiscam checks the visible screen while the run is active.")
+                Text("Captures: ${state.captureCount}")
+                Text("Jev: ${state.jevStatus}")
+                Text("Voice: ${state.voiceStatus}")
+            } else {
+                if (!state.consentGranted) Text("Allow screen capture below.")
+                if (!state.serviceConnected) Text("Enable Antiscam in Accessibility settings.")
+                if (!state.jevReady || !state.voiceReady) Text("Set both API keys in Phone keys below.")
+                if (!state.voiceConsentGranted) Text("Allow automatic voice warnings below.")
+                if (state.consentGranted && !state.monitoringEnabled) {
+                    OutlinedButton(onClick = { CaptureStore.setEnabled(true) }) {
+                        Text("Resume monitoring")
+                    }
+                }
+            }
+            Text(state.status)
+            startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            state.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Text(if (state.dashboardConnected) "Desktop console: connected" else "Desktop console: not connected")
+            Text("To save outputs on your laptop, connect the desktop console and start a run there. Phone runs do not save a desktop record.")
         }
     }
 }
@@ -167,7 +225,7 @@ private fun VoiceConsentCard(state: CaptureState) {
                     "OpenAI receives the flagged screen text, the Jev results, and microphone audio during the conversation.",
             )
             Text("The red X stops the voice conversation and microphone, closes the warning, and resumes screen checks. You can withdraw voice consent here.")
-            Text(if (state.voiceReady) "OpenAI key is set for this app session." else "Set the OpenAI API key with the OpenAI key button in the desktop console.")
+            Text(if (state.voiceReady) "The OpenAI key is ready." else "Set the OpenAI API key in Phone keys or the desktop console.")
             if (!state.voiceConsentGranted) {
                 if (!state.consentGranted) Text("Allow screen capture above before you enable automatic voice warnings.")
                 Row {
@@ -214,7 +272,7 @@ private fun ConsentCard() {
             Text("Allow screen capture", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Antiscam uses Android Accessibility to observe app changes, typing, taps, and scrolling. " +
-                    "During a dashboard run, it captures the visible screen, including overlapping windows, " +
+                    "During a phone or desktop run, it captures the visible screen, including overlapping windows, " +
                     "and extracts text with ML Kit on this device. " +
                     "Antiscam masks keyboard windows before OCR. It does not mask sensitive fields. " +
                     "Android capture restrictions still apply.",
@@ -222,15 +280,16 @@ private fun ConsentCard() {
             Text(
                 "Captured text can include private messages and visible passwords. " +
                     "Screenshot images stay in device memory. " +
-                    "Extracted text, Jev questions, answers, and event records are saved on your connected computer. " +
-                    "With a development key configured, the app sends extracted text to TypeSafe's Jev service over the Internet. " +
+                    "During a desktop run, your connected computer saves extracted text, Jev questions, answers, and event records. " +
+                    "Phone runs keep these results in app memory and do not save a desktop record. " +
+                    "With a TypeSafe key configured, the app sends extracted text to TypeSafe's Jev service over the Internet. " +
                     "Jev checks the text for the configured topics.",
             )
             Text("You can withdraw consent here at any time. Previously saved runs remain on your computer.")
             Row {
                 Checkbox(checked = accepted, onCheckedChange = { accepted = it })
                 Text(
-                    "I allow screen capture, text extraction, and sending extracted text to TypeSafe for Jev analysis during dashboard runs.",
+                    "I allow screen capture, text extraction, and sending extracted text to TypeSafe for Jev analysis during phone or desktop runs.",
                     modifier = Modifier.weight(1f).padding(top = 12.dp),
                 )
             }
@@ -253,14 +312,13 @@ private fun JevStatusCard(state: CaptureState) {
     val context = LocalContext.current
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. Flags remain in the console."
+        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. Antiscam still attempts to open the warning on your phone."
         if (granted) JevWarning.update(context, ScamIntervention.incident.value?.captureId)
     }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Jev analysis", style = MaterialTheme.typography.titleMedium)
-            Text(if (state.jevReady) "Development key is set for this app session." else "Set the TypeSafe API key with the Jev key button in the desktop console.")
-            Text("The key stays in app memory until cleared or the app process ends. It is not included in console records.")
+            Text(if (state.jevReady) "The TypeSafe key is ready." else "Set the TypeSafe API key in Phone keys or the desktop console.")
             Text(
                 when {
                     state.jevFlagged == true -> "Probably scam"
@@ -270,7 +328,7 @@ private fun JevStatusCard(state: CaptureState) {
                 color = if (state.jevFlagged == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleMedium,
             )
-            Text("Any of the five checks at 0.7 or higher flags the capture. Read the questions and results in the console.")
+            Text("Any of the five checks at 0.7 or higher flags the capture and opens a phone warning. Desktop runs also show results in the console.")
             OutlinedButton(onClick = {
                 if (Build.VERSION.SDK_INT >= 33 && !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
