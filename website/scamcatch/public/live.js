@@ -11,6 +11,9 @@
   const MAX_EVENT_CHARS = 128 * 1024;
   const CAPTION_CHARS = 90;
   const CAPTION_PAUSE_MS = 1200;
+  const TURN_SILENCE_MS = 1200;         // the voice has been quiet this long after talking: it's the user's turn
+  const VOICE_LEVEL = 0.01;             // remote audio above this RMS counts as the voice talking
+  const LEVEL_MS = 100;                 // how often the call screen reads audio levels
   const UNEXPECTED = 'Voice sent something unexpected and stopped.';
   const MIC_ERRORS = {
     NotAllowedError: 'Microphone blocked. Allow it in your browser to talk.',
@@ -22,7 +25,7 @@
   let current = null;
   const problem = (message) => Object.assign(new Error(message), { friendly: true });
 
-  function start(context, { onStatus = () => {}, onCaption = () => {} } = {}) {
+  function start(context, { onStatus = () => {}, onCaption = () => {}, onTurn = () => {}, onMicLevel = () => {} } = {}) {
     if (current) current.end();
     let stopped = false;   // no more statuses or commands after this
     let started = false;   // session.started arrived
@@ -40,6 +43,14 @@
     let captionText = '';
     let captionEnd = NaN;
     let userSpoke = true;
+    let lastWordsAt = 0;   // when the last output transcript delta arrived
+    let lastVoiceAt = 0;   // when the voice's audio was last above VOICE_LEVEL
+    let turn = '';
+    let voiceMeter = null;
+    let micMeter = null;
+    // Created during the tap, so the browser lets it run. It only measures levels for the call screen; nothing plays through it.
+    const meters = window.AudioContext ? new AudioContext() : null;
+    const levelTimer = setInterval(watchLevels, LEVEL_MS);
     const audio = new Audio();
     audio.autoplay = true;
     const limitTimer = setTimeout(() => stop('Time’s up. Calls end after 3 minutes.'), CALL_LIMIT_MS);
@@ -54,6 +65,8 @@
       clearTimeout(startTimer);
       clearTimeout(disconnectTimer);
       clearTimeout(micTimer);
+      clearInterval(levelTimer);
+      if (meters) meters.close().catch(() => {});
       if (stream) stream.getTracks().forEach((track) => track.stop());
       audio.muted = true;
       audio.pause();
@@ -83,6 +96,41 @@
       micOpen = true;
       clearTimeout(micTimer);
       if (stream) stream.getAudioTracks().forEach((track) => { track.enabled = true; });
+    }
+
+    // An analyser on a media stream, for its level. Null when the browser can't measure it.
+    function meter(mediaStream) {
+      if (!meters) return null;
+      try {
+        const node = meters.createAnalyser();
+        node.fftSize = 512;
+        meters.createMediaStreamSource(mediaStream).connect(node);
+        return { node, data: new Float32Array(node.fftSize) };
+      } catch {
+        return null;
+      }
+    }
+    function level(m) {
+      m.node.getFloatTimeDomainData(m.data);
+      let sum = 0;
+      for (const value of m.data) sum += value * value;
+      return Math.sqrt(sum / m.data.length);
+    }
+
+    // Whose turn it is: the voice's, while its audio is playing; the user's, once it has gone quiet after talking.
+    // Transcript deltas arrive ahead of the audio, so the audio level decides; without it, a pause in the transcript does.
+    function watchLevels() {
+      if (stopped) return;
+      const now = performance.now();
+      if (voiceMeter && level(voiceMeter) > VOICE_LEVEL) lastVoiceAt = now;
+      if (micMeter && micOpen) onMicLevel(Math.min(1, level(micMeter) * 8));
+      if (!voiceStarted) return;
+      const quiet = lastVoiceAt ? now - lastVoiceAt > TURN_SILENCE_MS : now - lastWordsAt > TURN_SILENCE_MS * 2;
+      const next = quiet && now - lastWordsAt > TURN_SILENCE_MS / 2 ? 'you' : 'voice';
+      if (next !== turn) {
+        turn = next;
+        onTurn(next);
+      }
     }
 
     function command(event) {
@@ -184,6 +232,7 @@
           userSpoke = true;
           break;
         case 'session.output_transcript.delta':
+          lastWordsAt = performance.now();
           if (!voiceStarted) {
             voiceStarted = true;
             clearTimeout(micTimer);
@@ -201,27 +250,38 @@
       if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
         throw problem('This browser can’t run live voice. Try a recent Chrome, Edge, or Safari.');
       }
-      if (!(await microphoneAllowed())) say('Allow the microphone to talk');
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-      } catch (error) {
-        throw problem(MIC_ERRORS[error?.name] || 'The microphone couldn’t start.');
-      }
+      // An already allowed microphone opens while the call connects. Otherwise ask first, so no session starts
+      // (and bills) for a microphone the visitor then blocks.
+      const allowed = await microphoneAllowed();
+      if (!allowed) say('Allow the microphone to talk');
+      const microphone = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        .then((opened) => {
+          if (stopped) {   // the call ended while the microphone was opening
+            opened.getTracks().forEach((track) => track.stop());
+            return null;
+          }
+          stream = opened;
+          // A disabled track still sends audio (silence), which keeps the input flowing as OpenAI requires.
+          stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+          micMeter = meter(stream);
+          return stream.getAudioTracks()[0];
+        }, (error) => { throw problem(MIC_ERRORS[error?.name] || 'The microphone couldn’t start.'); });
+      if (!allowed) await microphone;
       if (stopped) {
         release();
         return;
       }
-      // A disabled track still sends audio (silence), which keeps the input flowing as OpenAI requires.
-      stream.getAudioTracks().forEach((track) => { track.enabled = false; });
       say('Connecting…');
       startTimer = setTimeout(() => stop('The voice took too long to connect. Try again.'), START_TIMEOUT_MS);
       peer = new RTCPeerConnection();
       peer.ontrack = (event) => {
         audio.srcObject = event.streams[0] || new MediaStream([event.track]);
         audio.play().catch(() => {});
+        voiceMeter = meter(audio.srcObject);
       };
       peer.onconnectionstatechange = watchConnection;
-      peer.addTrack(stream.getAudioTracks()[0], stream);
+      // The microphone joins this sender as soon as it opens.
+      const sender = peer.addTransceiver('audio', { direction: 'sendrecv' }).sender;
       // The event channel must exist before the offer.
       channel = peer.createDataChannel('oai-events');
       channel.onmessage = (event) => receive(event.data);
@@ -233,7 +293,15 @@
       await iceGathered();
       if (stopped) return;
       const voice = new URLSearchParams(location.search).get('voice');
-      prompts = await post({ sdp: peer.localDescription.sdp, context, ...(voice ? { voice } : {}) });
+      const answer = post({ sdp: peer.localDescription.sdp, context, ...(voice ? { voice } : {}) });
+      answer.catch(() => {});   // a microphone failure below ends the call first
+      const track = await microphone;
+      if (stopped) {
+        release();
+        return;
+      }
+      await sender.replaceTrack(track);
+      prompts = await answer;
       if (stopped) return;
       await peer.setRemoteDescription({ type: 'answer', sdp: prompts.sdp });
     }
