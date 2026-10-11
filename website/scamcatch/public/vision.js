@@ -11,7 +11,6 @@
   const canvas = frame.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const spot = stage.querySelector('.spot');
-  const today = stage.querySelector('.today');           // the "Today so far" counter, which the card steps around
   const land = new Path2D(map.querySelector('.us-land').getAttribute('d'));
   const VW = 960, VH = 610;            // the map's viewBox
   const TAU = Math.PI * 2;
@@ -114,13 +113,6 @@
     my = sr.top - st.top + (sr.height - VH * k) / 2;
     S = Math.max(13, Math.min(28, 38 * k));
     sprites = { screen: glow(COLORS.screen, 0.32), scam: glow(COLORS.scam, 0.55), catch: glow(COLORS.catch, 0.5) };
-    // the counter fills the open ocean to the right of the map, never narrower than 13rem
-    if (today) today.style.setProperty('--today-w', `${Math.round(Math.max(208, Math.min(300, w - (mx + VW * k) - 8)))}px`);
-    // on short screens the full source note gives way to a one-line "Sources" link so the counter fits beside the map
-    if (today) {
-      today.classList.remove('is-tight');
-      today.classList.toggle('is-tight', getComputedStyle(today).position === 'absolute' && today.offsetHeight > h - 6);
-    }
     rasterLogo();
     if (shown) placeSpot(shown);
     return true;
@@ -489,9 +481,6 @@
     const gap = S * 1.5;
     const box = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
     const me = { l: x - S * 0.7, r: x + S * 0.6, t: y - S * 0.9, b: y + S * 0.8 };      // the person and their phone
-    const tr = today ? today.getBoundingClientRect() : null, fr = frame.getBoundingClientRect();
-    const counter = tr && getComputedStyle(today).position === 'absolute'
-      ? { l: tr.left - fr.left - 12, r: tr.right - fr.left + 12, t: tr.top - fr.top - 12, b: tr.bottom - fr.top + 12 } : { l: 0, r: 0, t: 0, b: 0 };
     const cover = (a, l, t) => Math.max(0, Math.min(l + cw, a.r) - Math.max(l, a.l)) * Math.max(0, Math.min(t + ch, a.b) - Math.max(t, a.t));
     // next to the person first, then out in the ocean at the edge of the map
     const near = p.x < VW / 2 ? [x - gap - cw, x + gap] : [x + gap, x - gap - cw];
@@ -501,7 +490,7 @@
     lefts.forEach((l, i) => {
       if (l < 0 || l + cw > w) return;
       tops.forEach((t, j) => {
-        const score = (cover(box, l, t) + cover(me, l, t) + cover(counter, l, t)) * 10 + i * 40 + Math.abs(t + ch / 2 - y) * 0.6 + Math.abs(l + cw / 2 - x) * 0.1 + j;
+        const score = (cover(box, l, t) + cover(me, l, t)) * 10 + i * 40 + Math.abs(t + ch / 2 - y) * 0.6 + Math.abs(l + cw / 2 - x) * 0.1 + j;
         if (!best || score < best.score) best = { l, t, score };
       });
     });
@@ -644,26 +633,9 @@
     drawLeader();
   }
 
-  /* ---- Today so far: older Americans' scam reports and losses since midnight, at the FBI's 2025 pace ---- */
-  // FBI IC3 2025: 201,266 reports and $7.75 billion lost by people 60+. AARP (2023): $28.3 billion lost a year, of which
-  // only $7.8 billion is reported, so losses are scaled up by 28.3 / 7.8 to count what goes unreported.
-  const PER_DAY = { people: 201266 / 365, dollars: (7.75e9 * (28.3 / 7.8)) / 365 };
-  const todayEls = [...document.querySelectorAll('[data-today]')];
-  const whole = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-  function updateToday() {
-    const now = new Date();
-    const day = (now - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000;
-    for (const el of todayEls) {
-      const n = Math.floor(PER_DAY[el.dataset.today] * day);
-      el.textContent = el.dataset.today === 'dollars' ? `$${whole.format(n)}` : whole.format(n);
-    }
-  }
-  if (todayEls.length) { updateToday(); setInterval(updateToday, 1000); }
-
   if (storyPeople[0]) fill(storyPeople[0]);  // so the card has its size before the first story lands
 
   new ResizeObserver(() => { if (reduceMotion) still(); else if (layout()) start(); }).observe(frame);
-  if (document.fonts) document.fonts.ready.then(() => { if (reduceMotion) still(); else layout(); });   // text sizes settle once the fonts load
 
   new IntersectionObserver(([entry]) => {
     if (entry.isIntersecting) {
