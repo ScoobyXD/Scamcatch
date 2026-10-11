@@ -482,13 +482,15 @@
     const box = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
     const me = { l: x - S * 0.7, r: x + S * 0.6, t: y - S * 0.9, b: y + S * 0.8 };      // the person and their phone
     const cover = (a, l, t) => Math.max(0, Math.min(l + cw, a.r) - Math.max(l, a.l)) * Math.max(0, Math.min(t + ch, a.b) - Math.max(t, a.t));
-    // next to the person first, then out in the ocean at the edge of the map
     const near = p.x < VW / 2 ? [x - gap - cw, x + gap] : [x + gap, x - gap - cw];
-    const lefts = [...near, p.x < VW / 2 ? 0 : w - cw, p.x < VW / 2 ? w - cw : 0];
-    const tops = [y - ch / 2, box.b, box.t - ch, 0, h - ch].map((t) => Math.max(0, Math.min(h - ch, t)));
+    // beside the person first, then centered just above or below them, then out at the edges of the map
+    const minL = Math.min(0, spot.closest('.card').getBoundingClientRect().left - frame.getBoundingClientRect().left + 12);
+    const centered = Math.max(minL, Math.min(w - cw, x - cw / 2));
+    const lefts = [...near, centered, p.x < VW / 2 ? 0 : w - cw, p.x < VW / 2 ? w - cw : 0];
+    const tops = [y - ch / 2, y + S * 1.2, y - S * 1.6 - ch, box.b, box.t - ch, 0, h - ch].map((t) => Math.max(0, Math.min(h - ch, t)));
     let best = null;
     lefts.forEach((l, i) => {
-      if (l < 0 || l + cw > w) return;
+      if (l < minL || l + cw > w) return;   // the card may reach into the section's left margin
       tops.forEach((t, j) => {
         const score = (cover(box, l, t) + cover(me, l, t)) * 10 + i * 40 + Math.abs(t + ch / 2 - y) * 0.6 + Math.abs(l + cw / 2 - x) * 0.1 + j;
         if (!best || score < best.score) best = { l, t, score };
