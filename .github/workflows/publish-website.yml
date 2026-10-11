@@ -41,10 +41,18 @@ jobs:
           role-to-assume: arn:aws:iam::686458136219:role/scamcatch-github-publish
           aws-region: us-east-1
 
+      - name: Stamp the scripts and styles with this commit
+        # browsers keep each file for 5 minutes, so a new version gets a new URL and the homepage itself is never kept
+        run: |
+          v="${GITHUB_SHA::7}"
+          sed -i -E "s#(src|href)=\"(styles\.css|app\.js|vision\.js|live\.js)\"#\1=\"\2?v=$v\"#g" website/scamcatch/public/index.html
+          grep -c "?v=$v" website/scamcatch/public/index.html
+
       - name: Upload the website files
         run: |
           aws s3 sync website/scamcatch/public "s3://$BUCKET/" --cache-control public,max-age=300 --exclude "*.woff2"
           aws s3 sync website/scamcatch/public "s3://$BUCKET/" --cache-control public,max-age=300 --exclude "*" --include "*.woff2" --content-type font/woff2
+          aws s3 cp website/scamcatch/public/index.html "s3://$BUCKET/index.html" --cache-control no-cache --content-type "text/html; charset=utf-8"
 
       - name: Clear the CloudFront cache
         run: |
