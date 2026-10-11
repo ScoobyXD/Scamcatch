@@ -98,7 +98,8 @@
 
   let w = 0, h = 0, k = 1, mx = 0, my = 0, dpr = 1, S = 18;
   let sprites = {};
-  let threats = [], sparks = [], links = [], clock = 0, nextSpawn = 1.2, nextStory = 1.4, storyIndex = 0, raf = 0, last = 0, onScreen = false;
+  let threats = [], sparks = [], links = [], clock = 0, nextStory = 1.4, storyIndex = 0, raf = 0, last = 0, onScreen = false;
+  let gapScam = true;                  // whether the gap between card stories has had its one other scam yet
   let shown = null;                    // the person the card is following
 
   const X = (x) => mx + x * k;
@@ -423,9 +424,13 @@
     threats.push({ sx, sy, ex, ey, cx: sx + dx / 2 - dy * bend, cy: sy + dy / 2 + dx * bend, start: t, dur: flight });
   }
 
+  // One scam at a time: nothing new starts while a scam is in flight or a phone is still red.
+  const scamOnMap = () => threats.length > 0 || people.some((p) => p.ev && clock >= p.ev.land && clock < p.ev.land + POSSESSED);
+  const GAP = 3.6;                     // seconds between card stories, room for one other scam elsewhere
+
   function spawn() {
     const ready = people.filter((p) => !p.story && clock > p.free && clock > p.appear + 0.6);
-    if (ready.length) launch(ready[Math.floor(Math.random() * ready.length)], clock);
+    if (ready.length) launch(ready[Math.floor(Math.random() * ready.length)], clock, 1.4);
   }
 
   const along = (q, u) => {
@@ -596,8 +601,9 @@
   function tick(now) {
     clock += Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    if (clock > nextSpawn) { spawn(); nextSpawn = clock + 0.9 + Math.random() * 0.6; }
-    if (clock > nextStory) { nextStoryLaunch(); nextStory = clock + STORY_END + 0.6; }
+    // between card stories, one other scam lands somewhere else; the next story waits until it has been caught
+    if (!gapScam && !pending && !spot.classList.contains('is-shown') && !scamOnMap()) { spawn(); gapScam = true; }
+    if (clock > nextStory && !scamOnMap()) { nextStoryLaunch(); gapScam = false; nextStory = clock + STORY_END + GAP; }
     if (pending && clock >= pending.ev.land) { follow(pending, 'scam'); pending = null; }
     updateSpot(clock);
     draw();
@@ -611,7 +617,7 @@
   }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   function restart() {
-    clock = 0; nextSpawn = 1.2; nextStory = 1.4; storyIndex = 0; threats = []; sparks = []; links = []; shown = null; pending = null;
+    clock = 0; gapScam = true; nextStory = 1.4; storyIndex = 0; threats = []; sparks = []; links = []; shown = null; pending = null;
     for (const hub of HUBS) { hub.hitAt = -9; hub.glowAt = -9; }
     for (const p of people) { p.ev = null; p.free = 0; }
     resetSent();
