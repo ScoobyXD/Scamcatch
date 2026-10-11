@@ -26,7 +26,7 @@
   // The close-up card follows one person at a time. Scam text and alerts come from the demo's SCENARIOS (app.js).
   const STORIES = [
     { scam: 'romance', city: 'Phoenix, AZ', at: METROS[4] },
-    { scam: 'amazon', city: 'Atlanta, GA', at: METROS[7] },
+    { scam: 'false-charge', city: 'Atlanta, GA', at: METROS[7] },
     { scam: 'tech-support', city: 'Seattle, WA', at: METROS[9] },
     { scam: 'irs', city: 'Dallas, TX', at: METROS[6] },
     { scam: 'bank-favor', city: 'Chicago, IL', at: METROS[2] },
