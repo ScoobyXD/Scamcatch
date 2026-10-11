@@ -1,0 +1,64 @@
+# Publishes website/scamcatch/public to scamcatch.io whenever it changes on main.
+# AWS access comes from the scamcatch-github-publish role (website/scamcatch/infra/github-publish.json) through GitHub's
+# OIDC token, so no AWS keys are stored in GitHub. The role can only upload to the site bucket and clear its CloudFront cache.
+name: Publish website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/scamcatch/public/**"
+      - ".github/workflows/publish-website.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: publish-website
+  cancel-in-progress: false
+
+env:
+  BUCKET: scamcatch-site-686458136219
+  DISTRIBUTION: E1FTFPRB048HY
+  SITE: https://scamcatch.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the website folder
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: website/scamcatch/public
+          sparse-checkout-cone-mode: true
+
+      - name: Sign in to AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::686458136219:role/scamcatch-github-publish
+          aws-region: us-east-1
+
+      - name: Upload the website files
+        run: |
+          aws s3 sync website/scamcatch/public "s3://$BUCKET/" --cache-control public,max-age=300 --exclude "*.woff2"
+          aws s3 sync website/scamcatch/public "s3://$BUCKET/" --cache-control public,max-age=300 --exclude "*" --include "*.woff2" --content-type font/woff2
+
+      - name: Clear the CloudFront cache
+        run: |
+          id=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*" --query Invalidation.Id --output text)
+          echo "Invalidation $id"
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION" --id "$id"
+
+      - name: Check that scamcatch.io serves the new homepage
+        run: |
+          want=$(sha256sum website/scamcatch/public/index.html | cut -d' ' -f1)
+          for attempt in 1 2 3 4 5 6; do
+            got=$(curl -fsS "$SITE/?published=$GITHUB_SHA-$attempt" | sha256sum | cut -d' ' -f1 || true)
+            if [ "$got" = "$want" ]; then echo "Live: scamcatch.io matches commit $GITHUB_SHA"; exit 0; fi
+            sleep 10
+          done
+          echo "scamcatch.io does not match the uploaded index.html yet."
+          exit 1
