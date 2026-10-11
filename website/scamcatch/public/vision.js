@@ -261,7 +261,8 @@
   }
   const logoAt = (p) => { const [px, py] = phoneAt(p); return [px, py - S * 1.05]; };
   const hubSize = () => Math.max(24, S * 1.75);
-  const LAW_ICON = new Path2D(spot.querySelector('li[data-to="law"] svg path').getAttribute('d'));
+  // the Authorities icon: the card row's SVG paths (index.html), an eagle head and an olive wreath in a 100 grid
+  const LAW_ICON = [...spot.querySelectorAll('li[data-to="law"] svg path')].map((el) => [new Path2D(el.getAttribute('d')), el.getAttribute('fill-rule') || 'nonzero']);
 
   function drawLinks(t) {
     links = links.filter((l) => {
@@ -346,11 +347,11 @@
     },
     // an eagle head inside an olive wreath, drawn from the same path as the card row's icon (index.html)
     law(x, y, s) {
-      const k2 = (s * 0.9) / 24;
+      const k2 = (s * 0.86) / 100;
       ctx.save();
-      ctx.translate(x - 12 * k2, y - 12 * k2);
+      ctx.translate(x - 50 * k2, y - 50 * k2);
       ctx.scale(k2, k2);
-      ctx.fill(LAW_ICON, 'evenodd');
+      for (const [path, rule] of LAW_ICON) ctx.fill(path, rule);
       ctx.restore();
     },
     // a small group of people: two behind, one in front
