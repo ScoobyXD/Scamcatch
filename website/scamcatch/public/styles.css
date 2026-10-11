@@ -389,13 +389,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .timeline li[data-step="caught"],.timeline li[data-step="shared"]{--c:var(--catch)}
 /* each step: its icon with a number badge, then a line on to the next step */
 .timeline-mark{display:flex;align-items:center;gap:.7rem;height:46px}
-.timeline li:not(:last-child) .timeline-mark::after{content:"";flex:1;height:2px;margin-right:calc(-1.4rem + 8px);border-radius:1px;background:linear-gradient(90deg,var(--c),var(--to)) no-repeat 0 0,var(--line);background-size:0% 100%,100% 100%;transition:background-size .4s ease,box-shadow .4s ease}
-.timeline li[data-step="scam"]{--to:var(--catch)}
-.timeline li[data-step="caught"]{--to:var(--catch)}
-/* each line fills toward the next step while its own step is lit, landing as the next one lights up, and stays filled after */
-.timeline[data-active="scam"] li[data-step="scam"] .timeline-mark::after{background-size:100% 100%,100% 100%;transition:background-size var(--fill-1,1s) linear}
-.timeline[data-active="caught"] li[data-step="caught"] .timeline-mark::after{background-size:100% 100%,100% 100%;transition:background-size var(--fill-2,1.3s) linear}
-.timeline:is([data-active="caught"],[data-active="shared"]) li[data-step="scam"] .timeline-mark::after,.timeline[data-active="shared"] li[data-step="caught"] .timeline-mark::after{background-size:100% 100%,100% 100%;box-shadow:0 0 10px rgba(122,176,255,.45);transition:box-shadow .3s ease}
+.timeline li:not(:last-child) .timeline-mark::after{content:"";flex:1;height:2px;margin-right:calc(-1.4rem + 8px);border-radius:1px;background:var(--line)}
 .timeline-icon{position:relative;flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:13px;opacity:.82;transition:opacity .3s ease,box-shadow .3s ease,transform .3s ease}
 .timeline li[data-step="scam"] .timeline-icon{background:var(--alert);color:#fff}
 .timeline li[data-step="scam"] svg{width:26px;height:26px;fill:#fff}
