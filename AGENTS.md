@@ -20,3 +20,6 @@ Jev rules:
 4. Pin the Jev model we are doing, the configurations and tuning we're doing for this Jev model may not carry over to the next
 5. Nouls are supposed to map into if statements, choice to switchable enums, and score to some threshold.
 6. For Jev/TypeSafe work, use the official `typesafe-ai` skill from https://github.com/typesafe-ai/skills. Read the installed skill, or `skills/typesafe-ai/SKILL.md` if it is not installed, and consult the relevant live TypeSafe docs as it directs. The project-specific rules above take precedence over generic skill guidance.
+
+Where things are:
+1. docs/where-things-are.md maps the website, its AWS hosting and publish steps, the live voice backend, and the rest of the repository.

@@ -6,6 +6,8 @@
   const ICE_TIMEOUT_MS = 10000;
   const DISCONNECT_MS = 5000;
   const CLOSE_TIMEOUT_MS = 5000;
+  const SPEAK_FIRST_MS = 6000;          // the voice speaks first; open the mic anyway if it hasn't started by then
+  const MIC_GRACE_MS = 1000;            // after the voice starts talking, wait this long before listening
   const MAX_EVENT_CHARS = 128 * 1024;
   const CAPTION_CHARS = 90;
   const CAPTION_PAUSE_MS = 1200;
@@ -32,6 +34,9 @@
     let startTimer = null;
     let disconnectTimer = null;
     let closeTimer = null;
+    let micTimer = null;
+    let micOpen = false;
+    let voiceStarted = false;
     let captionText = '';
     let captionEnd = NaN;
     let userSpoke = true;
@@ -48,6 +53,7 @@
       clearTimeout(limitTimer);
       clearTimeout(startTimer);
       clearTimeout(disconnectTimer);
+      clearTimeout(micTimer);
       if (stream) stream.getTracks().forEach((track) => track.stop());
       audio.muted = true;
       audio.pause();
@@ -69,6 +75,14 @@
       if (!channel || channel.readyState !== 'open' || channel.bufferedAmount >= MAX_EVENT_CHARS) return false;
       channel.send(JSON.stringify(event));
       return true;
+    }
+
+    // The voice always speaks first: the mic sends silence until the voice starts talking.
+    function openMic() {
+      if (micOpen || stopped) return;
+      micOpen = true;
+      clearTimeout(micTimer);
+      if (stream) stream.getAudioTracks().forEach((track) => { track.enabled = true; });
     }
 
     function command(event) {
@@ -158,6 +172,7 @@
           started = true;
           clearTimeout(startTimer);
           command({ type: 'session.instructions.append', event_id: 'scamcatch_greeting', delegation_id: null, content: prompts.greeting });
+          if (!voiceStarted) micTimer = setTimeout(openMic, SPEAK_FIRST_MS);
           say('Connected');
           break;
         case 'session.delegation.created':
@@ -169,6 +184,11 @@
           userSpoke = true;
           break;
         case 'session.output_transcript.delta':
+          if (!voiceStarted) {
+            voiceStarted = true;
+            clearTimeout(micTimer);
+            micTimer = setTimeout(openMic, MIC_GRACE_MS);
+          }
           caption(event);
           break;
         case 'error':
@@ -191,6 +211,8 @@
         release();
         return;
       }
+      // A disabled track still sends audio (silence), which keeps the input flowing as OpenAI requires.
+      stream.getAudioTracks().forEach((track) => { track.enabled = false; });
       say('Connecting…');
       startTimer = setTimeout(() => stop('The voice took too long to connect. Try again.'), START_TIMEOUT_MS);
       peer = new RTCPeerConnection();

@@ -554,7 +554,7 @@
   document.querySelectorAll('.stage').forEach((stage) => observer.observe(stage));
   document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
 
-  window.ScamCatchDemo = { context: demoContext, startCall, endCall, replay: () => play(0), scenario: selectScenario };
+  window.ScamCatchDemo = { context: demoContext, startCall, endCall, replay: () => play(0), scenario: selectScenario, scenarios: SCENARIOS };
 
   // scamcatch.io/?scam=irs opens on that scam
   const linked = new URLSearchParams(window.location.search).get('scam');
