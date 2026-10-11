@@ -261,8 +261,9 @@
   }
   const logoAt = (p) => { const [px, py] = phoneAt(p); return [px, py - S * 1.05]; };
   const hubSize = () => Math.max(24, S * 1.75);
-  // the Authorities icon: the card row's SVG paths (index.html), an eagle head and an olive wreath in a 100 grid
-  const LAW_ICON = [...spot.querySelectorAll('li[data-to="law"] svg path')].map((el) => [new Path2D(el.getAttribute('d')), el.getAttribute('fill-rule') || 'nonzero']);
+  // the Authorities icon: the card row's SVG paths (index.html) in a 100 grid. An eagle with its wings spread over two
+  // olive branches; the path marked data-ink (eye, beak) is cut in the tile's own color.
+  const LAW_ICON = [...spot.querySelectorAll('li[data-to="law"] svg path')].map((el) => [new Path2D(el.getAttribute('d')), el.hasAttribute('data-ink')]);
 
   function drawLinks(t) {
     links = links.filter((l) => {
@@ -321,13 +322,14 @@
         ctx.lineWidth = 2;
         roundRect(x - s / 2 - 6 * ease(hit), y - s / 2 - 6 * ease(hit), s + 12 * ease(hit), s + 12 * ease(hit), s * 0.3); ctx.stroke();
       }
-      ctx.fillStyle = hit < 0.5 ? '#5f8dff' : '#3d6df0';
+      const tile = hit < 0.5 ? '#5f8dff' : '#3d6df0';
+      ctx.fillStyle = tile;
       roundRect(x - s / 2, y - s / 2, s, s, s * 0.26); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,.28)';
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.fillStyle = '#fff';
-      GLYPHS[hub.id](x, y, s);
+      GLYPHS[hub.id](x, y, s, tile);
       const ty = y + s / 2 + Math.max(10, S * 0.5), tw = ctx.measureText(hub.label).width + 14, th = Math.max(16, S * 0.7);
       ctx.fillStyle = 'rgba(12,17,36,.9)';
       roundRect(x - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
@@ -346,12 +348,12 @@
       ctx.fillRect(x - s * 0.34, y + s * 0.22, s * 0.68, s * 0.08);
     },
     // an eagle head inside an olive wreath, drawn from the same path as the card row's icon (index.html)
-    law(x, y, s) {
-      const k2 = (s * 0.86) / 100;
+    law(x, y, s, tile) {
+      const k2 = (s * 0.92) / 100;
       ctx.save();
       ctx.translate(x - 50 * k2, y - 50 * k2);
       ctx.scale(k2, k2);
-      for (const [path, rule] of LAW_ICON) ctx.fill(path, rule);
+      for (const [path, ink] of LAW_ICON) { ctx.fillStyle = ink ? tile : '#fff'; ctx.fill(path); }
       ctx.restore();
     },
     // a small group of people: two behind, one in front
