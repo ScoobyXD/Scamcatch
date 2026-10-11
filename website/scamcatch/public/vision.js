@@ -3,7 +3,8 @@
    does the timeline beside the headline: 1. the scam message; 2. ScamCatch intervenes and warns the person; 3. reports
    fly to three icons in the middle of the country (a bank, the authorities, trusted contacts), and each card row shows
    "Sent" as its trace lands; 4. trace & investigate to help get back lost funds: a violet trail hops from the phone
-   back toward the scammer through three crypto wallets, and ends at a magnifying glass: investigating. */
+   straight back toward the ocean the scam came across, through three crypto wallets, and ends at a magnifying glass:
+   investigating. Scams come across the Pacific (left) or the Atlantic (right), never from below. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;
@@ -57,7 +58,7 @@
   const SHARE_GAP = 0.4, SHARE_FLIGHT = 0.8;                              // seconds between reports, and each one's flight
   const TRACE_AT = SHARE_AT + 0.15 + SHARE_GAP * (HUBS.length - 1) + SHARE_FLIGHT + 0.65;   // tracing the crypto starts, half a second after the last report lands
   const HOP = 0.35;                    // seconds per hop: phone, three wallets, the investigation
-  const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way back along the route to the map's edge (the last is the investigation)
+  const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way from the phone to the map's edge (the last is the investigation)
   const STORY_END = TRACE_AT + 0.15 + TRACE_STOPS.length * HOP + 1.5;   // when the card hides
   const STORY_HOLD = STORY_END - POSSESSED - CATCH;                       // the ScamCatch logo stays up this long
 
@@ -104,6 +105,7 @@
   const storyPeople = STORIES.map((s) => people.find((p) => p.story === s));
 
   let w = 0, h = 0, k = 1, mx = 0, my = 0, dpr = 1, S = 18;
+  let maxRight = 0;                    // the frame's right edge, short of the floating section index
   let sprites = {};
   let threats = [], sparks = [], links = [], clock = 0, nextStory = 1.4, storyIndex = 0, raf = 0, last = 0, onScreen = false;
   let shown = null;                    // the person the card is following
@@ -116,6 +118,8 @@
     const sr = map.getBoundingClientRect();
     if (!st.width || !st.height) return false;
     w = st.width; h = st.height;
+    const index = document.querySelector('.index');
+    maxRight = index && getComputedStyle(index).display !== 'none' ? Math.min(w, index.getBoundingClientRect().left - st.left - 10) : w;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
@@ -412,26 +416,23 @@
     ctx.globalAlpha = 1;
   }
 
-  // A scam in flight: from the edge of the frame (overseas) to one person's phone, in viewBox units. The card's spot is
-  // picked first, then the route: the crypto trace later runs back along it, so it stays clear of the card
-  // and the four icons, and prefers the nearer ocean.
+  // A scam in flight, in viewBox units: from overseas, across the Pacific (the left edge) or the Atlantic (the right
+  // edge), never from below, to one person's phone. The side is picked first (usually the nearer ocean), then the card's
+  // spot, clear of the trace that later runs straight back toward that side, then a route clear of the card and icons.
   function launch(p, t, dur) {
     const left = -mx / k, right = (w - mx) / k, top = -my / k, bottom = (h - my) / k;
     const ex = p.x + (S * PHONE_DX) / k, ey = p.y + (S * PHONE_DY) / k;
-    const card = floating() ? spotBox(p) : null;
+    const side = p.x < 360 ? 'west' : p.x > 620 ? 'east' : (Math.random() < 0.5 ? 'west' : 'east');
+    const card = floating() ? spotBox(p, side) : null;
     const icons = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
-    const near = p.x < 360 ? 'west' : p.x > 620 ? 'east' : null;
     let best = null;
-    for (let i = 0; i < 14; i++) {
-      const side = i < 5 ? 'west' : i < 10 ? 'east' : 'south';
-      const f = ((i % 5) + 0.25 + Math.random() * 0.5) / 5;      // spread along that edge
-      const sx = side === 'west' ? left - 8 : side === 'east' ? right + 8 : 100 + f * 960;
-      const sy = side === 'south' ? bottom + 8 : top + f * (bottom - top) * 0.85;
+    for (let i = 0; i < 6; i++) {
+      const sx = side === 'west' ? left - 8 : right + 8;
+      const sy = top + ((i + 0.25 + Math.random() * 0.5) / 6) * (bottom - top) * 0.85;   // spread along that edge
       const dx = ex - sx, dy = ey - sy;
-      const sign = side === 'west' ? -1 : side === 'east' ? 1 : (Math.random() < 0.5 ? -1 : 1);
-      const bend = (0.14 + Math.random() * 0.14) * sign;
+      const bend = (0.14 + Math.random() * 0.14) * (side === 'west' ? -1 : 1);
       const q = { sx, sy, ex, ey, cx: sx + dx / 2 - dy * bend, cy: sy + dy / 2 + dx * bend };
-      let score = Math.hypot(dx, dy) * 0.4 + (near && side !== near ? 60 : 0) + Math.random() * 40;
+      let score = Math.abs(dy) * 0.6 + Math.random() * 40;   // flatter routes read as coming from across the ocean
       for (let u = 0.04; u < 0.96; u += 0.04) {
         const [x, y] = along(q, u), px = X(x), py = Y(y);
         if (card && px > card.l - 14 && px < card.r + 14 && py > card.t - 14 && py < card.b + 14) score += 400;
@@ -443,7 +444,7 @@
     const speed = Math.max(190, w * 0.24);
     const flight = dur || Math.min(2.6, Math.max(1.1, (Math.hypot(q.ex - q.sx, q.ey - q.sy) * k) / speed));
     Object.assign(q, { start: t, dur: flight });
-    p.ev = { land: t + flight, popped: false, q, card };   // q is the scam's route; the crypto trace goes back along it
+    p.ev = { land: t + flight, popped: false, q, side, card };   // side: the ocean the scam came across, where the trace heads
     threats.push(q);
   }
 
@@ -481,28 +482,18 @@
   }
 
 
-  /* ---- Trace crypto: back along the scam's route ---- */
-  // A point v of the way back from the phone (0) to the scammer (1), in screen units.
-  const back = (q, v) => { const [x, y] = along(q, 1 - v); return [X(x), Y(y)]; };
+  /* ---- Trace & investigate: straight back toward the ocean the scam came across ---- */
 
 
-  // Step 4: trace crypto. From the phone, back along the route, through three of the scammer's crypto wallets to
-  // a magnifying glass: investigating. The stops step off the route to alternate sides so the trail reads as hops.
+  // Step 4: trace & investigate. From the phone through three of the scammer's crypto wallets to a magnifying glass.
   function traceStops(p) {
-    // how far back along the route it stays well inside the frame: the magnifying glass sits there, with room for its label
-    const m = S * 1.3;
-    let end = 0;
-    for (let v = 0; v <= 1; v += 0.01) {
-      const [x, y] = back(p.ev.q, v);
-      if (x < m || x > w - m || y < m || y > h - m * 1.4) break;
-      end = v;
-    }
+    // from the phone, level across the map toward the side the scam came from; the magnifying glass sits near that edge,
+    // with room for its label. The stops step up and down so the trail reads as hops.
+    const [px, py] = phoneAt(p), m = S * 1.3;
+    const edge = p.ev.side === 'west' ? m : maxRight - m;
     return TRACE_STOPS.map((f, i) => {
-      const v = end * f;
-      const [x, y] = back(p.ev.q, v), [x2, y2] = back(p.ev.q, v + 0.01);
-      const l = Math.hypot(x2 - x, y2 - y) || 1;
       const off = i === TRACE_STOPS.length - 1 ? 0 : (i % 2 ? 1 : -1) * S * 0.75;
-      return [x - ((y2 - y) / l) * off, y + ((x2 - x) / l) * off];
+      return [px + (edge - px) * f, Math.max(m, Math.min(h - m * 1.4, py + off))];
     });
   }
   function drawTrace(p, t) {
@@ -603,7 +594,7 @@
   let spotScale = 1;                   // the card shrinks to fit when the map is shorter than the card (short laptop screens)
 
   // Where the card goes for person p, in screen units, at its full height with every step unfolded.
-  function spotBox(p) {
+  function spotBox(p, side) {
     // the card's full height, counting the steps that are still folded away (the catch's padding and border only show
     // once it opens: .55rem above and below, and 1px each)
     const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -615,13 +606,15 @@
     const gap = S * 1.5;
     const box = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
     const me = { l: x - S * 0.7, r: x + S * 0.6, t: y - S * 0.9, b: y + S * 0.8 };      // the person and their phone
+    // the lane the trace runs along, from the phone straight toward the side the scam came from
+    const [tx, ty] = phoneAt(p);
+    const lane = side ? { l: side === 'west' ? 0 : tx, r: side === 'west' ? tx : w, t: ty - S * 1.6, b: ty + S * 1.6 } : null;
     const cover = (a, l, t) => Math.max(0, Math.min(l + cw, a.r) - Math.max(l, a.l)) * Math.max(0, Math.min(t + ch, a.b) - Math.max(t, a.t));
     const near = p.x < VW / 2 ? [x - gap - cw, x + gap] : [x + gap, x - gap - cw];
     // beside the person first, then centered just above or below them, then out at the edges of the map
     const minL = Math.min(0, spot.closest('.card').getBoundingClientRect().left - frame.getBoundingClientRect().left + 12);
     // and never under the floating section index on the right
-    const index = document.querySelector('.index');
-    const maxR = index && getComputedStyle(index).display !== 'none' ? Math.min(w, index.getBoundingClientRect().left - frame.getBoundingClientRect().left - 10) : w;
+    const maxR = maxRight;
     const centered = Math.max(minL, Math.min(maxR - cw, x - cw / 2));
     const lefts = [...near, centered, p.x < VW / 2 ? 0 : maxR - cw, p.x < VW / 2 ? maxR - cw : 0];
     const tops = [y - ch / 2, y + S * 1.2, y - S * 1.6 - ch, box.b, box.t - ch, 0, h - ch].map((t) => Math.max(0, Math.min(h - ch, t)));
@@ -629,7 +622,7 @@
     lefts.forEach((l, i) => {
       if (l < minL || l + cw > maxR) return;   // the card may reach into the section's left margin
       tops.forEach((t, j) => {
-        const score = (cover(box, l, t) + cover(me, l, t)) * 10 + i * 40 + Math.abs(t + ch / 2 - y) * 0.6 + Math.abs(l + cw / 2 - x) * 0.1 + j;
+        const score = (cover(box, l, t) + cover(me, l, t) + (lane ? cover(lane, l, t) : 0)) * 10 + i * 40 + Math.abs(t + ch / 2 - y) * 0.6 + Math.abs(l + cw / 2 - x) * 0.1 + j;
         if (!best || score < best.score) best = { l, t, score };
       });
     });
@@ -640,7 +633,7 @@
   // Puts the card where launch() planned it, so the scam's route stays clear of it. After a resize, plans it again.
   function placeSpot(p, fresh) {
     if (!floating()) { spot.style.left = spot.style.top = spot.style.scale = ''; spotScale = 1; return; }
-    const box = (!fresh && p.ev && p.ev.card) || spotBox(p);
+    const box = (!fresh && p.ev && p.ev.card) || spotBox(p, p.ev && p.ev.side);
     spotScale = box.scale;
     spot.style.scale = spotScale < 1 ? String(spotScale) : '';
     spot.style.left = `${Math.round(box.l)}px`;
