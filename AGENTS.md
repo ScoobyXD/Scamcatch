@@ -12,6 +12,7 @@ User Preferences:
 8. Do not create duplicate or similar data structures for the exact or similar thing.
 9. When you merge to main please make sure the install files are updates so I can update the browser extension
 10. When I ask to merge to main, merge the requested changes directly. Do not add review agents, code reviews, type checks, smoke tests, or other validation runs unless I ask. Build and package as needed to update install files. Preserve unrelated local changes.
+11. Ship in this order: make changes locally on a branch, merge that branch into local main, push main to GitHub, then deploy. Never push a branch straight onto GitHub's main. A push to main that touches website/scamcatch/public deploys scamcatch.io through .github/workflows/publish-website.yml; check the live site after it finishes.
 
 Jev rules:
 1. Don't put 1 question per call. Bunch them up.

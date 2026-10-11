@@ -23,7 +23,7 @@
 
   /* ---- Scam scenarios ----
      thread rows: ['stamp', day, time] · ['them', text] · ['me', text] · ['read', time] · ['photo', what the photo shows]
-     step: the message that arrives first · lead (optional): a message just before the flagged one
+     steps: the messages that arrive one by one before the flagged one
      flagged: the message ScamCatch catches
      avatar: a letter for a saved contact, 'photo' for a contact photo, null for an unknown number
      app: the chat look, 'imessage', 'whatsapp' (dark) or 'messenger' (dark). Styled after those apps, never their names or logos. */
@@ -44,8 +44,7 @@
         ['read', '11:43 PM'],
         ['stamp', 'Today', '8:13 AM'],
       ],
-      step: 'Morning ☀️ I couldn’t stop thinking about you',
-      lead: 'My friend’s asking us to invest in his Monero fund. He’s made a fortune with it 🚀',
+      steps: ['Morning ☀️ I couldn’t stop thinking about you', 'My friend’s asking us to invest in his Monero fund. He’s made a fortune with it 🚀'],
       flagged: 'I’ll put in $40,000 if you put in $40,000. Let’s build our future together ❤️',
       alert: 'Simon wants you to match his $40,000 in a Monero investment. Someone you met online asking you to invest is a classic romance scam.',
     },
@@ -64,25 +63,29 @@
         ['read', '9:49 PM'],
         ['stamp', 'Today', '8:13 AM'],
       ],
-      step: 'I need a huge favor. My bank froze my transfers while I’m overseas 😩',
+      steps: ['I need a huge favor. My bank froze my transfers while I’m overseas 😩'],
       flagged: 'I’m giving you my bank login. Could you log in and transfer $100,000 to my supplier? You’re an angel 🙏',
       alert: 'Mark wants you to log into his bank and move $100,000. Moving money for someone else can make you part of a scam.',
     },
-    amazon: {
-      key: 'fake_fraud_department_safe_account',
+    'false-charge': {
+      key: 'false_charge_fraud_department_safe_account',
       app: 'imessage', contact: '+1 (888) 555-0193', avatar: null, first: 'The scare',
-      trust: ['It starts with a scare.', 'A text from a company you shop with says someone is using your account and your bank.'],
-      ask: ['Then they offer to protect you.', 'Move all your money into a “safe” account, today, before the hackers get it.'],
+      trust: ['It starts with a charge you didn’t make.', 'A text says your account was just charged, then a “fraud department” steps in to help.'],
+      ask: ['Then they tell you to empty it.', 'Move everything to a “protected” account, today. And don’t tell your bank why.'],
       thread: [
         ['stamp', 'Today', '7:52 AM'],
-        ['them', 'Amazon Fraud Dept: A $1,249.99 order was placed on your account from a new device. Was this you? Reply YES or NO.'],
-        ['me', 'NO'],
-        ['them', 'Thank you. We also see someone accessing the bank account linked to your profile.'],
-        ['me', 'What?? What do I do?'],
+        ['them', 'FRAUD ALERT: A $1,249.99 charge was just made on your account. Not you? Reply NO to reach our fraud department.'],
+        ['me', 'NO. I didn’t make that!'],
+        ['them', 'This is Daniel in the Fraud Department. Someone has access to your accounts, and more charges are pending.'],
+        ['me', 'Oh no. What do I do?'],
       ],
-      step: 'To protect you, we have opened a secure account in your name.',
-      flagged: 'Transfer your full balance to it today. We will return it once the fraud is stopped.',
-      alert: 'Real companies never ask you to move your money to keep it safe. This is a fake fraud department.',
+      steps: [
+        'Stay calm, we’re taking safety precautions now. We opened a protected account in your name.',
+        'Move your full balance there today. It comes back to you once the fraud is stopped.',
+        'Don’t tell the bank why. Someone at your branch is part of this. If they ask, say it’s for a home renovation.',
+      ],
+      flagged: 'Withdraw everything today and send it to the protected account. Text me the moment it’s done.',
+      alert: 'Daniel wants you to empty your account and lie to your bank about why. Real fraud departments never ask you to move your money or keep it from your bank.',
     },
     'tech-support': {
       key: 'tech_support_remote_access',
@@ -96,7 +99,7 @@
         ['them', 'Our scan shows hackers on your network. They can see your bank accounts.'],
         ['me', 'Oh no. Please help me'],
       ],
-      step: 'Don’t worry, I’m a certified technician. I just need to connect to your computer.',
+      steps: ['Don’t worry, I’m a certified technician. I just need to connect to your computer.'],
       flagged: 'Install the remote access app, then log into your online banking so I can secure it.',
       alert: 'Kevin wants control of your computer and your bank login. Real tech support never asks for either.',
     },
@@ -112,7 +115,7 @@
         ['them', 'Our records show errors in your 2023 return. Officers are scheduled to visit your home today.'],
         ['me', 'Please, what can I do?'],
       ],
-      step: 'You can settle now and the warrant will be cancelled.',
+      steps: ['You can settle now and the warrant will be cancelled.'],
       flagged: 'Buy $3,412 in gift cards and text me the card numbers within 2 hours.',
       alert: 'The IRS doesn’t text threats or ask for gift cards. This is someone pretending to be the IRS.',
     },
@@ -128,7 +131,7 @@
         ['them', 'A bench warrant was issued. You will be arrested unless this is resolved today.'],
         ['me', 'Please, I didn’t know'],
       ],
-      step: 'I can hold the warrant if you pay the bond now.',
+      steps: ['I can hold the warrant if you pay the bond now.'],
       flagged: 'Wire the $10,000 bond to the court clerk now, or officers will come to your home.',
       alert: 'Courts don’t text you to demand payment or threaten arrest. This is a jury duty scam.',
     },
@@ -144,7 +147,7 @@
         ['them', 'Yes! Our prize team will deliver your check this Friday.'],
         ['me', 'Oh my goodness. What do I need to do?'],
       ],
-      step: 'First we just need to cover the taxes and delivery fee on your winnings.',
+      steps: ['First we just need to cover the taxes and delivery fee on your winnings.'],
       flagged: 'Send $850 in gift cards today to release your prize. Don’t tell anyone until it arrives!',
       alert: 'Real prizes never cost money to collect. Paying first to get your winnings is a prize scam.',
     },
@@ -163,7 +166,7 @@
         ['read', '10:21 PM'],
         ['stamp', 'Today', '8:13 AM'],
       ],
-      step: 'I want to fly you out to meet me, but my accounts are frozen while my lawyers sort things out 😔',
+      steps: ['I want to fly you out to meet me, but my accounts are frozen while my lawyers sort things out 😔'],
       flagged: 'Could you send $20,000 for my medical bills? I’ll pay you back the moment it clears.',
       alert: 'Celebrities don’t message fans asking for money. This is someone pretending to be Brad Pitt.',
     },
@@ -327,7 +330,7 @@
       }
       rows.push(say(kind, a));
     });
-    const incoming = [s.step, ...(s.lead ? [s.lead] : [])].map((text) => say('them', text));
+    const incoming = s.steps.map((text) => say('them', text));
     const caught = say('them flagged', s.flagged);
     stepped = [...incoming, caught];
     stepped.forEach((m, i) => { m.dataset.step = String(i + 1); });
@@ -340,6 +343,7 @@
       side = now;
     });
     thread.replaceChildren(...rows, ...stepped, typing);
+    buildScript();
 
     chat.dataset.app = app;
     card.dataset.app = app;
@@ -397,32 +401,48 @@
     caption.textContent = 'ScamCatch will start talking.';
   }
 
-  // [wait before this step in ms, what happens]
-  const script = [
-    [0, () => { reset(); setPhase('trust', 2100); }],
-    [300, () => card.classList.add('has-watch')],
-    [300, () => show(typing)],
-    [900, () => { hide(typing); show(stepped[0]); }],
-    [600, () => { show(typing); setPhase('ask', stepped.length > 2 ? 4300 : 3000); }],
-    [1100, () => { hide(typing); show(stepped[1]); if (stepped.length > 2) show(typing); }],
-    [() => (stepped.length > 2 ? 1300 : 0), () => { hide(typing); stepped.forEach(show); }],
-    [700, () => { flagged.classList.add('is-scanned'); card.classList.add('has-flag'); }],
-    [1200, () => {
-      setPhase('warn', 1700);
-      phone.classList.remove('buzz');
-      void phone.offsetWidth;
-      phone.classList.add('buzz');
-    }],
-    [1700, () => { setPhase('voice'); card.classList.add('has-ready'); }],
-    [LOOP_HOLD, () => {
-      const idle = Date.now() - lastInteraction;
-      if (calling) return;
-      if (idle < 6000) { schedule(stepIndex - 1, 6000); return; }
-      play(0);
-    }],
-  ];
+  // The playback, rebuilt for each scenario: [wait before this step in ms, what happens].
+  // Each new message gets typing dots, then stays up long enough to read before the next one starts.
+  const TYPING = 1000;
+  const readFor = (text) => Math.max(1100, Math.min(3600, 500 + text.length * 30));
+  let script = [];
+  function buildScript() {
+    const rows = [
+      [0, () => { reset(); setPhase('trust', trustFor); }],
+      [300, () => card.classList.add('has-watch')],
+      [300, () => show(typing)],
+    ];
+    let askAt = 0;
+    stepped.forEach((m, i) => {
+      rows.push([TYPING, () => { hide(typing); show(m); }]);
+      if (m === flagged) return;
+      if (i === 0) askAt = rows.length;
+      rows.push([readFor(msgText(m)), () => { show(typing); if (i === 0) setPhase('ask', askFor); }]);
+    });
+    const flagAt = rows.length;
+    rows.push(
+      [900, () => { flagged.classList.add('is-scanned'); card.classList.add('has-flag'); }],
+      [1200, () => {
+        setPhase('warn', 1700);
+        phone.classList.remove('buzz');
+        void phone.offsetWidth;
+        phone.classList.add('buzz');
+      }],
+      [1700, () => { setPhase('voice'); card.classList.add('has-ready'); }],
+      [LOOP_HOLD, () => {
+        const idle = Date.now() - lastInteraction;
+        if (calling) return;
+        if (idle < 6000) { schedule(stepIndex - 1, 6000); return; }
+        play(0);
+      }],
+    );
+    const sum = (from, to) => rows.slice(from, to).reduce((total, [wait]) => total + wait, 0);
+    const trustFor = sum(1, askAt + 1);            // the first bar fills until the ask begins
+    const askFor = sum(askAt + 1, flagAt + 2);     // the second fills until the warning
+    script = rows;
+  }
 
-  const delayOf = (index) => (typeof script[index][0] === 'function' ? script[index][0]() : script[index][0]);
+  const delayOf = (index) => script[index][0];
 
   function schedule(index, wait) {
     clearTimeout(timer);
