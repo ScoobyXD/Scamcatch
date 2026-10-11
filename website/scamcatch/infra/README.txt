@@ -1,7 +1,7 @@
 1. AWS profile mangorts-dev hosts this site. Region: us-east-1. Stack: scamcatch-site.
 2. The S3 origin is private. CloudFront reads public website files through its origin access control.
 3. Publish only website/scamcatch/public. Do not upload application files, company evidence, or this infra directory.
-4. Update site files from the repository root with: aws s3 sync ./website/scamcatch/public s3://scamcatch-site-686458136219/ --cache-control public,max-age=300 --profile mangorts-dev --region us-east-1
+4. GitHub publishes the site: .github/workflows/publish-website.yml runs on every push to main that changes website/scamcatch/public (or by hand from the Actions tab). It uploads the folder, clears the CloudFront cache, waits for the cache to clear, and fails unless scamcatch.io serves the pushed index.html. To update the site by hand instead, run from the repository root: aws s3 sync ./website/scamcatch/public s3://scamcatch-site-686458136219/ --cache-control public,max-age=300 --profile mangorts-dev --region us-east-1
 5. Cached files expire after five minutes. For an immediate update, run: aws cloudfront create-invalidation --distribution-id E1FTFPRB048HY --paths "/*" --profile mangorts-dev
 6. site.json defines the website stack. Preserve CertificateArn and RedirectDomainName when updating it. An empty CertificateArn removes custom-domain support.
 7. Route 53 zone Z01377241I2U5CS0WC4NA and the ACM certificate are managed separately from the stack. dns-records.json records the website and certificate-validation DNS records.
@@ -15,3 +15,6 @@
 15. The active certificate must cover scamcatch.io, www.scamcatch.io, scamcatchtech.com, and www.scamcatchtech.com. Keep the previous certificate until a separate cleanup is authorized.
 16. Namecheap registration and mailbox details for scamcatchtech.com are in application/scamcatch/domain-evidence/scamcatchtech-setup.json. Website redirects do not change mail delivery.
 17. The scamcatch-voice stack (voice.json) holds the live voice Lambda, its function URL, the scamcatch-voice-usage table, and a 14-day log group. site.json routes /api/* to that function URL only when VoiceOriginDomain is set. deploy_voice.py sets VoiceOriginDomain and VoiceOriginToken and keeps CertificateArn, DomainName, and RedirectDomainName as they are. To turn voice off, update scamcatch-site with an empty VoiceOriginDomain.
+18. GitHub signs in to AWS through the scamcatch-github-publish role (github-publish.json, stack scamcatch-github-publish) with GitHub's OIDC token. No AWS keys are stored in GitHub. Only ScoobyXD/Scamcatch main can use the role, and it can only list and upload to the site bucket and create or read invalidations on E1FTFPRB048HY.
+19. Set Up GitHub Publishing.cmd in the repository root creates or updates that stack with setup_github_publish.py and logs to github-publish-setup-log.txt. It reuses the account's GitHub OIDC provider if one exists. Run it again only if the repository, branch, bucket, or distribution changes.
+20. The workflow uploads without --delete, like Publish Website.cmd: removing a file from public/ does not remove it from the bucket.

@@ -11,15 +11,16 @@ Website (scamcatch.io)
 
 Hosting and publishing
 6. The site is on AWS: profile mangorts-dev, region us-east-1, stack scamcatch-site, private S3 bucket scamcatch-site-686458136219 behind CloudFront distribution E1FTFPRB048HY.
-7. Publish Website.cmd in the repository root syncs website/scamcatch/public to S3 and clears the CloudFront cache. It changes the public site, so ask the user before running it.
-8. Hosting, DNS, certificate, and domain rules are in website/scamcatch/infra/README.txt. scamcatch.io is registered at Namecheap with DNS in Route 53. scamcatchtech.com redirects to scamcatch.io.
+7. Publishing goes through GitHub (ScoobyXD/Scamcatch). A push to main that changes website/scamcatch/public runs .github/workflows/publish-website.yml, which uploads to S3, clears CloudFront, and checks scamcatch.io. Push only when the user asks to publish. Publish Website.cmd in the repository root does the same upload by hand from the user's PC.
+8. To publish from a cloud session: attach ScoobyXD/Scamcatch with push access, copy the changed files from the user's antiscam folder into the clone, commit to main, push, then watch the Publish website run with gh run watch. The user's local folder keeps the same files, so their next pull merges cleanly once they have committed their own changes.
+9. Hosting, DNS, certificate, and domain rules are in website/scamcatch/infra/README.txt. scamcatch.io is registered at Namecheap with DNS in Route 53. scamcatchtech.com redirects to scamcatch.io.
 
 Live voice
-9. On scamcatch.io, /api/* goes through CloudFront to the scamcatch-voice Lambda (website/scamcatch/infra/voice/handler.py). Deploy Voice.cmd deploys it and logs to website/scamcatch/infra/voice-deploy-log.txt.
-10. Voice prompts, key handling, and cost limits are in docs/voice.md. All Jev questions and voice prompts come from app/ai-instructions/AIInstructions.kt.
+10. On scamcatch.io, /api/* goes through CloudFront to the scamcatch-voice Lambda (website/scamcatch/infra/voice/handler.py). Deploy Voice.cmd deploys it and logs to website/scamcatch/infra/voice-deploy-log.txt.
+11. Voice prompts, key handling, and cost limits are in docs/voice.md. All Jev questions and voice prompts come from app/ai-instructions/AIInstructions.kt.
 
 Rest of the repository
-11. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.
-12. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved run records.
-13. application/scamcatch holds application answers, company and domain evidence, and video material.
-14. User preferences for agents are in AGENTS.md.
+12. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.
+13. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved run records.
+14. application/scamcatch holds application answers, company and domain evidence, and video material.
+15. User preferences for agents are in AGENTS.md.
