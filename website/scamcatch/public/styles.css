@@ -379,7 +379,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .spot[data-phase="shared"] .spot-share{max-height:11rem;opacity:1}
 .spot-share-head{font-size:.64rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mist)}
 .spot-share ul{display:grid;gap:.35rem}
-.spot-share li{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:.55rem;font-size:.82rem;line-height:1.25;color:var(--paper);opacity:0;transform:translateX(-6px);transition:opacity .3s ease,transform .3s ease}
+.spot-share li{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:.55rem;font-size:.82rem;line-height:1.25;color:var(--paper);opacity:0;transform:translateX(-6px);transition:opacity .14s ease-out,transform .14s ease-out}
 .spot-share li i{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:#3d6df0;color:#fff}
 .spot-share li svg{width:16px;height:16px;fill:currentColor}
 .spot-share li b{font-size:.7rem;font-weight:700;white-space:nowrap;color:var(--catch)}

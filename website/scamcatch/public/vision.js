@@ -45,15 +45,23 @@
 
   // Where reports go, in viewBox units around the geographic center of the lower 48 (Kansas). Same order as the card rows.
   const HUBS = [
-    { id: 'bank', at: [362, 328], label: 'Bank' },
-    { id: 'law', at: [470, 204], label: 'Authorities' },
-    { id: 'contacts', at: [578, 328], label: 'Trusted contacts' },
+    { id: 'bank', at: [390, 330], label: 'Bank' },
+    { id: 'law', at: [470, 226], label: 'Authorities' },
+    { id: 'contacts', at: [550, 330], label: 'Trusted contacts' },
   ];
-  const nearHub = (x, y) => HUBS.some((hb) => Math.hypot(hb.at[0] - x, hb.at[1] - (y - 16)) < 78);
+  // The zone the three icons and their labels sit in, in viewBox units. No person is placed in it and the card avoids it.
+  const HUB_ZONE = {
+    l: Math.min(...HUBS.map((hb) => hb.at[0])) - 82, r: Math.max(...HUBS.map((hb) => hb.at[0])) + 82,
+    t: Math.min(...HUBS.map((hb) => hb.at[1])) - 52, b: Math.max(...HUBS.map((hb) => hb.at[1])) + 66,
+  };
+  // a person stands at (x, y) by their feet and reaches about 40 units up and 25 to the side, counting the phone
+  const nearHub = (x, y) => x + 18 > HUB_ZONE.l && x - 28 < HUB_ZONE.r && y > HUB_ZONE.t && y - 44 < HUB_ZONE.b;
   const COLORS = { person: '196,204,232', screen: '244,194,122', scam: '255,111,97', catch: '122,176,255' };
 
   const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
   const ease = (p) => 1 - (1 - p) ** 3;
+  // a report's flight: eases off the phone and still has speed when it hits the icon, so the landing reads as one moment
+  const flightEase = (p) => 0.5 * p + 0.5 * p * p * (3 - 2 * p);
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
   // People, in viewBox units, placed the same way on every visit: clustered around metros, spread across the country.
@@ -252,6 +260,7 @@
     links.push({ p, hub, start, dur, until: p.ev.land + STORY_END });
   }
   const logoAt = (p) => { const [px, py] = phoneAt(p); return [px, py - S * 1.05]; };
+  const hubSize = () => Math.max(24, S * 1.75);
 
   function drawLinks(t) {
     links = links.filter((l) => {
@@ -263,10 +272,14 @@
         markSent(l.hub.id);
       }
       if (t >= l.until) return false;
-      const [x0, y0] = logoAt(l.p), x1 = X(l.hub.at[0]), y1 = Y(l.hub.at[1]);
-      const cx = (x0 + x1) / 2, cy = Math.min(y0, y1) - Math.hypot(x1 - x0, y1 - y0) * 0.22;
+      const [x0, y0] = logoAt(l.p), hx1 = X(l.hub.at[0]), hy1 = Y(l.hub.at[1]);
+      const cx = (x0 + hx1) / 2, cy = Math.min(y0, hy1) - Math.hypot(hx1 - x0, hy1 - y0) * 0.22;
+      // the trace ends at the edge of the icon's tile, where it visibly lands, not hidden under the tile at its center
+      const tx = hx1 - cx, ty = hy1 - cy, tl = Math.hypot(tx, ty) || 1;
+      const edge = (hubSize() / 2 + 2) / Math.max(Math.abs(tx / tl), Math.abs(ty / tl));
+      const x1 = hx1 - (tx / tl) * edge, y1 = hy1 - (ty / tl) * edge;
       const fade = 1 - clamp01((t - l.until + 0.5) / 0.5);
-      const e = ease(clamp01(u)), v = 1 - e;
+      const e = flightEase(clamp01(u)), v = 1 - e;
       // the trace, drawn up to the report's head
       ctx.strokeStyle = `rgba(156,195,255,${0.75 * fade})`;
       ctx.lineWidth = 1.8;
@@ -291,8 +304,8 @@
   }
 
   function drawHubs(t) {
-    const s = Math.max(18, S * 1.3);
-    ctx.font = `600 ${Math.max(8.5, Math.min(12.5, S * 0.44))}px "Hanken Grotesk", system-ui, sans-serif`;
+    const s = hubSize();
+    ctx.font = `600 ${Math.max(10, Math.min(14, S * 0.5))}px "Hanken Grotesk", system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const hub of HUBS) {
@@ -313,7 +326,7 @@
       ctx.stroke();
       ctx.fillStyle = '#fff';
       GLYPHS[hub.id](x, y, s);
-      const ty = y + s / 2 + Math.max(9, S * 0.46), tw = ctx.measureText(hub.label).width + 12, th = Math.max(14, S * 0.62);
+      const ty = y + s / 2 + Math.max(10, S * 0.5), tw = ctx.measureText(hub.label).width + 14, th = Math.max(16, S * 0.7);
       ctx.fillStyle = 'rgba(12,17,36,.9)';
       roundRect(x - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
       ctx.fillStyle = 'rgba(223,232,255,.95)';
@@ -462,9 +475,8 @@
     spot.style.scale = spotScale < 1 ? String(spotScale) : '';
     const cw = spot.offsetWidth * spotScale, ch = fullH * spotScale;
     const x = X(p.x), y = Y(p.y) - S * 0.6;
-    const gap = S * 1.5, s = Math.max(18, S * 1.3), m = 14;
-    const xs = HUBS.map((hb) => X(hb.at[0])), ys = HUBS.map((hb) => Y(hb.at[1]));
-    const box = { l: Math.min(...xs) - 70, r: Math.max(...xs) + 70, t: Math.min(...ys) - s / 2 - m, b: Math.max(...ys) + s / 2 + S * 1.2 + m };
+    const gap = S * 1.5;
+    const box = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
     const me = { l: x - S * 0.7, r: x + S * 0.6, t: y - S * 0.9, b: y + S * 0.8 };      // the person and their phone
     const cover = (a, l, t) => Math.max(0, Math.min(l + cw, a.r) - Math.max(l, a.l)) * Math.max(0, Math.min(t + ch, a.b) - Math.max(t, a.t));
     // next to the person first, then out in the ocean at the edge of the map
