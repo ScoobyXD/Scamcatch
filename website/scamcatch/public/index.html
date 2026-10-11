@@ -2,113 +2,275 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#102640">
-  <meta name="description" content="ScamCatch is developing an AI voice assistant to help people pause, talk through a possible scam, and find a safer next step.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1124">
+  <meta name="description" content="ScamCatch notices a scam on your phone and calls you with a live AI voice that helps you step back before money moves.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="ScamCatch — A moment to pause. A chance to protect.">
-  <meta property="og:description" content="An AI voice assistant in development to help people recognize and step away from an ongoing scam.">
-  <title>ScamCatch — A moment to pause. A chance to protect.</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css">
+  <meta property="og:title" content="ScamCatch: the voice that speaks up before you send">
+  <meta property="og:description" content="Watch ScamCatch catch a romance scam in a chat, then talk to the live voice yourself.">
+  <title>ScamCatch: the voice that speaks up before you send</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/hanken-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header wrap">
-    <a class="brand" href="#" aria-label="ScamCatch home">
-      <svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M20 2 37 8v13c0 10-8 17-17 21C11 38 3 31 3 21V8Z" fill="currentColor"/><path d="M16 14v13m8-13v13" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>
-      <span>ScamCatch<span class="brand-dot">.</span></span>
-    </a>
-    <nav aria-label="Main navigation">
-      <a href="#approach">The approach</a>
-      <a href="#progress">Our progress</a>
-      <a href="#story">Our story <span aria-hidden="true">↗</span></a>
-    </nav>
-  </header>
+  <a class="skip-link" href="#how">Skip the demo</a>
 
-  <main id="main">
-    <section class="hero wrap" aria-labelledby="hero-title">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> An AI voice assistant, in development</p>
-        <h1 id="hero-title">A moment to <em>pause.</em><br>A chance to protect.</h1>
-        <p class="hero-description">When something feels wrong, a conversation could make the difference. We’re building ScamCatch to help people recognize and step away from an ongoing scam.</p>
-        <a class="button" href="#approach">Explore the approach <span aria-hidden="true">↗</span></a>
-        <p class="hero-note">Built around a simple idea: you don’t have to figure it out alone.</p>
-      </div>
+  <nav class="index" aria-label="Page sections">
+    <ol>
+      <li><a href="#demo" aria-current="true"><span class="label">Live demo</span><span class="dot" aria-hidden="true"></span></a></li>
+      <li><a href="#how"><span class="label">How it works</span><span class="dot" aria-hidden="true"></span></a></li>
+      <li><a href="#voice"><span class="label">The voice</span><span class="dot" aria-hidden="true"></span></a></li>
+      <li><a href="#status"><span class="label">Where it stands</span><span class="dot" aria-hidden="true"></span></a></li>
+      <li><a href="#why"><span class="label">Why it matters</span><span class="dot" aria-hidden="true"></span></a></li>
+      <li><a href="#try"><span class="label">Try it</span><span class="dot" aria-hidden="true"></span></a></li>
+    </ol>
+  </nav>
 
-      <figure class="conversation">
-        <div class="conversation-top"><span class="small-label">The moment we’re designing for</span><span class="concept-tag">Concept</span></div>
-        <div class="voice-symbol" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  <main class="reel">
+
+    <!-- Stage 1: the live demo -->
+    <section class="stage" id="demo" aria-labelledby="demo-title">
+      <div class="card card-demo" data-phase="trust">
+        <div class="night" aria-hidden="true"><span class="glow"></span></div>
+
+        <header class="brand-bar">
+          <a class="brand" href="#demo" aria-label="ScamCatch home">
+            <svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M20 2 37 8v13c0 10-8 17-17 21C11 38 3 31 3 21V8Z" fill="currentColor"/><path d="M16 14v13m8-13v13" stroke="#10162b" stroke-width="4" stroke-linecap="round"/></svg>
+            <span>ScamCatch</span>
+          </a>
+        </header>
+
+        <div class="demo-copy">
+          <h1 id="demo-title" class="visually-hidden">ScamCatch live demo</h1>
+          <div class="story" aria-live="polite">
+            <p class="story-line" data-for="trust"><span class="story-head">It starts with someone who feels real.</span><span class="story-sub">Romance scammers spend weeks earning trust before money ever comes up.</span></p>
+            <p class="story-line" data-for="ask"><span class="story-head">Then comes the ask.</span><span class="story-sub">Often it’s an investment. Often crypto. Often through a “friend” who’s doing really well.</span></p>
+            <p class="story-line" data-for="warn"><span class="story-head">ScamCatch catches it on screen.</span><span class="story-sub">With your permission, the app reads the chat and flags the pattern the moment it shows up.</span></p>
+            <p class="story-line" data-for="voice"><span class="story-head">Then it calls you. Talk to it.</span><span class="story-sub">A live AI voice helps you think it through, kindly. Tap the phone and say “hey.”</span></p>
+          </div>
+
+          <ol class="tracker" aria-label="Demo progress">
+            <li data-for="trust"><span class="bar"><i></i></span>Trust</li>
+            <li data-for="ask"><span class="bar"><i></i></span>The ask</li>
+            <li data-for="warn"><span class="bar"><i></i></span>The warning</li>
+            <li data-for="voice"><span class="bar"><i></i></span>The voice</li>
+          </ol>
+          <button class="replay" type="button" data-action="replay">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10a6 6 0 1 0 2-4.5M4 3v3.5h3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Replay
+          </button>
         </div>
-        <div class="conversation-line assistant-line"><span class="speaker">ScamCatch</span><p>“Let’s pause for a moment. What did they ask you to do?”</p></div>
-        <div class="conversation-line person-line"><span class="speaker">You</span><p>“They said I need to move my money to keep it safe.”</p></div>
-        <div class="conversation-line assistant-line last-line"><span class="speaker">ScamCatch</span><p>“Before you send anything, let’s check with your bank through a number you know.”</p></div>
-        <figcaption><span aria-hidden="true">✦</span> Illustrative conversation. This is not a live service.</figcaption>
-      </figure>
-    </section>
 
-    <div class="belief-band">
-      <p class="wrap">Our goal <span aria-hidden="true">/</span> <strong>Give doubt a voice before money is lost.</strong></p>
-    </div>
+        <div class="stagefloor">
+          <p class="chip chip-watch" aria-hidden="true"><span class="pulse"></span>Watching for scam patterns</p>
+          <p class="chip chip-flag" aria-hidden="true"><span class="chip-icon">!</span>Money ask from an online contact</p>
+          <p class="chip chip-ready" aria-hidden="true"><span class="pulse"></span>Live voice ready</p>
 
-    <section id="approach" class="section wrap" aria-labelledby="approach-title">
-      <div class="section-heading">
-        <div><p class="eyebrow">01 / The approach</p><h2 id="approach-title">A warning starts it.<br>A conversation takes it further.</h2></div>
-        <p>We’re exploring a voice assistant that helps someone slow down, explain the situation, and decide what to do next.</p>
+          <div class="callout" aria-hidden="true">
+            <span class="callout-text">Tap here<br>to talk</span>
+            <svg class="callout-arrow" viewBox="0 0 120 60"><path d="M4 8c36-4 76 6 102 36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 9"/><path d="M112 30l-4 18-18-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+
+          <div class="phone" aria-label="Animated phone showing a chat, a ScamCatch scam warning, and a live voice call">
+            <span class="btn-side btn-action" aria-hidden="true"></span>
+            <span class="btn-side btn-vol-up" aria-hidden="true"></span>
+            <span class="btn-side btn-vol-down" aria-hidden="true"></span>
+            <span class="btn-side btn-power" aria-hidden="true"></span>
+            <div class="screen">
+              <div class="ui">
+                <div class="statusbar" aria-hidden="true">
+                  <span class="clock">8:14</span>
+                  <span class="island"></span>
+                  <span class="sys">
+                    <svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+                    <svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0Zm-4.3-4.4L2 5.4a8.5 8.5 0 0 1 12 0l-1.7 1.7a6 6 0 0 0-8.6 0Z"/></svg>
+                    <span class="battery"><i></i></span>
+                  </span>
+                </div>
+
+                <!-- Chat app (generic, unbranded) -->
+                <div class="chat" aria-hidden="true">
+                  <div class="chat-head">
+                    <svg class="back" viewBox="0 0 12 20"><path d="M10 2 2 10l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="avatar">D<i></i></span>
+                    <span class="who"><b>Daniel</b><small>Active now</small></span>
+                    <svg class="head-icon" viewBox="0 0 24 24"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1Z" fill="currentColor"/></svg>
+                    <svg class="head-icon" viewBox="0 0 24 24"><path d="M15 8.5V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-1.5l5 3.5V5Z" fill="currentColor"/></svg>
+                  </div>
+                  <div class="thread">
+                    <p class="stamp">Tuesday 9:20 PM</p>
+                    <p class="msg them">I showed my mom your picture. She said you have kind eyes 😊</p>
+                    <p class="msg me">Stop 🙈 that’s so sweet</p>
+                    <p class="msg them">I mean it. I’ve never met anyone like you</p>
+                    <p class="stamp">Yesterday 11:42 PM</p>
+                    <p class="msg them">Goodnight beautiful. Talking to you is the best part of my day</p>
+                    <p class="msg me">Same here 🥰</p>
+                    <p class="stamp">Today 8:13 AM</p>
+                    <p class="msg them" data-step="1">Morning ☀️ I couldn’t stop thinking about you</p>
+                    <p class="msg them flagged" data-step="2">Hey, my friend’s wealthy. Do you want to invest in Bitcoin?</p>
+                    <p class="typing"><span></span><span></span><span></span></p>
+                  </div>
+                  <div class="composer">
+                    <span class="plus">+</span>
+                    <span class="field">Aa</span>
+                    <span class="like">👍</span>
+                  </div>
+                </div>
+
+                <!-- ScamCatch warning notification -->
+                <div class="alert" aria-hidden="true">
+                  <div class="alert-top">
+                    <span class="app-icon"><svg viewBox="0 0 40 44"><path d="M20 2 37 8v13c0 10-8 17-17 21C11 38 3 31 3 21V8Z" fill="currentColor"/><path d="M16 14v13m8-13v13" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg></span>
+                    <span class="app-name">ScamCatch</span><span class="when">now</span>
+                  </div>
+                  <b>Hold on. This looks like a scam.</b>
+                  <span>Daniel just asked you to invest in Bitcoin. Someone you met online asking for money is a classic romance scam.</span>
+                </div>
+
+                <!-- ScamCatch voice sheet -->
+                <div class="sheet">
+                  <p class="sheet-title"><b>ScamCatch</b><span class="sheet-sub">wants to talk with you about this chat</span><span class="call-status" aria-live="polite"></span></p>
+                  <p class="sheet-quote" aria-hidden="true"><span>Daniel</span>Hey, my friend’s wealthy. Do you want to invest in Bitcoin?</p>
+                  <button class="orb-button" type="button" data-action="talk" aria-label="Tap here to talk to the ScamCatch voice">
+                    <svg class="ring-text" viewBox="0 0 200 200" aria-hidden="true">
+                      <defs><path id="ring" d="M100 100m-86 0a86 86 0 1 1 172 0a86 86 0 1 1-172 0"/></defs>
+                      <text><textPath href="#ring" textLength="530">tap here to talk · tap here to talk · tap here to talk ·</textPath></text>
+                    </svg>
+                    <span class="orb" aria-hidden="true"><span class="orb-core"></span><span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></span>
+                  </button>
+                  <button class="talk-button" type="button" data-action="talk">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1a7 7 0 0 0 6-6.9Z" fill="currentColor"/></svg>
+                    Tap here to talk
+                  </button>
+                  <div class="call-controls">
+                    <p class="caption">Say “hey” to start.</p>
+                    <button class="end-call" type="button" data-action="end" aria-label="End the call">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .4-.23.74-.56.9-.98.49-1.87 1.1-2.66 1.85a1 1 0 0 1-1.4-.02L.29 13.06a1 1 0 0 1 0-1.41C3.34 8.76 7.46 7 12 7s8.66 1.76 11.71 4.65a1 1 0 0 1 0 1.41l-2.48 2.49a1 1 0 0 1-1.4.02 11.3 11.3 0 0 0-2.67-1.85 1 1 0 0 1-.56-.9v-3.1A15 15 0 0 0 12 9Z" fill="currentColor"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="section-label">Proposed experience</p>
-      <ol class="steps">
-        <li><span class="step-number" aria-hidden="true">01</span><h3>Notice the moment.</h3><p>A risk signal, such as an unusual payment flagged by a bank, could prompt a check before the person sends money.</p><span class="step-keyword">Early signal</span></li>
-        <li><span class="step-number" aria-hidden="true">02</span><h3>Talk it through.</h3><p>The AI would ask the person to pause and explain what happened, then discuss signs of pressure, secrecy, or deception.</p><span class="step-keyword">A calm conversation</span></li>
-        <li><span class="step-number" aria-hidden="true">03</span><h3>Find a safer next step.</h3><p>The person could verify the request independently and choose whether to involve their bank or someone they trust.</p><span class="step-keyword">Support with consent</span></li>
-      </ol>
-      <p class="section-footnote">Bank signals, bank alerts, and trusted-contact sharing are planned research directions. They are not available features.</p>
     </section>
 
-    <section id="progress" class="progress-section" aria-labelledby="progress-title">
-      <div class="wrap section">
-        <div class="section-heading"><div><p class="eyebrow">02 / Where we are</p><h2 id="progress-title">A working starting point.<br>A clear next question.</h2></div><p>Can a timely voice conversation help someone pause and verify a request? That is what we want to learn.</p></div>
-        <div class="progress-grid">
-          <article class="progress-card current-card">
-            <p class="card-label"><span class="status-dot" aria-hidden="true"></span> Current development prototype</p>
-            <h3>From the screen<br>to a conversation.</h3>
-            <p>Our Android prototype analyzes on-screen text with the user’s permission. When it flags a possible scam, it can start an AI voice warning.</p>
-            <p>The voice assistant asks the person to pause before sending money or sensitive information. The user can end the conversation.</p>
-            <div class="card-bottom"><span>Android prototype</span><span aria-hidden="true">↗</span></div>
+    <!-- Stage 2: how it works -->
+    <section class="stage" id="how" aria-labelledby="how-title">
+      <div class="card card-how">
+        <div class="stage-head">
+          <h2 id="how-title">From a message to a conversation.</h2>
+          <p>ScamCatch runs on your Android phone. It doesn’t wait for a report or a chargeback. It steps in while you’re still deciding.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <div class="art art-read" aria-hidden="true">
+              <span class="mini-msg">Hey, my friend’s wealthy.</span>
+              <span class="mini-msg hit">Do you want to invest in Bitcoin?</span>
+              <span class="scanline"></span>
+            </div>
+            <span class="step-n">1</span>
+            <h3>It reads the moment</h3>
+            <p>With your permission, ScamCatch looks at the text on your screen in the apps you already use.</p>
+          </li>
+          <li>
+            <div class="art art-flag" aria-hidden="true">
+              <span class="mini-alert"><i>!</i><b>Hold on. This looks like a scam.</b><small>An investment ask from someone you met online.</small></span>
+            </div>
+            <span class="step-n">2</span>
+            <h3>It spots the pattern</h3>
+            <p>A model checks for the signs: a new online relationship, secrecy, urgency, a request for money.</p>
+          </li>
+          <li>
+            <div class="art art-call" aria-hidden="true">
+              <span class="mini-orb"></span>
+              <span class="mini-caption">“Hi, it’s ScamCatch. Can we talk for a second?”</span>
+            </div>
+            <span class="step-n">3</span>
+            <h3>It calls you</h3>
+            <p>A live AI voice opens on your phone, asks what’s going on, and helps you check before any money moves.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Stage 3: the voice -->
+    <section class="stage" id="voice" aria-labelledby="voice-title">
+      <div class="card card-voice">
+        <div class="voice-copy">
+          <h2 id="voice-title">It talks like someone who’s on your side.</h2>
+          <p class="lede">Getting scammed isn’t a failure of intelligence. So the voice doesn’t lecture. It listens, asks questions, and helps you reach the answer yourself.</p>
+          <ul class="traits">
+            <li><h3>It listens before it warns.</h3><q>That sounds like someone who means a lot to you. How did you two meet?</q></li>
+            <li><h3>It gives you a reason to check, not a verdict.</h3><q>Before anything moves, let’s look up that platform together.</q></li>
+            <li><h3>You stay in charge.</h3><q>You decide who else hears about this, if anyone.</q></li>
+          </ul>
+        </div>
+        <div class="big-orb" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+    </section>
+
+    <!-- Stage 4: where it stands -->
+    <section class="stage" id="status" aria-labelledby="status-title">
+      <div class="card card-status">
+        <div class="stage-head">
+          <h2 id="status-title">Working on Android today. Headed for the moment money moves.</h2>
+        </div>
+        <div class="status-grid">
+          <article class="status-now">
+            <p class="status-tag"><span class="pulse"></span>Now</p>
+            <h3>The Android prototype</h3>
+            <p>Reads on-screen text with your permission, flags likely scams, and starts a live voice warning. You can end the call any time.</p>
           </article>
-          <article class="progress-card future-card">
-            <p class="card-label">Next research direction</p>
-            <h3>Closer to the moment<br>money moves.</h3>
-            <p>We want to explore risk signals from financial institutions, with a voice check before a risky payment.</p>
-            <p>We also want to explore support from trusted contacts and fraud specialists, with clear choices about what gets shared.</p>
-            <div class="card-bottom"><span>Partner integration planned</span><span aria-hidden="true">↗</span></div>
+          <article class="status-next">
+            <p class="status-tag">Next</p>
+            <h3>Banks and the people you trust</h3>
+            <p>Voice checks triggered by risky payments at partner banks, plus optional help from family or fraud specialists, with clear choices about what gets shared.</p>
           </article>
         </div>
-        <p class="section-footnote">ScamCatch is not publicly available. The prototype does not block payments, and we have not established that it prevents losses.</p>
       </div>
     </section>
 
-    <section class="principles section wrap" aria-labelledby="principles-title">
-      <div class="principles-intro"><p class="eyebrow">03 / What matters</p><h2 id="principles-title">Support the person.<br>Respect their choices.</h2><p>We’re designing for people facing pressure, including older adults and the people who care about them.</p></div>
-      <ol class="principle-list">
-        <li><span aria-hidden="true">01</span><div><h3>No blame. No shame.</h3><p>The conversation should help someone assess the situation without judging them.</p></div></li>
-        <li><span aria-hidden="true">02</span><div><h3>A reason to check, not a verdict.</h3><p>A warning can be wrong. The next step should be independent verification, with uncertainty made clear.</p></div></li>
-        <li><span aria-hidden="true">03</span><div><h3>Consent before involving others.</h3><p>People should choose their trusted contacts and understand what information would be shared.</p></div></li>
-      </ol>
+    <!-- Stage 5: why -->
+    <section class="stage" id="why" aria-labelledby="why-title">
+      <div class="card card-why">
+        <div class="why-stat">
+          <h2 id="why-title">In 2025, Americans reported losing $7.9 billion to investment scams.</h2>
+          <p>More than any other kind of fraud. <a href="https://www.ftc.gov/news-events/news/press-releases/2026/03/ftc-testifies-joint-economic-committee-agencys-efforts-combat-fraud">Source: FTC</a></p>
+        </div>
+        <div class="why-story">
+          <p>Watching interviews with scam victims led Jonathan Kim to one question: what if someone had been there the first time the doubt showed up?</p>
+          <p>ScamCatch is the answer he’s building. A voice that shows up in that moment, while there’s still time to stop.</p>
+          <div class="founder">
+            <span class="monogram" aria-hidden="true">JK</span>
+            <span><b>Jonathan Kim</b><small>Founder, Mirae Opus LLC, California</small></span>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section id="story" class="story-section" aria-labelledby="story-title">
-      <div class="wrap story-layout">
-        <div class="story-heading"><p class="eyebrow">04 / Why we’re building</p><h2 id="story-title">What if someone<br>was there<br><em>the first time?</em></h2></div>
-        <div class="story-copy"><p>Watching interviews with scam victims led Jonathan Kim to a question: could an early conversation help someone trust their doubts and pause?</p><p>ScamCatch grew from that question. We’re exploring how AI voice could help someone assess a request while there is still time to act.</p><div class="founder"><span class="founder-monogram" aria-hidden="true">JK</span><div><strong>Jonathan Kim</strong><span>Software engineer &amp; founder</span><span>Mirae Opus LLC · California</span></div></div></div>
+    <!-- Stage 6: try it -->
+    <section class="stage" id="try" aria-labelledby="try-title">
+      <div class="card card-try">
+        <div class="try-copy">
+          <h2 id="try-title">Hear it for yourself.</h2>
+          <p>Play the scenario, then talk to the voice the way you would if this were happening to you.</p>
+          <a class="cta" href="#demo" data-action="restart">Start the demo</a>
+        </div>
+        <footer class="site-footer">
+          <a class="brand" href="#demo">
+            <svg class="brand-mark" viewBox="0 0 40 44" aria-hidden="true"><path d="M20 2 37 8v13c0 10-8 17-17 21C11 38 3 31 3 21V8Z" fill="currentColor"/><path d="M16 14v13m8-13v13" stroke="#10162b" stroke-width="4" stroke-linecap="round"/></svg>
+            <span>ScamCatch</span>
+          </a>
+          <p>Built by Mirae Opus LLC in California. © 2026</p>
+        </footer>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer wrap">
-    <div><a class="brand footer-brand" href="#">ScamCatch<span class="brand-dot">.</span></a><p>A product in development by Mirae Opus LLC.</p></div>
-    <div class="footer-meta"><span>California, United States</span><a href="#progress">Development status <span aria-hidden="true">↗</span></a><span>© 2026 Mirae Opus LLC</span></div>
-  </footer>
+  <script src="app.js" defer></script>
 </body>
 </html>
