@@ -56,7 +56,7 @@
   const CATCH = 0.6;                   // the catch
   const SHARE_AT = POSSESSED + CATCH + 0.9;                               // the reports start going out
   const SHARE_GAP = 0.4, SHARE_FLIGHT = 0.8;                              // seconds between reports, and each one's flight
-  const TRACE_AT = SHARE_AT + 0.15 + SHARE_GAP * (HUBS.length - 1) + SHARE_FLIGHT + 0.15;   // tracing the crypto starts
+  const TRACE_AT = SHARE_AT + 0.15 + SHARE_GAP * (HUBS.length - 1) + SHARE_FLIGHT + 0.65;   // tracing the crypto starts, half a second after the last report lands
   const HOP = 0.35;                    // seconds per hop: phone, three wallets, the exchange
   const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way back along the route to the map's edge (the last is the exchange)
   const STORY_END = TRACE_AT + 0.15 + TRACE_STOPS.length * HOP + 1.5;   // when the card hides
