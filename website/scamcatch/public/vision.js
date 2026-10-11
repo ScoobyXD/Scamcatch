@@ -12,6 +12,9 @@
   const ctx = canvas.getContext('2d');
   const spot = stage.querySelector('.spot');
   const timeline = document.querySelector('.vision-head .timeline');   // steps 1 to 3 light up with the card's phase
+  // step 3 shows the same bank, authorities and trusted contacts icons as the card's rows
+  const trio = timeline && timeline.querySelector('.timeline-trio');
+  if (trio) trio.prepend(...[...spot.querySelectorAll('.spot-share li i')].map((icon) => icon.cloneNode(true)));
   const land = new Path2D(map.querySelector('.us-land').getAttribute('d'));
   const VW = 960, VH = 610;            // the map's viewBox
   const TAU = Math.PI * 2;
