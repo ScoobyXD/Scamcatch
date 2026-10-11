@@ -513,6 +513,7 @@
     clearTimeout(timer);
     calling = true;
     card.classList.add('is-calling');
+    delete card.dataset.turn;
     callStatus.textContent = 'Connecting…';
     caption.textContent = 'ScamCatch will start talking.';
 
@@ -523,6 +524,12 @@
       liveSession = live.start(context, {
         onStatus: (text) => { callStatus.textContent = text; },
         onCaption: (text) => { caption.textContent = text; },
+        // after the voice finishes talking, the call screen shows it's the visitor's turn to talk back
+        onTurn: (turn) => {
+          card.dataset.turn = turn;
+          callStatus.textContent = turn === 'you' ? 'Listening to you' : 'ScamCatch is talking';
+        },
+        onMicLevel: (level) => card.style.setProperty('--mic', level.toFixed(2)),
       });
     } else {
       setTimeout(() => {
@@ -539,6 +546,8 @@
     if (liveSession && typeof liveSession.end === 'function') liveSession.end();
     liveSession = null;
     card.classList.remove('is-calling');
+    delete card.dataset.turn;
+    card.style.removeProperty('--mic');
     callStatus.textContent = '';
     lastInteraction = Date.now();
     if (!reduceMotion) schedule(script.length - 1, LOOP_HOLD);
