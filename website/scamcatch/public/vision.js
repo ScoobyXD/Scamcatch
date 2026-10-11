@@ -261,6 +261,7 @@
   }
   const logoAt = (p) => { const [px, py] = phoneAt(p); return [px, py - S * 1.05]; };
   const hubSize = () => Math.max(24, S * 1.75);
+  const LAW_ICON = new Path2D(spot.querySelector('li[data-to="law"] svg path').getAttribute('d'));
 
   function drawLinks(t) {
     links = links.filter((l) => {
@@ -343,22 +344,14 @@
       for (const dx of [-0.23, -0.077, 0.077, 0.23]) ctx.fillRect(x + s * dx - s * 0.034, y - s * 0.0, s * 0.068, s * 0.2);
       ctx.fillRect(x - s * 0.34, y + s * 0.22, s * 0.68, s * 0.08);
     },
-    // an old-fashioned six-point sheriff's star with round tips
+    // an eagle head inside an olive wreath, drawn from the same path as the card row's icon (index.html)
     law(x, y, s) {
-      const R = s * 0.33, r = s * 0.18;
-      ctx.beginPath();
-      for (let i = 0; i < 12; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 6, rad = i % 2 ? r : R;
-        ctx[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rad, y + Math.sin(a) * rad);
-      }
-      ctx.closePath(); ctx.fill();
-      for (let i = 0; i < 6; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 3;
-        ctx.beginPath(); ctx.arc(x + Math.cos(a) * R, y + Math.sin(a) * R, s * 0.05, 0, TAU); ctx.fill();
-      }
-      ctx.fillStyle = '#3d6df0';
-      ctx.beginPath(); ctx.arc(x, y, s * 0.085, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff';
+      const k2 = (s * 0.9) / 24;
+      ctx.save();
+      ctx.translate(x - 12 * k2, y - 12 * k2);
+      ctx.scale(k2, k2);
+      ctx.fill(LAW_ICON, 'evenodd');
+      ctx.restore();
     },
     // a small group of people: two behind, one in front
     contacts(x, y, s) {
