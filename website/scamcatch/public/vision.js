@@ -11,6 +11,7 @@
   const canvas = frame.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const spot = stage.querySelector('.spot');
+  const timeline = document.querySelector('.vision-head .timeline');   // steps 1 to 3 light up with the card's phase
   const land = new Path2D(map.querySelector('.us-land').getAttribute('d'));
   const VW = 960, VH = 610;            // the map's viewBox
   const TAU = Math.PI * 2;
@@ -527,6 +528,7 @@
     }
     spot.dataset.phase = phase;
     spot.classList.add('is-shown');
+    if (timeline) timeline.dataset.active = phase;
   }
 
   function updateSpot(t) {
@@ -544,7 +546,7 @@
           sendReport(shown, hub, at, SHARE_FLIGHT);
         });
       }
-    } else spot.classList.remove('is-shown');
+    } else { spot.classList.remove('is-shown'); if (timeline) delete timeline.dataset.active; }
   }
 
   function nextStoryLaunch() {
