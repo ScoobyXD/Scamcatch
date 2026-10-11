@@ -643,6 +643,12 @@
     drawLeader();
   }
 
+  // the timeline's lines fill over the card's scam and catch phases, so each lands as the next step lights up
+  if (timeline) {
+    timeline.style.setProperty('--fill-1', `${POSSESSED}s`);
+    timeline.style.setProperty('--fill-2', `${SHARE_AT - POSSESSED}s`);
+  }
+
   if (storyPeople[0]) fill(storyPeople[0]);  // so the card has its size before the first story lands
 
   new ResizeObserver(() => { if (reduceMotion) still(); else if (layout()) start(); }).observe(frame);
