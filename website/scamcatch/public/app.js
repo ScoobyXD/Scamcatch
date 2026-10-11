@@ -553,11 +553,6 @@
     if (kind === 'end') endCall();
     if (kind === 'scenario') selectScenario(action.dataset.scenario);
     if (kind === 'replay') { lastInteraction = 0; reduceMotion ? showFinalState() : play(0); }
-    if (kind === 'restart') {
-      event.preventDefault();
-      document.getElementById('demo').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
-      reduceMotion ? showFinalState() : play(0);
-    }
   });
   ['pointermove', 'focusin'].forEach((type) => phone.addEventListener(type, () => { lastInteraction = Date.now(); }));
 

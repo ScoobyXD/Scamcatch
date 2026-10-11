@@ -2,8 +2,8 @@
    overseas, lands on a phone and takes it over (it turns red), and the card follows every one of them in four steps, as
    does the timeline beside the headline: 1. the scam message; 2. ScamCatch intervenes and warns the person; 3. reports
    fly to three icons in the middle of the country (a bank, the authorities, trusted contacts), and each card row shows
-   "Sent" as its trace lands; 4. trace crypto to help get back lost funds: a violet trail hops from the phone back
-   toward the scammer, through three crypto wallets to an exchange, which gets flagged. */
+   "Sent" as its trace lands; 4. trace & investigate to help get back lost funds: a violet trail hops from the phone
+   back toward the scammer through three crypto wallets, and ends at a magnifying glass: investigating. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;
@@ -56,8 +56,8 @@
   const SHARE_AT = POSSESSED + CATCH + 0.9;                               // the reports start going out
   const SHARE_GAP = 0.4, SHARE_FLIGHT = 0.8;                              // seconds between reports, and each one's flight
   const TRACE_AT = SHARE_AT + 0.15 + SHARE_GAP * (HUBS.length - 1) + SHARE_FLIGHT + 0.65;   // tracing the crypto starts, half a second after the last report lands
-  const HOP = 0.35;                    // seconds per hop: phone, three wallets, the exchange
-  const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way back along the route to the map's edge (the last is the exchange)
+  const HOP = 0.35;                    // seconds per hop: phone, three wallets, the investigation
+  const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way back along the route to the map's edge (the last is the investigation)
   const STORY_END = TRACE_AT + 0.15 + TRACE_STOPS.length * HOP + 1.5;   // when the card hides
   const STORY_HOLD = STORY_END - POSSESSED - CATCH;                       // the ScamCatch logo stays up this long
 
@@ -487,9 +487,9 @@
 
 
   // Step 4: trace crypto. From the phone, back along the route, through three of the scammer's crypto wallets to
-  // the exchange they cash out at. The stops step off the route to alternate sides so the trail reads as hops.
+  // a magnifying glass: investigating. The stops step off the route to alternate sides so the trail reads as hops.
   function traceStops(p) {
-    // how far back along the route it stays well inside the frame: the exchange sits there, with room for its label
+    // how far back along the route it stays well inside the frame: the magnifying glass sits there, with room for its label
     const m = S * 1.3;
     let end = 0;
     for (let v = 0; v <= 1; v += 0.01) {
@@ -541,7 +541,7 @@
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    // the exchange: a gold tile that gets a padlock when the trail reaches it
+    // the investigation: a violet tile with a magnifying glass that lights up when the trail reaches it
     const [ex, ey] = pts[pts.length - 1], es = Math.max(18, S * 0.95), got = done === TRACE_STOPS.length;
     const since = a - TRACE_STOPS.length * HOP;
     if (got) {
@@ -558,29 +558,26 @@
     ctx.strokeStyle = '#c084fc';
     ctx.lineWidth = 1.4;
     roundRect(ex - es / 2, ey - es / 2, es, es, es * 0.26); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = got ? '#10162b' : '#c084fc';
-    if (got) {
-      ctx.fillRect(ex - es * 0.2, ey - es * 0.04, es * 0.4, es * 0.3);
-      ctx.strokeStyle = '#10162b';
-      ctx.lineWidth = Math.max(1.2, es * 0.08);
-      ctx.beginPath(); ctx.arc(ex, ey - es * 0.06, es * 0.13, Math.PI, 0); ctx.stroke();
-    } else {
-      ctx.font = `700 ${Math.round(es * 0.5)}px "Hanken Grotesk", system-ui, sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('\u20bf', ex, ey + 0.5);
-    }
+    ctx.strokeStyle = got ? '#10162b' : '#c084fc';
+    ctx.lineWidth = Math.max(1.4, es * 0.09);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(ex - es * 0.06, ey - es * 0.06, es * 0.19, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex + es * 0.08, ey + es * 0.08); ctx.lineTo(ex + es * 0.24, ey + es * 0.24); ctx.stroke();
     ctx.globalAlpha = fade;
-    ctx.font = `600 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const label = got ? 'Exchange flagged' : 'Exchange', th = Math.max(16, S * 0.65);
-    let ty = ey + es / 2 + Math.max(10, S * 0.45);
-    if (ty + th / 2 > h - 2) ty = ey - es / 2 - Math.max(10, S * 0.45);
-    const tw = ctx.measureText(label).width + 14, tx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, ex));
-    ctx.fillStyle = 'rgba(12,17,36,.9)';
-    roundRect(tx - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
-    ctx.fillStyle = got ? '#c084fc' : 'rgba(223,232,255,.95)';
-    ctx.fillText(label, tx, ty + 0.5);
-    ctx.textBaseline = 'alphabetic';
+    if (got) {
+      // its label once the trail gets there
+      ctx.font = `600 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const label = 'Investigating', th = Math.max(16, S * 0.65);
+      let ty = ey + es / 2 + Math.max(10, S * 0.45);
+      if (ty + th / 2 > h - 2) ty = ey - es / 2 - Math.max(10, S * 0.45);
+      const tw = ctx.measureText(label).width + 14, tx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, ex));
+      ctx.fillStyle = 'rgba(12,17,36,.9)';
+      roundRect(tx - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
+      ctx.fillStyle = '#c084fc';
+      ctx.fillText(label, tx, ty + 0.5);
+      ctx.textBaseline = 'alphabetic';
+    }
     ctx.globalAlpha = 1;
     // the money moving between stops
     if (head) {
