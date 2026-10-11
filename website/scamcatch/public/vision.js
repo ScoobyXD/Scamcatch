@@ -261,9 +261,11 @@
   }
   const logoAt = (p) => { const [px, py] = phoneAt(p); return [px, py - S * 1.05]; };
   const hubSize = () => Math.max(24, S * 1.75);
-  // the Authorities icon: the card row's SVG paths (index.html) in a 100 grid. An eagle with its wings spread over two
-  // olive branches; the path marked data-ink (eye, beak) is cut in the tile's own color.
-  const LAW_ICON = [...spot.querySelectorAll('li[data-to="law"] svg path')].map((el) => [new Path2D(el.getAttribute('d')), el.hasAttribute('data-ink')]);
+  // the Authorities icon: the card row's SVG paths (index.html) in a 200 grid. An eagle spread across a shield, an olive
+  // branch on each side. Paths marked data-ink are drawn in the tile's own color; one with a stroke is the eagle's outline.
+  const LAW_ICON = [...spot.querySelectorAll('li[data-to="law"] svg path')].map((el) => ({
+    path: new Path2D(el.getAttribute('d')), ink: el.hasAttribute('data-ink'), line: Number(el.getAttribute('stroke-width')) || 0,
+  }));
 
   function drawLinks(t) {
     links = links.filter((l) => {
@@ -349,11 +351,16 @@
     },
     // an eagle head inside an olive wreath, drawn from the same path as the card row's icon (index.html)
     law(x, y, s, tile) {
-      const k2 = (s * 0.92) / 100;
+      const k2 = (s * 0.94) / 200;
       ctx.save();
-      ctx.translate(x - 50 * k2, y - 50 * k2);
+      ctx.translate(x - 100 * k2, y - 100 * k2);
       ctx.scale(k2, k2);
-      for (const [path, ink] of LAW_ICON) { ctx.fillStyle = ink ? tile : '#fff'; ctx.fill(path); }
+      ctx.lineJoin = 'round';
+      for (const { path, ink, line } of LAW_ICON) {
+        ctx.fillStyle = ink ? tile : '#fff';
+        if (line) { ctx.strokeStyle = tile; ctx.lineWidth = line; ctx.stroke(path); }
+        ctx.fill(path);
+      }
       ctx.restore();
     },
     // a small group of people: two behind, one in front
