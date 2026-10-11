@@ -45,9 +45,12 @@ def main():
 
     log("3/3 Checking the role")
     policy = aws.run("iam", "get-role", "--role-name", "scamcatch-github-publish", "--query", "Role.AssumeRolePolicyDocument")
-    subject = json.dumps(policy)
-    if "repo:ScoobyXD/Scamcatch:ref:refs/heads/main" not in subject:
-        raise Failed("The role exists but doesn't name ScoobyXD/Scamcatch main. Open IAM > Roles > scamcatch-github-publish.")
+    parameters = json.loads(TEMPLATE.read_text(encoding="utf-8"))["Parameters"]
+    expected_subject = f"{parameters['GitHubSubjectPrefix']['Default']}:ref:refs/heads/{parameters['GitHubBranch']['Default']}"
+    subjects = [statement.get("Condition", {}).get("StringEquals", {}).get(f"{OIDC_HOST}:sub")
+                for statement in policy.get("Statement", [])]
+    if expected_subject not in subjects:
+        raise Failed("The role does not trust the configured GitHub repository and branch. Open IAM > Roles > scamcatch-github-publish.")
     log("")
     log("DONE. GitHub can now publish scamcatch.io whenever website/scamcatch/public changes on main.")
 

@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Lets GitHub Actions on ScoobyXD/Scamcatch main publish website/scamcatch/public to scamcatch.io: upload to the site bucket and clear the CloudFront cache, nothing else.",
   "Parameters": {
-    "GitHubRepo": { "Type": "String", "Default": "ScoobyXD/Scamcatch", "Description": "owner/repo exactly as GitHub shows it." },
+    "GitHubSubjectPrefix": { "Type": "String", "Default": "repo:ScoobyXD@73263131/Scamcatch@1403800412", "Description": "GitHub OIDC sub_claim_prefix, including immutable owner and repository IDs." },
     "GitHubBranch": { "Type": "String", "Default": "main" },
     "DistributionId": { "Type": "String", "Default": "E1FTFPRB048HY" },
     "ExistingOidcProviderArn": { "Type": "String", "Default": "", "Description": "ARN of the account's GitHub OIDC provider if it already exists. Empty creates one." }
@@ -38,7 +38,7 @@
             "Condition": {
               "StringEquals": {
                 "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                "token.actions.githubusercontent.com:sub": { "Fn::Sub": "repo:${GitHubRepo}:ref:refs/heads/${GitHubBranch}" }
+                "token.actions.githubusercontent.com:sub": { "Fn::Sub": "${GitHubSubjectPrefix}:ref:refs/heads/${GitHubBranch}" }
               }
             }
           }]
