@@ -1,8 +1,10 @@
-/* ScamCatch homepage: the vision map. People across the lower 48 on their phones. Scams from overseas land on a phone
-   and take it over (it turns red), then ScamCatch on that phone catches the scam and warns the person. Three icons in the
-   middle of the country stand for a bank, the authorities, and trusted contacts. The card follows one person at a time:
-   only that person's reports draw traces to the icons, and each card row shows "Sent" as its trace lands. Other catches
-   just make the icons glow softly, so the map stays readable. */
+/* ScamCatch homepage: the vision map. People across the lower 48 on their phones. One scam at a time flies in from
+   overseas, lands on a phone and takes it over (it turns red), and the card follows every one of them in four steps, as
+   does the timeline beside the headline: 1. the scam message; 2. ScamCatch catches it, warns the person, and sends an
+   AI decoy back to tie up the scammer; 3. reports fly to four icons in the middle of the country (a bank, the
+   authorities, trusted contacts, the community), and each card row checks off as its trace lands; 4. following the
+   money: a trace hops from the phone back toward the scammer, through three crypto wallets to an exchange, which gets
+   flagged. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;
@@ -11,11 +13,11 @@
   const canvas = frame.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const spot = stage.querySelector('.spot');
-  const timeline = document.querySelector('.vision-head .timeline');   // steps 1 to 3 light up with the card's phase
-  // step 3 shows the same bank, authorities and trusted contacts icons as the card's rows
-  const trio = timeline && timeline.querySelector('.timeline-trio');
-  if (trio) {
-    trio.prepend(...[...spot.querySelectorAll('.spot-share li i')].map((icon) => {
+  const timeline = document.querySelector('.vision-head .timeline');   // steps 1 to 4 light up with the card's phase
+  // step 3 shows the same bank, authorities, trusted contacts and community icons as the card's rows
+  const reports = timeline && timeline.querySelector('.timeline-reports');
+  if (reports) {
+    reports.prepend(...[...spot.querySelectorAll('.spot-share li i')].map((icon) => {
       const copy = icon.cloneNode(true);
       copy.dataset.to = icon.closest('li').dataset.to;
       return copy;
@@ -27,10 +29,7 @@
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const scenarios = (window.ScamCatchDemo && window.ScamCatchDemo.scenarios) || {};
 
-  // Coast points and metro areas in viewBox units, projected with the same Albers projection as the outline.
-  const COAST = {
-    gulf: [[788,575],[777,558],[760,530],[751,503],[722,490],[690,486],[663,487],[631,488],[625,516],[595,521],[558,510],[515,516],[486,537],[466,552],[463,575],[466,595]],
-  };
+  // Metro areas in viewBox units, projected with the same Albers projection as the outline.
   const METROS = [[868,210],[73,359],[633,220],[503,508],[185,396],[852,232],[475,438],[710,402],[820,572],[84,38],[333,269],[907,160],[535,154],[594,299],[217,230],[660,351],[772,359],[709,201],[66,82],[140,324],[292,373],[462,375],[491,241],[21,256],[440,515],[290,123],[158,151],[478,111],[774,473],[810,339],[734,217],[516,291],[601,379],[608,499],[286,450],[339,237],[159,56],[371,171],[912,128],[776,177]];
 
   // The close-up card follows one person at a time. Scam text and alerts come from the demo's SCENARIOS (app.js).
@@ -45,21 +44,27 @@
     { scam: 'lottery', city: 'Cleveland, OH', at: METROS[30] },
   ].filter((s) => scenarios[s.scam]);
 
-  const POSSESSED = 1.05;              // seconds a phone stays taken over before ScamCatch catches the scam
-  const CATCH = 0.65;                  // seconds the catch takes
-  const WARNED = 1.9;                  // seconds the ScamCatch logo stays up
-  const SHARE_AT = POSSESSED + CATCH + 0.7;   // when the card person's reports start going out
-  const SHARE_GAP = 0.6, SHARE_FLIGHT = 0.9;  // seconds between their three reports, and each one's flight
-  const STORY_END = SHARE_AT + 0.15 + SHARE_GAP * 2 + SHARE_FLIGHT + 1.4;   // when the card hides
-  const STORY_HOLD = STORY_END - POSSESSED - CATCH;                         // the card person's logo stays up this long
-
   // Where reports go, in viewBox units around the geographic center of the lower 48 (Kansas). Same order as the card rows.
   const HUBS = [
-    { id: 'bank', at: [390, 330], label: 'Bank' },
-    { id: 'law', at: [470, 226], label: 'Authorities' },
-    { id: 'contacts', at: [550, 330], label: 'Trusted contacts' },
+    { id: 'bank', at: [380, 335], label: 'Bank' },
+    { id: 'law', at: [380, 215], label: 'Authorities' },
+    { id: 'contacts', at: [540, 335], label: 'Trusted contacts' },
+    { id: 'community', at: [540, 215], label: 'Community' },
   ];
-  // The zone the three icons and their labels sit in, in viewBox units. No person is placed in it and the card avoids it.
+
+  // The four steps, in seconds after the scam lands on the phone.
+  const POSSESSED = 0.9;               // the phone stays taken over this long before ScamCatch catches the scam
+  const CATCH = 0.6;                   // the catch
+  const DECOY_AT = POSSESSED + CATCH + 0.1, DECOY_FLIGHT = 0.9;            // the AI decoy flies back at the scammer
+  const SHARE_AT = DECOY_AT + DECOY_FLIGHT + 0.1;                         // the reports start going out
+  const SHARE_GAP = 0.4, SHARE_FLIGHT = 0.8;                              // seconds between reports, and each one's flight
+  const TRACE_AT = SHARE_AT + 0.15 + SHARE_GAP * (HUBS.length - 1) + SHARE_FLIGHT + 0.15;   // following the money starts
+  const HOP = 0.35;                    // seconds per hop: phone, three wallets, the exchange
+  const TRACE_STOPS = [0.3, 0.53, 0.77, 1];      // each stop's share of the way back along the route to the map's edge (the last is the exchange)
+  const STORY_END = TRACE_AT + 0.15 + TRACE_STOPS.length * HOP + 1.5;   // when the card hides
+  const STORY_HOLD = STORY_END - POSSESSED - CATCH;                       // the ScamCatch logo stays up this long
+
+  // The zone the four icons and their labels sit in, in viewBox units. No person is placed in it and the card avoids it.
   const HUB_ZONE = {
     l: Math.min(...HUBS.map((hb) => hb.at[0])) - 82, r: Math.max(...HUBS.map((hb) => hb.at[0])) + 82,
     t: Math.min(...HUBS.map((hb) => hb.at[1])) - 52, b: Math.max(...HUBS.map((hb) => hb.at[1])) + 66,
@@ -96,7 +101,6 @@
       p.appear = at + hash(p.x, p.y) * 0.3;
       p.seed = hash(p.y, p.x) * 100;
       p.ev = null;
-      p.free = 0;
     }
     return out.sort((a, b) => a.y - b.y);
   })();
@@ -105,7 +109,6 @@
   let w = 0, h = 0, k = 1, mx = 0, my = 0, dpr = 1, S = 18;
   let sprites = {};
   let threats = [], sparks = [], links = [], clock = 0, nextStory = 1.4, storyIndex = 0, raf = 0, last = 0, onScreen = false;
-  let gapScam = true;                  // whether the gap between card stories has had its one other scam yet
   let shown = null;                    // the person the card is following
 
   const X = (x) => mx + x * k;
@@ -123,9 +126,9 @@
     mx = sr.left - st.left + (sr.width - VW * k) / 2;
     my = sr.top - st.top + (sr.height - VH * k) / 2;
     S = Math.max(13, Math.min(28, 38 * k));
-    sprites = { screen: glow(COLORS.screen, 0.32), scam: glow(COLORS.scam, 0.55), catch: glow(COLORS.catch, 0.5) };
+    sprites = { screen: glow(COLORS.screen, 0.32), scam: glow(COLORS.scam, 0.55), catch: glow(COLORS.catch, 0.5), money: glow(COLORS.screen, 0.6) };
     rasterLogo();
-    if (shown) placeSpot(shown);
+    if (shown) placeSpot(shown, true);
     return true;
   }
 
@@ -185,7 +188,7 @@
     const since = ev ? t - ev.land : -1;
     const taken = ev && since >= 0 && since < POSSESSED;
     const caught = ev && since >= POSSESSED;
-    const hold = p.story ? STORY_HOLD : WARNED;
+    const hold = STORY_HOLD;
     const warned = caught && since < POSSESSED + CATCH + hold;
     const jitter = taken ? Math.sin(t * 57 + p.seed) * S * 0.05 : 0;
     const lift = (1 - ease(show)) * S * 0.3;
@@ -260,7 +263,6 @@
     } else if (!ev.popped) {
       ev.popped = true;
       for (let i = 0; i < 7; i++) sparks.push({ x: lx, y: ly, a: (i / 7) * TAU + Math.random() * 0.5, v: S * (1.8 + Math.random() * 1.6), start: t });
-      if (!p.story) for (const hub of HUBS) hub.glowAt = t + 0.25;
     }
   }
 
@@ -324,12 +326,13 @@
     ctx.font = `600 ${Math.max(10, Math.min(14, S * 0.5))}px "Hanken Grotesk", system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    // labels only when no two in a row overlap (small screens, where the card below the map names the icons)
+    const tws = HUBS.map((hub) => ctx.measureText(hub.label).width + 14);
+    const labels = HUBS.every((a, i) => HUBS.every((b, j) => j <= i || a.at[1] !== b.at[1] || Math.abs(a.at[0] - b.at[0]) * k >= (tws[i] + tws[j]) / 2 + 6));
     for (const hub of HUBS) {
       const x = X(hub.at[0]), y = Y(hub.at[1]);
       const hit = clamp01((t - (hub.hitAt ?? -9)) / 0.7);
-      const glowAge = t - (hub.glowAt ?? -9);
-      const soft = glowAge >= 0 && glowAge < 0.9 ? Math.sin((glowAge / 0.9) * Math.PI) * 0.3 : 0;   // another catch somewhere
-      stamp(sprites.catch, x, y, (s / S) * 0.9 * (1 + 0.25 * (1 - hit) + soft * 0.3), Math.min(1, 0.55 + 0.45 * (1 - hit) + soft));
+      stamp(sprites.catch, x, y, (s / S) * 0.9 * (1 + 0.25 * (1 - hit)), 0.55 + 0.45 * (1 - hit));
       if (hit < 1) {
         ctx.strokeStyle = `rgba(156,195,255,${1 - hit})`;
         ctx.lineWidth = 2;
@@ -343,6 +346,7 @@
       ctx.stroke();
       ctx.fillStyle = '#fff';
       GLYPHS[hub.id](x, y, s, tile);
+      if (!labels) continue;
       const ty = y + s / 2 + Math.max(10, S * 0.5), tw = ctx.measureText(hub.label).width + 14, th = Math.max(16, S * 0.7);
       ctx.fillStyle = 'rgba(12,17,36,.9)';
       roundRect(x - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
@@ -397,6 +401,14 @@
       ctx.quadraticCurveTo(x + s * 0.19, y + s * 0.07, x + s * 0.19, y + s * 0.27);
       ctx.closePath(); ctx.stroke(); ctx.fill();
     },
+    // a house: the neighbors who get warned about the scam going around
+    community(x, y, s, tile) {
+      ctx.beginPath(); ctx.moveTo(x - s * 0.34, y - s * 0.02); ctx.lineTo(x, y - s * 0.31); ctx.lineTo(x + s * 0.34, y - s * 0.02); ctx.closePath(); ctx.fill();
+      ctx.fillRect(x - s * 0.24, y - s * 0.05, s * 0.48, s * 0.33);
+      ctx.fillStyle = tile;
+      ctx.fillRect(x - s * 0.065, y + s * 0.09, s * 0.13, s * 0.19);
+      ctx.fillStyle = '#fff';
+    },
   };
 
   function drawAlert(x, y, scale, alpha) {
@@ -411,33 +423,43 @@
     ctx.globalAlpha = 1;
   }
 
-  // A scam in flight: from the edge of the frame (overseas) to one person's phone, in viewBox units.
+  // A scam in flight: from the edge of the frame (overseas) to one person's phone, in viewBox units. The card's spot is
+  // picked first, then the route: the decoy and the money trail later run back along it, so it stays clear of the card
+  // and the four icons, and prefers the nearer ocean.
   function launch(p, t, dur) {
     const left = -mx / k, right = (w - mx) / k, top = -my / k, bottom = (h - my) / k;
-    const side = p.x < 360 ? 'west' : p.x > 620 ? (p.y > 430 && Math.random() < 0.5 ? 'gulf' : 'east') : (Math.random() < 0.5 ? 'west' : 'east');
-    let sx, sy;
-    if (side === 'west') { sx = left - 8; sy = top + Math.random() * (bottom - top) * 0.8; }
-    else if (side === 'east') { sx = right + 8; sy = top + Math.random() * (bottom - top) * 0.8; }
-    else { const [cx] = COAST.gulf[Math.floor(Math.random() * COAST.gulf.length)]; sx = cx - 120 + Math.random() * 360; sy = bottom + 8; }
     const ex = p.x + (S * PHONE_DX) / k, ey = p.y + (S * PHONE_DY) / k;
-    const dx = ex - sx, dy = ey - sy;
-    const sign = side === 'west' ? -1 : side === 'east' ? 1 : (Math.random() < 0.5 ? -1 : 1);
-    const bend = (0.14 + Math.random() * 0.14) * sign;
+    const card = floating() ? spotBox(p) : null;
+    const icons = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
+    const near = p.x < 360 ? 'west' : p.x > 620 ? 'east' : null;
+    let best = null;
+    for (let i = 0; i < 14; i++) {
+      const side = i < 5 ? 'west' : i < 10 ? 'east' : 'south';
+      const f = ((i % 5) + 0.25 + Math.random() * 0.5) / 5;      // spread along that edge
+      const sx = side === 'west' ? left - 8 : side === 'east' ? right + 8 : 100 + f * 960;
+      const sy = side === 'south' ? bottom + 8 : top + f * (bottom - top) * 0.85;
+      const dx = ex - sx, dy = ey - sy;
+      const sign = side === 'west' ? -1 : side === 'east' ? 1 : (Math.random() < 0.5 ? -1 : 1);
+      const bend = (0.14 + Math.random() * 0.14) * sign;
+      const q = { sx, sy, ex, ey, cx: sx + dx / 2 - dy * bend, cy: sy + dy / 2 + dx * bend };
+      let score = Math.hypot(dx, dy) * 0.4 + (near && side !== near ? 60 : 0) + Math.random() * 40;
+      for (let u = 0.04; u < 0.96; u += 0.04) {
+        const [x, y] = along(q, u), px = X(x), py = Y(y);
+        if (card && px > card.l - 14 && px < card.r + 14 && py > card.t - 14 && py < card.b + 14) score += 400;
+        if (px > icons.l && px < icons.r && py > icons.t && py < icons.b) score += 60;
+      }
+      if (!best || score < best.score) best = { q, score };
+    }
+    const q = best.q;
     const speed = Math.max(190, w * 0.24);
-    const flight = dur || Math.min(2.6, Math.max(1.1, (Math.hypot(dx, dy) * k) / speed));
-    p.ev = { land: t + flight, popped: false };
-    p.free = p.ev.land + (p.story ? STORY_END : POSSESSED + CATCH + WARNED) + 1.2;
-    threats.push({ sx, sy, ex, ey, cx: sx + dx / 2 - dy * bend, cy: sy + dy / 2 + dx * bend, start: t, dur: flight });
+    const flight = dur || Math.min(2.6, Math.max(1.1, (Math.hypot(q.ex - q.sx, q.ey - q.sy) * k) / speed));
+    Object.assign(q, { start: t, dur: flight });
+    p.ev = { land: t + flight, popped: false, q, card };   // q is the scam's route; the decoy and the money trail go back along it
+    threats.push(q);
   }
 
   // One scam at a time: nothing new starts while a scam is in flight or a phone is still red.
   const scamOnMap = () => threats.length > 0 || people.some((p) => p.ev && clock >= p.ev.land && clock < p.ev.land + POSSESSED);
-  const GAP = 3.6;                     // seconds between card stories, room for one other scam elsewhere
-
-  function spawn() {
-    const ready = people.filter((p) => !p.story && clock > p.free && clock > p.appear + 0.6);
-    if (ready.length) launch(ready[Math.floor(Math.random() * ready.length)], clock, 1.4);
-  }
 
   const along = (q, u) => {
     const v = 1 - u;
@@ -457,16 +479,149 @@
       px = nx; py = ny;
     }
     // the head is the scam message itself: a red chat bubble
-    const hx = X(px), hy = Y(py);
+    drawBubble(X(px), Y(py), sprites.scam, '#ff6f61', 'rgba(255,236,232,.95)', enter);
+  }
+
+  // A chat bubble with three dots: the scam message (red) or the AI decoy talking back (blue).
+  function drawBubble(hx, hy, sprite, fill, dots, alpha) {
     const bw = Math.max(7, S * 0.46), bh = bw * 0.72;
-    stamp(sprites.scam, hx, hy, 0.6, enter);
-    ctx.globalAlpha = enter;
-    ctx.fillStyle = '#ff6f61';
+    stamp(sprite, hx, hy, 0.6, alpha);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = fill;
     roundRect(hx - bw / 2, hy - bh / 2, bw, bh, bh * 0.38); ctx.fill();
     ctx.beginPath(); ctx.moveTo(hx - bw * 0.2, hy + bh / 2 - 0.5); ctx.lineTo(hx - bw * 0.34, hy + bh / 2 + bh * 0.35); ctx.lineTo(hx + bw * 0.02, hy + bh / 2 - 0.5); ctx.fill();
-    ctx.fillStyle = 'rgba(255,236,232,.95)';
+    ctx.fillStyle = dots;
     for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.arc(hx + i * bw * 0.24, hy, Math.max(0.8, bw * 0.07), 0, TAU); ctx.fill(); }
     ctx.globalAlpha = 1;
+  }
+
+  /* ---- Fighting back: the AI decoy and the money trail, both back along the scam's route ---- */
+  // A point v of the way back from the phone (0) to the scammer (1), in screen units.
+  const back = (q, v) => { const [x, y] = along(q, 1 - v); return [X(x), Y(y)]; };
+
+  // Step 2: the decoy leaves the ScamCatch logo and flies back to the scammer. Its trail clears soon after it gets there.
+  function drawDecoy(p, t) {
+    const a = t - p.ev.land - DECOY_AT;
+    if (a < 0) return;
+    const u = clamp01(a / DECOY_FLIGHT);
+    if (u >= 1 && !p.ev.decoyed) { p.ev.decoyed = true; spot.classList.add('has-decoy'); }
+    const fade = 1 - clamp01((a - DECOY_FLIGHT - 0.5) / 0.5);
+    if (fade <= 0) return;
+    const [lx, ly] = logoAt(p), [px, py] = phoneAt(p);
+    const at = (v) => { const [x, y] = back(p.ev.q, v), o = (1 - v) ** 2; return [x + (lx - px) * o, y + (ly - py) * o]; };
+    const e = flightEase(u);
+    ctx.strokeStyle = `rgba(156,195,255,${0.7 * fade})`;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) { const [x, y] = at((e * i) / 24); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (u < 1) { const [hx, hy] = at(e); drawBubble(hx, hy, sprites.catch, '#7ab0ff', 'rgba(12,17,36,.9)', 1); }
+  }
+
+  // Step 4: following the money. From the phone, back along the route, through three of the scammer's crypto wallets to
+  // the exchange they cash out at. The stops step off the route to alternate sides so the trail reads as hops.
+  function traceStops(p) {
+    // how far back along the route it stays well inside the frame: the exchange sits there, with room for its label
+    const m = S * 1.3;
+    let end = 0;
+    for (let v = 0; v <= 1; v += 0.01) {
+      const [x, y] = back(p.ev.q, v);
+      if (x < m || x > w - m || y < m || y > h - m * 1.4) break;
+      end = v;
+    }
+    return TRACE_STOPS.map((f, i) => {
+      const v = end * f;
+      const [x, y] = back(p.ev.q, v), [x2, y2] = back(p.ev.q, v + 0.01);
+      const l = Math.hypot(x2 - x, y2 - y) || 1;
+      const off = i === TRACE_STOPS.length - 1 ? 0 : (i % 2 ? 1 : -1) * S * 0.75;
+      return [x - ((y2 - y) / l) * off, y + ((x2 - x) / l) * off];
+    });
+  }
+  function drawTrace(p, t) {
+    const a = t - p.ev.land - TRACE_AT - 0.15;
+    if (a < 0) return;
+    const fade = 1 - clamp01((t - p.ev.land - STORY_END + 0.5) / 0.5);
+    if (fade <= 0) return;
+    const pts = [phoneAt(p), ...traceStops(p)];
+    const done = Math.min(TRACE_STOPS.length, Math.floor(a / HOP));   // stops reached so far
+    const part = done < TRACE_STOPS.length ? flightEase(clamp01((a - done * HOP) / HOP)) : 0;
+    for (let i = 0; i < done; i++) traceDots[i].classList.add('is-lit');
+    if (done === TRACE_STOPS.length && !p.ev.traced) { p.ev.traced = true; spot.classList.add('has-traced'); }
+    // the trail so far
+    ctx.strokeStyle = `rgba(${COLORS.screen},${0.85 * fade})`;
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i <= done; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    let head = null;
+    if (part > 0) {
+      const [x0, y0] = pts[done], [x1, y1] = pts[done + 1];
+      head = [x0 + (x1 - x0) * part, y0 + (y1 - y0) * part];
+      ctx.lineTo(head[0], head[1]);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // the wallets: small diamonds that light up as the trail reaches them
+    for (let i = 0; i < TRACE_STOPS.length - 1; i++) {
+      const [x, y] = pts[i + 1], lit = i < done, r = S * 0.2;
+      if (lit) stamp(sprites.money, x, y, 0.45, fade);
+      ctx.globalAlpha = fade * (lit ? 1 : 0.55);
+      ctx.fillStyle = lit ? '#f4c27a' : '#10162b';
+      ctx.strokeStyle = '#f4c27a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // the exchange: a gold tile that gets a padlock when the trail reaches it
+    const [ex, ey] = pts[pts.length - 1], es = Math.max(18, S * 0.95), got = done === TRACE_STOPS.length;
+    const since = a - TRACE_STOPS.length * HOP;
+    if (got) {
+      stamp(sprites.money, ex, ey, (es / S) * 0.8, fade);
+      const ring = clamp01(since / 0.7);
+      if (ring < 1) {
+        ctx.strokeStyle = `rgba(${COLORS.screen},${1 - ring})`;
+        ctx.lineWidth = 2;
+        roundRect(ex - es / 2 - 6 * ease(ring), ey - es / 2 - 6 * ease(ring), es + 12 * ease(ring), es + 12 * ease(ring), es * 0.3); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = fade * (got ? 1 : 0.6);
+    ctx.fillStyle = got ? '#f4c27a' : '#10162b';
+    ctx.strokeStyle = '#f4c27a';
+    ctx.lineWidth = 1.4;
+    roundRect(ex - es / 2, ey - es / 2, es, es, es * 0.26); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = got ? '#10162b' : '#f4c27a';
+    if (got) {
+      ctx.fillRect(ex - es * 0.2, ey - es * 0.04, es * 0.4, es * 0.3);
+      ctx.strokeStyle = '#10162b';
+      ctx.lineWidth = Math.max(1.2, es * 0.08);
+      ctx.beginPath(); ctx.arc(ex, ey - es * 0.06, es * 0.13, Math.PI, 0); ctx.stroke();
+    } else {
+      ctx.font = `700 ${Math.round(es * 0.5)}px "Hanken Grotesk", system-ui, sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('\u20bf', ex, ey + 0.5);
+    }
+    ctx.globalAlpha = fade;
+    ctx.font = `600 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const label = got ? 'Exchange flagged' : 'Exchange', th = Math.max(16, S * 0.65);
+    let ty = ey + es / 2 + Math.max(10, S * 0.45);
+    if (ty + th / 2 > h - 2) ty = ey - es / 2 - Math.max(10, S * 0.45);
+    const tw = ctx.measureText(label).width + 14, tx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, ex));
+    ctx.fillStyle = 'rgba(12,17,36,.9)';
+    roundRect(tx - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
+    ctx.fillStyle = got ? '#f4c27a' : 'rgba(223,232,255,.95)';
+    ctx.fillText(label, tx, ty + 0.5);
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = 1;
+    // the money moving between stops
+    if (head) {
+      stamp(sprites.money, head[0], head[1], 0.55, 1);
+      ctx.fillStyle = '#ffe2b0';
+      ctx.beginPath(); ctx.arc(head[0], head[1], Math.max(2.6, S * 0.12), 0, TAU); ctx.fill();
+    }
   }
 
   function drawSparks(t) {
@@ -484,14 +639,15 @@
   const floating = () => getComputedStyle(spot).position === 'absolute';
   let spotScale = 1;                   // the card shrinks to fit when the map is shorter than the card (short laptop screens)
 
-  function placeSpot(p) {
-    if (!floating()) { spot.style.left = spot.style.top = spot.style.scale = ''; spotScale = 1; return; }
-    // the card's full height, counting the rows that are still folded away
-    const folded = (el) => (el && el.offsetHeight < 4 ? el.scrollHeight + 28 : 0);
-    const fullH = spot.offsetHeight + folded(spot.querySelector('.spot-catch')) + folded(spot.querySelector('.spot-share'));
-    spotScale = Math.max(0.68, Math.min(1, (h - 2) / fullH));
-    spot.style.scale = spotScale < 1 ? String(spotScale) : '';
-    const cw = spot.offsetWidth * spotScale, ch = fullH * spotScale;
+  // Where the card goes for person p, in screen units, at its full height with every step unfolded.
+  function spotBox(p) {
+    // the card's full height, counting the steps that are still folded away (the catch's padding and border only show
+    // once it opens: .55rem above and below, and 1px each)
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const folded = (el) => (el.offsetHeight < 4 ? el.scrollHeight + (el.matches('.spot-catch') ? rem * 1.1 + 2 : 0) : 0);
+    const fullH = spot.offsetHeight + ['.spot-catch', '.spot-share', '.spot-trace'].reduce((sum, sel) => sum + folded(spot.querySelector(sel)), 0);
+    const scale = Math.max(0.55, Math.min(1, (h - 2) / fullH));
+    const cw = spot.offsetWidth * scale, ch = fullH * scale;
     const x = X(p.x), y = Y(p.y) - S * 0.6;
     const gap = S * 1.5;
     const box = { l: X(HUB_ZONE.l), r: X(HUB_ZONE.r), t: Y(HUB_ZONE.t), b: Y(HUB_ZONE.b) };
@@ -515,19 +671,31 @@
       });
     });
     if (!best) best = { l: Math.max(0, Math.min(maxR - cw, lefts[0])), t: Math.max(0, Math.min(h - ch, y - ch / 2)) };
-    spot.style.left = `${Math.round(best.l)}px`;
-    spot.style.top = `${Math.round(best.t)}px`;
+    return { l: best.l, t: best.t, r: best.l + cw, b: best.t + ch, scale };
+  }
+
+  // Puts the card where launch() planned it, so the scam's route stays clear of it. After a resize, plans it again.
+  function placeSpot(p, fresh) {
+    if (!floating()) { spot.style.left = spot.style.top = spot.style.scale = ''; spotScale = 1; return; }
+    const box = (!fresh && p.ev && p.ev.card) || spotBox(p);
+    spotScale = box.scale;
+    spot.style.scale = spotScale < 1 ? String(spotScale) : '';
+    spot.style.left = `${Math.round(box.l)}px`;
+    spot.style.top = `${Math.round(box.t)}px`;
   }
 
   const shareRows = Object.fromEntries([...spot.querySelectorAll('.spot-share li')].map((li) => [li.dataset.to, li]));
+  const traceDots = [...spot.querySelectorAll('.trace-chain i')];
   function resetSent() {
     for (const id in shareRows) shareRows[id].classList.remove('is-sent');
-    if (trio) for (const icon of trio.querySelectorAll('i')) icon.classList.remove('is-hit');
+    if (reports) for (const icon of reports.querySelectorAll('i')) icon.classList.remove('is-hit');
+    traceDots.forEach((d) => d.classList.remove('is-lit'));
+    spot.classList.remove('has-decoy', 'has-traced');
   }
-  // a report lands: its card row shows Sent, and the matching icon in step 3 of the timeline hops and lights up
+  // a report lands: its card row checks off, and the matching icon in step 3 of the timeline hops and lights up
   function markSent(id) {
     if (shareRows[id]) shareRows[id].classList.add('is-sent');
-    const icon = trio && trio.querySelector(`i[data-to="${id}"]`);
+    const icon = reports && reports.querySelector(`i[data-to="${id}"]`);
     if (icon) { icon.classList.remove('is-hit'); void icon.offsetWidth; icon.classList.add('is-hit'); }
   }
 
@@ -562,7 +730,7 @@
     if (since < 0) return;
     if (since < POSSESSED) follow(shown, 'scam');
     else if (since < SHARE_AT) follow(shown, 'caught');
-    else if (since < STORY_END) {
+    else if (since < TRACE_AT) {
       follow(shown, 'shared');
       if (!shown.ev.shared) {
         shown.ev.shared = true;
@@ -571,7 +739,8 @@
           sendReport(shown, hub, at, SHARE_FLIGHT);
         });
       }
-    } else { spot.classList.remove('is-shown'); if (timeline) delete timeline.dataset.active; }
+    } else if (since < STORY_END) follow(shown, 'traced');
+    else { spot.classList.remove('is-shown'); if (timeline) delete timeline.dataset.active; }
   }
 
   function nextStoryLaunch() {
@@ -602,6 +771,7 @@
     for (const p of people) drawPerson(p, clock);
     drawLinks(clock);
     drawHubs(clock);
+    if (shown && shown.ev) { drawDecoy(shown, clock); drawTrace(shown, clock); }
     threats = threats.filter((q) => {
       const u = (clock - q.start) / q.dur;
       if (u >= 1) return false;
@@ -615,9 +785,8 @@
   function tick(now) {
     clock += Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
-    // between card stories, one other scam lands somewhere else; the next story waits until it has been caught
-    if (!gapScam && !pending && !spot.classList.contains('is-shown') && !scamOnMap()) { spawn(); gapScam = true; }
-    if (clock > nextStory && !scamOnMap()) { nextStoryLaunch(); gapScam = false; nextStory = clock + STORY_END + GAP; }
+    // every scam gets the card: the next one starts once the card has closed
+    if (clock > nextStory && !pending && !spot.classList.contains('is-shown') && !scamOnMap()) { nextStoryLaunch(); nextStory = clock + STORY_END; }
     if (pending && clock >= pending.ev.land) { follow(pending, 'scam'); pending = null; }
     updateSpot(clock);
     draw();
@@ -631,28 +800,27 @@
   }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   function restart() {
-    clock = 0; gapScam = true; nextStory = 1.4; storyIndex = 0; threats = []; sparks = []; links = []; shown = null; pending = null;
-    for (const hub of HUBS) { hub.hitAt = -9; hub.glowAt = -9; }
-    for (const p of people) { p.ev = null; p.free = 0; }
+    clock = 0; nextStory = 1.4; storyIndex = 0; threats = []; sparks = []; links = []; shown = null; pending = null;
+    for (const hub of HUBS) hub.hitAt = -9;
+    for (const p of people) p.ev = null;
     resetSent();
     spot.classList.remove('is-shown');
   }
 
-  // Reduced motion: one still frame with a few phones taken over, a few already caught, and the card on one person.
+  // Reduced motion: one still frame with the card on one person and all four steps done.
   function still() {
     if (!layout()) return;
     clock = 30;
-    people.forEach((p, i) => {
-      p.appear = 0;
-      const r = hash(i, 9);
-      p.ev = !p.story && r < 0.3 ? { land: clock - (r < 0.12 ? 0.4 : POSSESSED + CATCH + 0.5), popped: true } : null;
-    });
+    people.forEach((p) => { p.appear = 0; p.ev = null; });
     const p = storyPeople[0];
     links = [];
     if (p) {
-      p.ev = { land: clock - STORY_END + 1, popped: true, shared: true };
+      launch(p, clock - STORY_END + 1 - 1.5, 1.5);
+      threats = [];
+      Object.assign(p.ev, { popped: true, shared: true, decoyed: true });
       shown = null;
-      follow(p, 'shared');
+      follow(p, 'traced');
+      spot.classList.add('has-decoy');
       HUBS.forEach((hub) => { links.push({ p, hub, start: 0, dur: 1, until: Infinity, landed: true }); markSent(hub.id); });
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -660,6 +828,7 @@
     for (const q of people) drawPerson(q, clock);
     drawLinks(clock);
     drawHubs(clock);
+    if (p) drawTrace(p, clock);
     drawLeader();
   }
 
