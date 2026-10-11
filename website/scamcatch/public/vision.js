@@ -14,7 +14,13 @@
   const timeline = document.querySelector('.vision-head .timeline');   // steps 1 to 3 light up with the card's phase
   // step 3 shows the same bank, authorities and trusted contacts icons as the card's rows
   const trio = timeline && timeline.querySelector('.timeline-trio');
-  if (trio) trio.prepend(...[...spot.querySelectorAll('.spot-share li i')].map((icon) => icon.cloneNode(true)));
+  if (trio) {
+    trio.prepend(...[...spot.querySelectorAll('.spot-share li i')].map((icon) => {
+      const copy = icon.cloneNode(true);
+      copy.dataset.to = icon.closest('li').dataset.to;
+      return copy;
+    }));
+  }
   const land = new Path2D(map.querySelector('.us-land').getAttribute('d'));
   const VW = 960, VH = 610;            // the map's viewBox
   const TAU = Math.PI * 2;
@@ -514,8 +520,16 @@
   }
 
   const shareRows = Object.fromEntries([...spot.querySelectorAll('.spot-share li')].map((li) => [li.dataset.to, li]));
-  function resetSent() { for (const id in shareRows) shareRows[id].classList.remove('is-sent'); }
-  function markSent(id) { if (shareRows[id]) shareRows[id].classList.add('is-sent'); }
+  function resetSent() {
+    for (const id in shareRows) shareRows[id].classList.remove('is-sent');
+    if (trio) for (const icon of trio.querySelectorAll('i')) icon.classList.remove('is-hit');
+  }
+  // a report lands: its card row shows Sent, and the matching icon in step 3 of the timeline hops and lights up
+  function markSent(id) {
+    if (shareRows[id]) shareRows[id].classList.add('is-sent');
+    const icon = trio && trio.querySelector(`i[data-to="${id}"]`);
+    if (icon) { icon.classList.remove('is-hit'); void icon.offsetWidth; icon.classList.add('is-hit'); }
+  }
 
   function fill(p) {
     const s = scenarios[p.story.scam];
