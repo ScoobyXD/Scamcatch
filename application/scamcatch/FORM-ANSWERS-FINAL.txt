@@ -1,0 +1,52 @@
+AgeTech After Dark @ CES 2027: paste-ready answers (in form order)
+Form: https://forms.monday.com/forms/4fdec6d030dbdccc53e83ed2b7c1df6e?r=use1
+Deadline: Monday, October 12, 2026, 11:59 PM Eastern = 8:59 PM Pacific. Submit by ~7 PM Pacific to leave room for upload problems.
+
+1. Company Name: ScamCatch by Mirae Opus LLC
+2. Company Website: https://scamcatch.io
+3. Primary Contact Name: Jonathan Kim
+4. Primary Contact Title: Founder
+5. Primary Contact Email: jonathan.kim@scamcatchtech.com (only after the mailbox is created and a test email arrives; otherwise use your personal Gmail). The November 12 decision is sent here.
+6. Primary Contact Phone: +1 (United States) 909-657-6129
+7. Corporate Address: 22914 Colombard Ln, Unit 5, Diamond Bar, CA 91765
+8. Two-sentence description:
+ScamCatch is an AI that catches scams on the phone in the moment: with permission, it reads the chat a person is in, spots the signs of a scam, and opens a live AI voice that talks them through it before any money moves. We have a working Android prototype and a live demo at scamcatch.io, and our goal is a first line of defense on every phone in America, starting with older adults and the banks and credit unions that serve them.
+9. What stage are you?: Prototype
+10. Revenue status: Pre-revenue
+11. Categories: Artificial Intelligence, Fintech, Monitoring
+12. Pitch deck: output/ScamCatch-pitch-deck-v3.pdf (10 slides, covers all 8 required topics). Upload the PDF, not the PPTX.
+13. 30-second video: your own screen recording of the live demo with the AI voice (best), or output/ScamCatch-30-second-demo.mp4 (silent, captioned fallback). Do not use the old text-card explainer.
+14. Previously submitted a pitch or considered for the accelerator?: No
+15. How did you hear about us?: Referral (the form has no box for a name)
+16. Terms checkbox: check it only after reading the rules summary below.
+
+Deck slide map (required topic -> slide)
+1. Problem -> 2
+2. Solution and what sets us apart -> 3, 4
+3. Market size -> 6
+4. Target customer -> 5
+5. Traction and why people will buy -> 8, 9
+6. Revenue model -> 9
+7. Fundraising history and runway -> 9
+8. Team and advisors, first-time founder -> 10
+
+Founder facts used in the deck (change the deck if any are wrong)
+1. Sole founder, software engineer, first-time founder. No other team members or advisors.
+2. 0 users, 0 pilots, 0 contracts, $0 revenue, $0 raised, not currently raising.
+3. Runway: ongoing at prototype scale, founder-funded.
+4. Proposed by Claude, confirm or edit: credit unions as the first buyer, the $1 per senior per month illustrative price, and the 90-day goals (25 older-adult testers, a first credit union pilot, measuring how often people pause and verify).
+
+Rules summary (CES ATAD 2027 Pitch Rules Final.pdf)
+1. One entry per entrant. No fee.
+2. Eligible: incorporated nonprofit or for-profit organizations in good standing in their state, with a principal place of business in the US. LLCs are not named either way. Mirae Opus LLC is Active with Good standing in California.
+3. Not eligible if your officers or employees are AARP staff, or family or household members of AARP staff, its agencies, or anyone running the event.
+4. Up to 8 finalists are picked around November 10. The form says notifications go out November 12.
+5. Finalist scoring: product 25%, founders/team 22.5%, proven traction/demand 25%, ability to scale 22.5%, deck quality 5%.
+6. Finalists pitch live in Las Vegas on January 7, 2027, 3 to 5 minutes. Finalists get a free CES 2027 ticket. You must be there to win.
+7. Live judging: relevance 25%, team 25%, traction/demand 25%, ability to scale 25%.
+8. Prize: $10,000. The winner signs an eligibility affidavit, a liability waiver and a publicity release, and submits a W-9. Taxes are the winner's responsibility.
+9. Pitch selectees may be invited to the AgeTech Collaborative accelerator, even without winning.
+10. AARP's decisions are final.
+
+Also do (free, 5 minutes)
+1. Join the AgeTech Collaborative network: https://agetechcollaborative.org/apply-to-join/ (asks for company name, entity type, size, industry, contact, website, address).
