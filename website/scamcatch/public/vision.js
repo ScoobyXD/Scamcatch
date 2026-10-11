@@ -1,10 +1,9 @@
 /* ScamCatch homepage: the vision map. People across the lower 48 on their phones. One scam at a time flies in from
    overseas, lands on a phone and takes it over (it turns red), and the card follows every one of them in four steps, as
-   does the timeline beside the headline: 1. the scam message; 2. ScamCatch catches it and warns the person (the card
-   adds that an AI decoy goes back at the scammer; the map draws no line for it); 3. reports fly to three icons in the
-   middle of the country (a bank, the authorities, trusted contacts), and each card row shows "Sent" as its trace lands;
-   4. trace crypto: a violet trail hops from the phone back toward the scammer, through three crypto wallets to an
-   exchange, which gets flagged. */
+   does the timeline beside the headline: 1. the scam message; 2. ScamCatch intervenes and warns the person; 3. reports
+   fly to three icons in the middle of the country (a bank, the authorities, trusted contacts), and each card row shows
+   "Sent" as its trace lands; 4. trace crypto to help get back lost funds: a violet trail hops from the phone back
+   toward the scammer, through three crypto wallets to an exchange, which gets flagged. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;

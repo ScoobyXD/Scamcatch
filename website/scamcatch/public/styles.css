@@ -372,8 +372,8 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .spot-catch{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.65rem;max-height:0;overflow:hidden;padding:0 .7rem;border-radius:.8rem;background:rgba(61,109,240,.22);border:0 solid rgba(122,176,255,.45);font-size:.8rem;line-height:1.35;color:#dfe8ff;opacity:0;transition:max-height .4s ease,padding .4s ease,opacity .35s ease .05s}
 .spot-catch p{display:grid;gap:.15rem}
 .spot-catch b{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--catch)}
-.spot-logo{display:block;width:40px;height:40px;border-radius:10px;flex-shrink:0;box-shadow:0 6px 16px -6px rgba(0,0,0,.7)}
-.spot:is([data-phase="caught"],[data-phase="shared"],[data-phase="traced"]) .spot-catch{max-height:9rem;padding:.55rem .7rem;border-width:1px;opacity:1}
+.spot-logo{display:block;width:46px;height:46px;border-radius:11px;flex-shrink:0;box-shadow:0 6px 16px -6px rgba(0,0,0,.7)}
+.spot:is([data-phase="caught"],[data-phase="shared"],[data-phase="traced"]) .spot-catch{max-height:7rem;padding:.55rem .7rem;border-width:1px;opacity:1}
 .spot:is([data-phase="shared"],[data-phase="traced"]){border-color:rgba(122,176,255,.6)}
 .spot-share{display:grid;gap:.45rem;max-height:0;overflow:hidden;opacity:0;transition:max-height .45s ease,opacity .3s ease}
 .spot:is([data-phase="shared"],[data-phase="traced"]) .spot-share{max-height:11rem;opacity:1}
@@ -384,7 +384,6 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .spot-share li svg{width:16px;height:16px;fill:currentColor}
 .spot-share li b{font-size:.7rem;font-weight:700;white-space:nowrap;color:var(--catch)}
 .spot-share li.is-sent{opacity:1;transform:none}
-.spot-decoy{grid-column:1/-1;font-size:.72rem;font-weight:600;color:var(--catch)}
 .spot-trace{display:grid;gap:.45rem;max-height:0;overflow:hidden;opacity:0;transition:max-height .45s ease,opacity .3s ease}
 .spot[data-phase="traced"] .spot-trace{max-height:8rem;opacity:1}
 .trace-chain{position:relative;display:flex;justify-content:space-between;align-items:center;padding:.15rem .35rem}
