@@ -1,6 +1,6 @@
 """One-time setup so GitHub Actions can publish scamcatch.io. Python 3.11+, standard library only, plus the AWS CLI.
 
-Run it with "Set Up GitHub Publishing.cmd" in the repository root. It deploys the scamcatch-github-publish stack
+Run "python website/scamcatch/infra/setup_github_publish.py" from the repository root. It deploys the scamcatch-github-publish stack
 (infra/github-publish.json): GitHub's OIDC sign-in, if the account doesn't have it yet, and a role that only
 ScoobyXD/Scamcatch main can use, limited to uploading to the site bucket and clearing the CloudFront cache.
 No AWS keys are created or stored. Results go to infra/github-publish-setup-log.txt.
