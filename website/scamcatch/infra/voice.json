@@ -1,0 +1,94 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ScamCatch live voice for scamcatch.io: a Lambda function URL behind CloudFront /api/*, with a daily call limit.",
+  "Parameters": {
+    "OriginToken": { "Type": "String", "NoEcho": true, "MinLength": 32, "Description": "Shared value CloudFront sends as X-ScamCatch-Origin." },
+    "SecretArn": { "Type": "String", "Description": "Secrets Manager ARN of the OpenAI key." },
+    "SecretRegion": { "Type": "String" },
+    "SecretJsonField": { "Type": "String", "Default": "" },
+    "AllowedOrigins": { "Type": "String", "Default": "https://scamcatch.io,https://www.scamcatch.io" },
+    "DailyLimit": { "Type": "Number", "Default": 50, "MinValue": 1 },
+    "StartGapSeconds": { "Type": "Number", "Default": 10, "MinValue": 1 }
+  },
+  "Resources": {
+    "UsageTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "scamcatch-voice-usage",
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [{ "AttributeName": "day", "AttributeType": "S" }],
+        "KeySchema": [{ "AttributeName": "day", "KeyType": "HASH" }],
+        "TimeToLiveSpecification": { "AttributeName": "expires_at", "Enabled": true },
+        "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": { "LogGroupName": "/aws/lambda/scamcatch-voice", "RetentionInDays": 14 }
+    },
+    "Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [{ "Effect": "Allow", "Principal": { "Service": "lambda.amazonaws.com" }, "Action": "sts:AssumeRole" }]
+        },
+        "Policies": [{
+          "PolicyName": "scamcatch-voice",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              { "Effect": "Allow", "Action": ["logs:CreateLogStream", "logs:PutLogEvents"], "Resource": { "Fn::Sub": "${LogGroup.Arn}" } },
+              { "Effect": "Allow", "Action": "secretsmanager:GetSecretValue", "Resource": { "Ref": "SecretArn" } },
+              { "Effect": "Allow", "Action": ["dynamodb:UpdateItem", "dynamodb:GetItem"], "Resource": { "Fn::GetAtt": ["UsageTable", "Arn"] } }
+            ]
+          }
+        }],
+        "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
+      }
+    },
+    "Function": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": "LogGroup",
+      "Properties": {
+        "FunctionName": "scamcatch-voice",
+        "Description": "ScamCatch website live voice: creates one OpenAI voice session per call.",
+        "Runtime": "python3.12",
+        "Handler": "index.handler",
+        "Timeout": 30,
+        "MemorySize": 256,
+        "Role": { "Fn::GetAtt": ["Role", "Arn"] },
+        "Code": { "ZipFile": "def handler(event, context):\n    return {'statusCode': 503, 'body': '{\"error\": \"Live voice is being set up.\"}'}\n" },
+        "Environment": {
+          "Variables": {
+            "ORIGIN_TOKEN": { "Ref": "OriginToken" },
+            "ALLOWED_ORIGINS": { "Ref": "AllowedOrigins" },
+            "USAGE_TABLE": { "Ref": "UsageTable" },
+            "DAILY_LIMIT": { "Ref": "DailyLimit" },
+            "START_GAP_SECONDS": { "Ref": "StartGapSeconds" },
+            "SECRET_ID": { "Ref": "SecretArn" },
+            "SECRET_REGION": { "Ref": "SecretRegion" },
+            "SECRET_JSON_FIELD": { "Ref": "SecretJsonField" }
+          }
+        },
+        "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
+      }
+    },
+    "FunctionUrl": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": { "TargetFunctionArn": { "Fn::GetAtt": ["Function", "Arn"] }, "AuthType": "NONE" }
+    },
+    "UrlInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": { "FunctionName": { "Ref": "Function" }, "Action": "lambda:InvokeFunctionUrl", "Principal": "*", "FunctionUrlAuthType": "NONE" }
+    },
+    "FunctionInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": { "FunctionName": { "Ref": "Function" }, "Action": "lambda:InvokeFunction", "Principal": "*", "InvokedViaFunctionUrl": true }
+    }
+  },
+  "Outputs": {
+    "FunctionName": { "Value": { "Ref": "Function" } },
+    "FunctionUrl": { "Value": { "Fn::GetAtt": ["FunctionUrl", "FunctionUrl"] } }
+  }
+}

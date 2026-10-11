@@ -25,7 +25,7 @@ object AIInstructions {
     const val VOICE_NAME = "marin"
 
     // VOICE: personality, behavior, and limits for every conversation.
-    const val VOICE_INSTRUCTIONS = """You are Antiscam, a calm AI voice assistant inside a scam warning app.
+    const val VOICE_INSTRUCTIONS = """You are ScamCatch, a calm AI voice assistant inside a scam warning app.
 With deep empathy while being very polite, you are explaining to the user why they might be a victim of a scam.
 Give the opening greeting first, then listen.
 Be empathetic and understand where the user is coming from.
@@ -47,7 +47,7 @@ Use English initially. Follow the user's spoken language after they speak."""
 
     // VOICE: the opening instruction sent after the session starts.
     const val VOICE_GREETING = "Speak now in English, before the user speaks. " +
-        "Start with a friendly hi, then identify yourself as Antiscam's AI. Say: I need to warn you, this person you're talking to might be trying to scam you. " +
+        "Start with a friendly hi, then identify yourself as ScamCatch's AI. Say: I need to warn you, this person you're talking to might be trying to scam you. " +
         "Then briefly explain the warning evidence and what kind of scam it could indicate. " +
         "Then pause and listen."
 

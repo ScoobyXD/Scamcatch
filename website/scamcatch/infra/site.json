@@ -4,11 +4,14 @@
   "Parameters": {
     "CertificateArn": { "Type": "String", "Default": "" },
     "DomainName": { "Type": "String", "Default": "scamcatch.io" },
-    "RedirectDomainName": { "Type": "String", "Default": "" }
+    "RedirectDomainName": { "Type": "String", "Default": "" },
+    "VoiceOriginDomain": { "Type": "String", "Default": "", "Description": "Host of the scamcatch-voice Lambda function URL. Empty turns the /api route off." },
+    "VoiceOriginToken": { "Type": "String", "Default": "", "NoEcho": true, "Description": "Value CloudFront sends as X-ScamCatch-Origin to the voice function." }
   },
   "Conditions": {
     "HasCustomDomain": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "CertificateArn" }, ""] }] },
-    "HasRedirectDomain": { "Fn::And": [{ "Condition": "HasCustomDomain" }, { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "RedirectDomainName" }, ""] }] }] }
+    "HasRedirectDomain": { "Fn::And": [{ "Condition": "HasCustomDomain" }, { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "RedirectDomainName" }, ""] }] }] },
+    "HasVoice": { "Fn::Not": [{ "Fn::Equals": [{ "Ref": "VoiceOriginDomain" }, ""] }] }
   },
   "Resources": {
     "SiteBucket": {
@@ -71,12 +74,22 @@
           "HttpVersion": "http2and3", "IPV6Enabled": true, "PriceClass": "PriceClass_100",
           "Aliases": { "Fn::If": ["HasRedirectDomain", [{ "Ref": "DomainName" }, { "Fn::Sub": "www.${DomainName}" }, { "Ref": "RedirectDomainName" }, { "Fn::Sub": "www.${RedirectDomainName}" }], { "Fn::If": ["HasCustomDomain", [{ "Ref": "DomainName" }, { "Fn::Sub": "www.${DomainName}" }], { "Ref": "AWS::NoValue" }] }] },
           "ViewerCertificate": { "Fn::If": ["HasCustomDomain", { "AcmCertificateArn": { "Ref": "CertificateArn" }, "SslSupportMethod": "sni-only", "MinimumProtocolVersion": "TLSv1.2_2021" }, { "CloudFrontDefaultCertificate": true }] },
-          "Origins": [{
+          "Origins": { "Fn::If": ["HasVoice", [{
             "Id": "ScamCatchS3",
             "DomainName": { "Fn::GetAtt": ["SiteBucket", "RegionalDomainName"] },
             "OriginAccessControlId": { "Ref": "OriginAccess" },
             "S3OriginConfig": { "OriginAccessIdentity": "" }
-          }],
+          }, {
+            "Id": "ScamCatchVoice",
+            "DomainName": { "Ref": "VoiceOriginDomain" },
+            "CustomOriginConfig": { "OriginProtocolPolicy": "https-only", "OriginSSLProtocols": ["TLSv1.2"], "HTTPPort": 80, "HTTPSPort": 443, "OriginReadTimeout": 30 },
+            "OriginCustomHeaders": [{ "HeaderName": "X-ScamCatch-Origin", "HeaderValue": { "Ref": "VoiceOriginToken" } }]
+          }], [{
+            "Id": "ScamCatchS3",
+            "DomainName": { "Fn::GetAtt": ["SiteBucket", "RegionalDomainName"] },
+            "OriginAccessControlId": { "Ref": "OriginAccess" },
+            "S3OriginConfig": { "OriginAccessIdentity": "" }
+          }]] },
           "DefaultCacheBehavior": {
             "TargetOriginId": "ScamCatchS3", "ViewerProtocolPolicy": "redirect-to-https",
             "AllowedMethods": ["GET", "HEAD"], "CachedMethods": ["GET", "HEAD"], "Compress": true,
@@ -84,7 +97,14 @@
             "MinTTL": 0, "DefaultTTL": 300, "MaxTTL": 86400,
             "ResponseHeadersPolicyId": { "Ref": "ResponseHeaders" },
             "FunctionAssociations": { "Fn::If": ["HasRedirectDomain", [{ "EventType": "viewer-request", "FunctionARN": { "Fn::GetAtt": ["RedirectFunction", "FunctionMetadata.FunctionARN"] } }], { "Ref": "AWS::NoValue" }] }
-          }
+          },
+          "CacheBehaviors": { "Fn::If": ["HasVoice", [{
+            "PathPattern": "/api/*", "TargetOriginId": "ScamCatchVoice", "ViewerProtocolPolicy": "https-only",
+            "AllowedMethods": ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"], "CachedMethods": ["GET", "HEAD"], "Compress": false,
+            "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+            "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
+            "ResponseHeadersPolicyId": { "Ref": "ResponseHeaders" }
+          }], { "Ref": "AWS::NoValue" }] }
         },
         "Tags": [{ "Key": "Project", "Value": "ScamCatch" }]
       }

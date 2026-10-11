@@ -1,0 +1,17 @@
+2026-10-10 22:28:24  1/5 Building the voice package
+2026-10-10 22:28:24  Built the voice package (6 KB) with model gpt-live-1, voice marin.
+2026-10-10 22:28:24  2/5 Deploying the voice stack (function, daily call counter, permissions)
+2026-10-10 22:28:25  Created a new CloudFront route token.
+2026-10-10 22:29:34  Voice function URL host: s3jpy2xh7dp76vpyyfbymrspzy0rmzcm.lambda-url.us-east-1.on.aws
+2026-10-10 22:29:34  3/5 Uploading the function code
+2026-10-10 22:29:37  Function code is live.
+2026-10-10 22:29:39  The function reads the OpenAI key. Calls today: 0 of 50.
+2026-10-10 22:29:39  4/5 Adding the /api route to scamcatch-site (CloudFront updates can take several minutes)
+2026-10-10 22:29:41  Keeping site settings: DomainName=scamcatch.io, RedirectDomainName=scamcatchtech.com, CertificateArn=arn:aws:acm:us-east-1:686458136219:certificate/5d8de856-f052-4896-91ec-3adb4f8afc72
+2026-10-10 22:31:25  Site stack updated.
+2026-10-10 22:31:25  5/5 Checking the live endpoint
+2026-10-10 22:31:25  Checking https://scamcatch.io/api/voice/session (no call is started; this request has no WebRTC offer).
+2026-10-10 22:31:26  Voice endpoint answers through CloudFront: HTTP 400.
+2026-10-10 22:31:26  Requests from other websites are refused: HTTP 403.
+
+2026-10-10 22:31:26  DONE. Live voice is on at https://scamcatch.io with up to 50 calls a day.

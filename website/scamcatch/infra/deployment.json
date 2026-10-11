@@ -14,6 +14,7 @@
   "domainPrivacyAutoRenew": false,
   "awsProfile": "mangorts-dev",
   "awsRegion": "us-east-1",
+  "voiceKeySecret": { "secretId": "arn:aws:secretsmanager:us-west-1:686458136219:secret:mangorts/dev/openai-api-key-EaABNe", "region": "us-west-1", "jsonField": "" },
   "stackName": "scamcatch-site",
   "bucket": "scamcatch-site-686458136219",
   "distributionId": "E1FTFPRB048HY",

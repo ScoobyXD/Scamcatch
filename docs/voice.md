@@ -4,7 +4,7 @@
 
 1. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) is the single source for all Jev questions and voice prompts.
 2. It contains the voice system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary. It also defines model settings and the Jev threshold.
-3. The debug build compiles this Kotlin file directly. It uses no runtime parser or generated instruction copy.
+3. The debug build compiles this Kotlin file directly. The website server parses its voice constants at startup. Neither uses a generated instruction copy.
 4. Stop the run after edits. Build, install, and restart Antiscam. Restore or enter the required keys before another run. Edits do not reload live.
 5. Ask the user to audit any new Jev question before adding it.
 
@@ -50,3 +50,20 @@
 38. Remember on this phone is optional and off by default. Saved keys use Android Keystore encryption and stay outside Android backups.
 39. Restore saved phone keys when the app process starts. A newer key entry or clear action takes priority over restoration.
 40. If Android blocks the warning, keep capture paused. Open the notification or select Return to scam warning in Antiscam.
+
+## Website voice rules
+
+1. `Start Website.cmd` runs [website/scamcatch/server.py](../website/scamcatch/server.py). It serves the site at http://localhost:5180 and creates voice sessions at `POST /api/voice/session`.
+2. The server reads the voice model, voice name, instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary from AIInstructions.kt at startup. Restart it after edits.
+3. The server reads the OpenAI key from AWS Secrets Manager with the AWS CLI, using `voiceKeySecret` and `awsProfile` in [deployment.json](../website/scamcatch/infra/deployment.json). It keeps the key in memory only.
+4. The secret holds a raw key or JSON. JSON uses `jsonField`, or the first value that starts with `sk-` when `jsonField` is empty.
+5. The key never reaches the browser, logs, URLs, or error text. When OpenAI rejects the key, the next call reads the secret again.
+6. The browser sends its SDP offer and `ScamCatchDemo.context()`. The server frames the chat as screen evidence like the app, bounded to 6,000 characters.
+7. The server returns only the SDP answer, greeting, and no-backend commentary. Errors return a short message. The server console shows only safe identifiers.
+8. The server accepts local same-origin requests up to 32 KB and starts at most one session every 10 seconds. It never retries session creation.
+9. [live.js](../website/scamcatch/public/live.js) follows the LiveVoice connection sequence, events, timeouts, greeting, and delegation commentary.
+10. Each website call ends after 3 minutes. Ending the call, leaving the page, or hiding the tab stops the microphone and playback immediately.
+11. Captions show `session.output_transcript.delta` text. A new caption starts after the user speaks or the voice pauses.
+12. The voice calls itself ScamCatch on the website and in the app.
+13. On scamcatch.io the scamcatch-voice Lambda (website/scamcatch/infra/voice/handler.py) is the backend: CloudFront sends /api/* to its function URL with a shared X-ScamCatch-Origin token. It reads the same secret, allows 50 calls per UTC day and one new call every 10 seconds, and is deployed by `Deploy Voice.cmd`.
+14. Add `?voice=<name>` to the page address to try another built-in OpenAI voice. The server accepts only built-in voice names. `VOICE_NAME` stays the default.
