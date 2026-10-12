@@ -4,7 +4,7 @@
    fly to three icons in the middle of the country (a bank, the authorities, trusted contacts), and each card row shows
    "Sent" as its trace lands; 4. trace & investigate to help get back lost funds: a magenta-to-violet trail, labeled "Trace"
    at its start, hops from the phone straight back toward the ocean the scam came across, through three crypto wallets,
-   and ends at a magnifying glass: investigating. Scams come across the Pacific (left) or the Atlantic (right), never from below. */
+   and ends at a magnifying glass: investigate. Scams come across the Pacific (left) or the Atlantic (right), never from below. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;
@@ -69,7 +69,7 @@
   };
   // a person stands at (x, y) by their feet and reaches about 40 units up and 25 to the side, counting the phone
   const nearHub = (x, y) => x + 18 > HUB_ZONE.l && x - 28 < HUB_ZONE.r && y > HUB_ZONE.t && y - 44 < HUB_ZONE.b;
-  const COLORS = { person: '196,204,232', screen: '244,194,122', scam: '255,111,97', catch: '122,176,255', trace: '236,56,255', traceDeep: '124,92,255' };
+  const COLORS = { person: '196,204,232', screen: '244,194,122', scam: '255,46,76', scamDeep: '255,122,31', catch: '122,176,255', trace: '236,56,255', traceDeep: '124,92,255' };
 
   const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
   const ease = (p) => 1 - (1 - p) ** 3;
@@ -127,7 +127,7 @@
     mx = sr.left - st.left + (sr.width - VW * k) / 2;
     my = sr.top - st.top + (sr.height - VH * k) / 2;
     S = Math.max(13, Math.min(28, 38 * k));
-    sprites = { screen: glow(COLORS.screen, 0.32), scam: glow(COLORS.scam, 0.55), catch: glow(COLORS.catch, 0.5), trace: glow(COLORS.trace, 0.6) };
+    sprites = { screen: glow(COLORS.screen, 0.32), scam: glow(COLORS.scam, 0.65), catch: glow(COLORS.catch, 0.5), trace: glow(COLORS.trace, 0.6) };
     rasterLogo();
     if (shown) placeSpot(shown, true);
     return true;
@@ -203,7 +203,7 @@
 
     // the person: shoulders and head
     ctx.globalAlpha = show;
-    const skin = taken ? `rgba(255,166,156,${0.6 + 0.3 * Math.sin(t * 22 + p.seed) ** 2})` : `rgba(${COLORS.person},.8)`;
+    const skin = taken ? `rgba(255,150,160,${0.6 + 0.3 * Math.sin(t * 22 + p.seed) ** 2})` : `rgba(${COLORS.person},.8)`;
     ctx.fillStyle = skin;
     ctx.beginPath();
     ctx.moveTo(x - S * 0.36, y);
@@ -461,19 +461,24 @@
     const enter = Math.min(1, u / 0.12);
     let [px, py] = along(q, u0);
     ctx.lineCap = 'round';
+    // the tail runs from orange into red at the head, each piece over a soft glow
+    const tail = COLORS.scamDeep.split(',').map(Number), head = COLORS.scam.split(',').map(Number);
     for (let i = 1; i <= n; i++) {
-      const [nx, ny] = along(q, u0 + ((u - u0) * i) / n);
-      ctx.strokeStyle = `rgba(${COLORS.scam},${(i / n) * 0.85 * enter})`;
-      ctx.lineWidth = 0.7 + (i / n) * 2.2;
-      ctx.beginPath(); ctx.moveTo(X(px), Y(py)); ctx.lineTo(X(nx), Y(ny)); ctx.stroke();
+      const [nx, ny] = along(q, u0 + ((u - u0) * i) / n), f = i / n;
+      const rgb = tail.map((c, j) => Math.round(c + (head[j] - c) * f)).join(',');
+      [[3.2, 0.2], [1, 0.95]].forEach(([wide, alpha]) => {
+        ctx.strokeStyle = `rgba(${rgb},${f * alpha * enter})`;
+        ctx.lineWidth = (0.7 + f * 2.2) * wide;
+        ctx.beginPath(); ctx.moveTo(X(px), Y(py)); ctx.lineTo(X(nx), Y(ny)); ctx.stroke();
+      });
       px = nx; py = ny;
     }
     // the head is the scam message itself: a red chat bubble
     const hx = X(px), hy = Y(py);
     const bw = Math.max(7, S * 0.46), bh = bw * 0.72;
-    stamp(sprites.scam, hx, hy, 0.6, enter);
+    stamp(sprites.scam, hx, hy, 0.8, enter);
     ctx.globalAlpha = enter;
-    ctx.fillStyle = '#ff6f61';
+    ctx.fillStyle = `rgb(${COLORS.scam})`;
     roundRect(hx - bw / 2, hy - bh / 2, bw, bh, bh * 0.38); ctx.fill();
     ctx.beginPath(); ctx.moveTo(hx - bw * 0.2, hy + bh / 2 - 0.5); ctx.lineTo(hx - bw * 0.34, hy + bh / 2 + bh * 0.35); ctx.lineTo(hx + bw * 0.02, hy + bh / 2 - 0.5); ctx.fill();
     ctx.fillStyle = 'rgba(255,236,232,.95)';
@@ -496,7 +501,7 @@
       return [px + (edge - px) * f, Math.max(m, Math.min(h - m * 1.4, py + off))];
     });
   }
-  // a dark pill with a magenta outline and text, for the trail's "Trace" start and "Investigating" end
+  // a dark pill with a magenta outline and text, for the trail's "Trace" start and "Investigate" end
   function tag(label, x, y) {
     ctx.font = `700 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -581,7 +586,7 @@
     if (got) {
       // its label once the trail gets there, below the tile unless that runs off the map
       const gap = es / 2 + Math.max(10, S * 0.45);
-      tag('Investigating', ex, ey + gap + Math.max(16, S * 0.65) / 2 > h - 2 ? ey - gap : ey + gap);
+      tag('Investigate', ex, ey + gap + Math.max(16, S * 0.65) / 2 > h - 2 ? ey - gap : ey + gap);
     }
     ctx.globalAlpha = 1;
     // the money moving between stops
@@ -728,7 +733,7 @@
     const left = spot.offsetLeft, top = spot.offsetTop, cw = spot.offsetWidth * spotScale, ch = spot.offsetHeight * spotScale;
     const ex = left + cw / 2 < px ? left + cw : left;
     const ey = Math.max(top + 14, Math.min(top + ch - 14, py));
-    ctx.strokeStyle = spot.dataset.phase !== 'scam' ? 'rgba(122,176,255,.65)' : 'rgba(255,111,97,.65)';
+    ctx.strokeStyle = spot.dataset.phase !== 'scam' ? 'rgba(122,176,255,.65)' : `rgba(${COLORS.scam},.7)`;
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(px + (ex < px ? -S * 0.3 : S * 0.3), py); ctx.stroke();
