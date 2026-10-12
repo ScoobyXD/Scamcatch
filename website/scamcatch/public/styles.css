@@ -482,8 +482,8 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .about-copy h2{font-size:clamp(2.2rem,1rem + 5svh,4rem);line-height:1}
 .about-goal{margin-top:clamp(1.2rem,2.6svh,1.8rem);font-family:var(--display);font-size:clamp(1.6rem,.9rem + 3svh,2.6rem);line-height:1.15;color:var(--paper)}
 .about-goal strong{font-weight:600;color:var(--lamp)}
-.about-belief{margin-top:.8rem;max-width:34rem;font-family:var(--display);font-size:clamp(1.2rem,.8rem + 1.8svh,1.65rem);line-height:1.3;color:var(--mist)}
-.about-intro{margin-top:clamp(1.2rem,2.6svh,1.8rem);max-width:34rem;font-size:.88rem;color:var(--mist)}
+.about-belief{margin-top:.8rem;max-width:34rem;font-family:var(--display);font-size:clamp(1.2rem,.8rem + 1.8svh,1.65rem);line-height:1.3;color:var(--paper)}
+.about-intro{margin-top:clamp(1.2rem,2.6svh,1.8rem);max-width:34rem;font-size:.88rem;color:var(--paper)}
 .site-footer{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding-top:1.4rem;border-top:1px solid var(--line);color:var(--mist);font-size:.88rem}
 .site-footer .brand{color:var(--paper);font-size:1.25rem}
 .site-footer .brand-logo{width:36px;height:36px;border-radius:8px}
