@@ -2,9 +2,9 @@
    overseas, lands on a phone and takes it over (it turns red), and the card follows every one of them in four steps, as
    does the timeline beside the headline: 1. the scam message; 2. ScamCatch intervenes and warns the person; 3. reports
    fly to three icons in the middle of the country (a bank, the authorities, trusted contacts), and each card row shows
-   "Sent" as its trace lands; 4. trace & investigate to help get back lost funds: a violet trail hops from the phone
-   straight back toward the ocean the scam came across, through three crypto wallets, and ends at a magnifying glass:
-   investigating. Scams come across the Pacific (left) or the Atlantic (right), never from below. */
+   "Sent" as its trace lands; 4. trace & investigate to help get back lost funds: a magenta-to-violet trail, labeled "Trace"
+   at its start, hops from the phone straight back toward the ocean the scam came across, through three crypto wallets,
+   and ends at a magnifying glass: investigating. Scams come across the Pacific (left) or the Atlantic (right), never from below. */
 (() => {
   const stage = document.querySelector('.vision-map');
   if (!stage) return;
@@ -69,7 +69,7 @@
   };
   // a person stands at (x, y) by their feet and reaches about 40 units up and 25 to the side, counting the phone
   const nearHub = (x, y) => x + 18 > HUB_ZONE.l && x - 28 < HUB_ZONE.r && y > HUB_ZONE.t && y - 44 < HUB_ZONE.b;
-  const COLORS = { person: '196,204,232', screen: '244,194,122', scam: '255,111,97', catch: '122,176,255', trace: '192,132,252' };
+  const COLORS = { person: '196,204,232', screen: '244,194,122', scam: '255,111,97', catch: '122,176,255', trace: '236,56,255', traceDeep: '124,92,255' };
 
   const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
   const ease = (p) => 1 - (1 - p) ** 3;
@@ -496,6 +496,20 @@
       return [px + (edge - px) * f, Math.max(m, Math.min(h - m * 1.4, py + off))];
     });
   }
+  // a dark pill with a magenta outline and text, for the trail's "Trace" start and "Investigating" end
+  function tag(label, x, y) {
+    ctx.font = `700 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const th = Math.max(16, S * 0.65), tw = ctx.measureText(label).width + 16;
+    const tx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, x)), ty = Math.max(th / 2 + 2, Math.min(h - th / 2 - 2, y));
+    ctx.fillStyle = 'rgba(12,17,36,.92)';
+    ctx.strokeStyle = `rgba(${COLORS.trace},.7)`;
+    ctx.lineWidth = 1;
+    roundRect(tx - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = `rgb(${COLORS.trace})`;
+    ctx.fillText(label, tx, ty + 0.5);
+    ctx.textBaseline = 'alphabetic';
+  }
   function drawTrace(p, t) {
     const a = t - p.ev.land - TRACE_AT - 0.15;
     if (a < 0) return;
@@ -506,34 +520,41 @@
     const part = done < TRACE_STOPS.length ? flightEase(clamp01((a - done * HOP) / HOP)) : 0;
     for (let i = 0; i < done; i++) traceDots[i].classList.add('is-lit');
     if (done === TRACE_STOPS.length && !p.ev.traced) { p.ev.traced = true; spot.classList.add('has-traced'); }
-    // the trail so far
-    ctx.strokeStyle = `rgba(${COLORS.trace},${0.85 * fade})`;
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i <= done; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    // the trail so far: a soft glow under a dashed line that runs from magenta at the phone into violet at the edge
+    const [ex, ey] = pts[pts.length - 1];
+    const ink = ctx.createLinearGradient(pts[0][0], pts[0][1], ex, ey);
+    ink.addColorStop(0, `rgba(${COLORS.trace},${fade})`); ink.addColorStop(1, `rgba(${COLORS.traceDeep},${fade})`);
     let head = null;
     if (part > 0) {
       const [x0, y0] = pts[done], [x1, y1] = pts[done + 1];
       head = [x0 + (x1 - x0) * part, y0 + (y1 - y0) * part];
-      ctx.lineTo(head[0], head[1]);
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const trail = [...pts.slice(0, done + 1), ...(head ? [head] : [])];
+    ctx.strokeStyle = ink;
+    ctx.lineCap = 'round';
+    [[6, 0.22, []], [2.2, 1, [5, 4]]].forEach(([lw, alpha, dash]) => {
+      ctx.globalAlpha = alpha; ctx.lineWidth = lw; ctx.setLineDash(dash);
+      ctx.beginPath(); trail.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+    });
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    // its start, labeled once the trail sets off: below the line and past the person, on the side it heads to
+    const [px, py] = pts[0];
+    ctx.globalAlpha = fade * clamp01(a / 0.25);
+    tag('Trace', px + (p.ev.side === 'west' ? -1 : 1) * S * 1.4, py + S * 0.95);
+    ctx.globalAlpha = 1;
     // the wallets: small diamonds that light up as the trail reaches them
     for (let i = 0; i < TRACE_STOPS.length - 1; i++) {
       const [x, y] = pts[i + 1], lit = i < done, r = S * 0.2;
       if (lit) stamp(sprites.trace, x, y, 0.45, fade);
       ctx.globalAlpha = fade * (lit ? 1 : 0.55);
-      ctx.fillStyle = lit ? '#c084fc' : '#10162b';
-      ctx.strokeStyle = '#c084fc';
+      ctx.fillStyle = lit ? `rgb(${COLORS.trace})` : '#10162b';
+      ctx.strokeStyle = `rgb(${COLORS.trace})`;
       ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    // the investigation: a violet tile with a magnifying glass that lights up when the trail reaches it
-    const [ex, ey] = pts[pts.length - 1], es = Math.max(18, S * 0.95), got = done === TRACE_STOPS.length;
+    // the investigation: a tile with a magnifying glass that lights up magenta into violet when the trail reaches it
+    const es = Math.max(18, S * 0.95), got = done === TRACE_STOPS.length;
     const since = a - TRACE_STOPS.length * HOP;
     if (got) {
       stamp(sprites.trace, ex, ey, (es / S) * 0.8, fade);
@@ -545,35 +566,28 @@
       }
     }
     ctx.globalAlpha = fade * (got ? 1 : 0.6);
-    ctx.fillStyle = got ? '#c084fc' : '#10162b';
-    ctx.strokeStyle = '#c084fc';
+    const lit = ctx.createLinearGradient(ex - es / 2, ey - es / 2, ex + es / 2, ey + es / 2);
+    lit.addColorStop(0, `rgb(${COLORS.trace})`); lit.addColorStop(1, `rgb(${COLORS.traceDeep})`);
+    ctx.fillStyle = got ? lit : '#10162b';
+    ctx.strokeStyle = got ? lit : `rgb(${COLORS.trace})`;
     ctx.lineWidth = 1.4;
     roundRect(ex - es / 2, ey - es / 2, es, es, es * 0.26); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = got ? '#10162b' : '#c084fc';
+    ctx.strokeStyle = got ? '#fff' : `rgb(${COLORS.trace})`;
     ctx.lineWidth = Math.max(1.4, es * 0.09);
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(ex - es * 0.06, ey - es * 0.06, es * 0.19, 0, TAU); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(ex + es * 0.08, ey + es * 0.08); ctx.lineTo(ex + es * 0.24, ey + es * 0.24); ctx.stroke();
     ctx.globalAlpha = fade;
     if (got) {
-      // its label once the trail gets there
-      ctx.font = `600 ${Math.max(10, Math.min(13, S * 0.46))}px "Hanken Grotesk", system-ui, sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const label = 'Investigating', th = Math.max(16, S * 0.65);
-      let ty = ey + es / 2 + Math.max(10, S * 0.45);
-      if (ty + th / 2 > h - 2) ty = ey - es / 2 - Math.max(10, S * 0.45);
-      const tw = ctx.measureText(label).width + 14, tx = Math.max(tw / 2 + 2, Math.min(w - tw / 2 - 2, ex));
-      ctx.fillStyle = 'rgba(12,17,36,.9)';
-      roundRect(tx - tw / 2, ty - th / 2, tw, th, th / 2); ctx.fill();
-      ctx.fillStyle = '#c084fc';
-      ctx.fillText(label, tx, ty + 0.5);
-      ctx.textBaseline = 'alphabetic';
+      // its label once the trail gets there, below the tile unless that runs off the map
+      const gap = es / 2 + Math.max(10, S * 0.45);
+      tag('Investigating', ex, ey + gap + Math.max(16, S * 0.65) / 2 > h - 2 ? ey - gap : ey + gap);
     }
     ctx.globalAlpha = 1;
     // the money moving between stops
     if (head) {
       stamp(sprites.trace, head[0], head[1], 0.55, 1);
-      ctx.fillStyle = '#efdcff';
+      ctx.fillStyle = '#ffe2ff';
       ctx.beginPath(); ctx.arc(head[0], head[1], Math.max(2.6, S * 0.12), 0, TAU); ctx.fill();
     }
   }

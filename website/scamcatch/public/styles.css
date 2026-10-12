@@ -10,7 +10,8 @@
   --catch:#7ab0ff;     /* the ScamCatch voice */
   --catch-deep:#3d6df0;
   --alert:#ff6f61;     /* the warning, used once */
-  --trace:#c084fc;     /* tracing the scammer's crypto */
+  --trace:#ec38ff;     /* tracing the scammer's crypto: hot magenta into... */
+  --trace-deep:#7c5cff;  /* ...electric violet */
   --paper:#eef0f7;
   --mist:#a9b1cc;
   --line:rgba(238,240,247,.12);
@@ -401,11 +402,11 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .spot-trace{display:grid;gap:.45rem;max-height:0;overflow:hidden;opacity:0;transition:max-height .45s ease,opacity .3s ease}
 .spot[data-phase="traced"] .spot-trace{max-height:8rem;opacity:1}
 .trace-chain{position:relative;display:flex;justify-content:space-between;align-items:center;padding:.15rem .35rem}
-.trace-chain::before{content:"";position:absolute;left:.8rem;right:.8rem;top:50%;border-top:1.5px dashed rgba(192,132,252,.5)}
+.trace-chain::before{content:"";position:absolute;left:.8rem;right:.8rem;top:50%;border-top:1.5px dashed rgba(236,56,255,.6)}
 .trace-chain i{position:relative;width:11px;height:11px;transform:rotate(45deg);border:1.5px solid var(--trace);background:var(--night);transition:background .15s ease,box-shadow .15s ease}
 .trace-chain i.trace-x{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;transform:none;color:var(--trace)}
 .trace-chain svg{width:15px;height:15px;fill:currentColor}
-.trace-chain i.is-lit{background:var(--trace);box-shadow:0 0 10px rgba(192,132,252,.7);color:var(--night)}
+.trace-chain i.is-lit{border-color:transparent;background:linear-gradient(135deg,var(--trace),var(--trace-deep));box-shadow:0 0 12px rgba(236,56,255,.75);color:#fff}
 .trace-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.55rem;font-size:.82rem;line-height:1.25;color:var(--paper)}
 .trace-row b{font-size:.7rem;font-weight:700;white-space:nowrap;color:var(--trace);opacity:0;transition:opacity .2s ease}
 .spot.has-traced .trace-row b{opacity:1}
@@ -431,8 +432,8 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .timeline-trio i.is-hit{background:#5f8dff;box-shadow:0 0 0 3px rgba(122,176,255,.28),0 0 14px rgba(122,176,255,.75);animation:trio-hop .55s cubic-bezier(.3,1.5,.5,1)}
 @keyframes trio-hop{0%{transform:none}35%{transform:translateY(-7px) scale(1.14)}100%{transform:none}}
 @media (prefers-reduced-motion: reduce){.timeline-trio i.is-hit{animation:none}}
-/* step 4: trace crypto, a violet tile with a trail of wallets */
-.timeline-trace{background:var(--trace);color:var(--night)}
+/* step 4: trace crypto, a magenta-to-violet tile with a trail of wallets */
+.timeline-trace{background:linear-gradient(135deg,var(--trace),var(--trace-deep));color:#fff}
 .timeline-trace svg{width:28px;height:28px;fill:currentColor}
 .timeline-num{position:absolute;top:-8px;left:-8px;display:grid;place-items:center;width:21px;height:21px;border-radius:50%;border:2px solid var(--night);background:var(--c);color:var(--night);font-size:.7rem;font-weight:800;line-height:1}
 .timeline li p{max-width:none;font-size:.95rem;line-height:1.38;color:var(--mist);transition:color .3s ease}
@@ -476,6 +477,10 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .about{margin:auto 0;display:grid;grid-template-columns:minmax(0,clamp(13rem,40svh,22rem)) minmax(0,38rem);gap:clamp(2rem,5vw,5rem);align-items:center}
 .about-photo{display:block;width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;border-radius:24px;box-shadow:0 30px 60px -30px rgba(0,0,0,.8)}
 .about-copy h2{font-size:clamp(2.2rem,1rem + 5svh,4rem);line-height:1}
+.about-intro{margin-top:1rem;max-width:34rem;color:var(--mist)}
+.about-statement{margin:clamp(1.4rem,3svh,2.2rem) 0 0;padding-left:1.2rem;border-left:3px solid var(--lamp);font-family:var(--display);font-size:clamp(1.35rem,.8rem + 2.4svh,2.1rem);line-height:1.25;color:var(--paper)}
+.about-statement p+p{margin-top:.6em}
+.about-statement strong{font-weight:600;color:var(--lamp)}
 .site-footer{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding-top:1.4rem;border-top:1px solid var(--line);color:var(--mist);font-size:.88rem}
 .site-footer .brand{color:var(--paper);font-size:1.25rem}
 .site-footer .brand-logo{width:36px;height:36px;border-radius:8px}
