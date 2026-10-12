@@ -284,8 +284,7 @@ button{font:inherit;color:inherit}
 /* ScamCatch alert */
 .alert{position:absolute;z-index:4;top:3.55em;left:.55em;right:.55em;display:flex;flex-direction:column;gap:.2em;padding:.75em .9em .85em;border-radius:1.35em;background:rgba(246,247,250,.9);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);color:#0b0e14;box-shadow:0 1em 2.4em -.6em rgba(10,14,30,.45),0 0 0 1px rgba(255,255,255,.6) inset;transform:translateY(-130%);opacity:0;transition:transform .6s cubic-bezier(.2,.9,.25,1.1),opacity .3s}
 .alert-top{display:flex;align-items:center;gap:.45em;font-size:.78em;color:#5d6475;margin-bottom:.15em}
-.app-icon{display:grid;place-items:center;width:1.7em;height:1.7em;border-radius:.45em;background:linear-gradient(160deg,#5b8fff,#2c56d6);color:#fff}
-.app-icon svg{width:62%;height:auto}
+.app-icon{display:block;width:1.7em;height:1.7em;border-radius:.45em;flex-shrink:0}
 .app-name{font-weight:650;color:#0b0e14;margin-right:auto}
 .alert b{display:flex;align-items:center;gap:.4em;font-size:.98em;font-weight:700}
 .alert b::before{content:"";width:.55em;height:.55em;border-radius:50%;background:var(--alert);flex-shrink:0}
