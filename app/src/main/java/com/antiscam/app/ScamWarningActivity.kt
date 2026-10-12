@@ -3,6 +3,7 @@ package com.antiscam.app
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,14 +12,17 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -36,7 +40,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,12 +50,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -60,6 +67,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.antiscam.app.capture.CaptureStore
 import com.antiscam.app.capture.ScamIntervention
@@ -73,7 +81,10 @@ class ScamWarningActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setFinishOnTouchOutside(false)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         setContent {
             val incident by ScamIntervention.incident.collectAsStateWithLifecycle()
             val captureState by CaptureStore.state.collectAsStateWithLifecycle()
@@ -81,7 +92,7 @@ class ScamWarningActivity : ComponentActivity() {
                 if (incident == null) finish()
             }
             BackHandler { closeWarning() }
-            MaterialTheme(colorScheme = lightColorScheme()) {
+            MaterialTheme(colorScheme = scamCatchColors) {
                 WarningScreen(
                     status = if (closing) "Closing voice…" else captureState.voiceStatus,
                     level = voiceLevel,
@@ -118,6 +129,17 @@ class ScamWarningActivity : ComponentActivity() {
     }
 }
 
+// Colors and orb geometry follow website/scamcatch/public/styles.css.
+private val scamCatchColors = darkColorScheme(
+    primary = Color(0xFF7AB0FF),
+    secondary = Color(0xFFF4C27A),
+    background = Color(0xFF0C1124),
+    surface = Color(0xFF10162B),
+    onSurface = Color(0xFFEEF0F7),
+    onSurfaceVariant = Color(0xFFA9B1CC),
+    error = Color(0xFFFF6F61),
+)
+
 @Composable
 private fun WarningScreen(status: String, level: Float, closing: Boolean, onClose: () -> Unit) {
     var visible by rememberSaveable { mutableStateOf(false) }
@@ -130,7 +152,7 @@ private fun WarningScreen(status: String, level: Float, closing: Boolean, onClos
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.32f * entrance))
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.82f * entrance))
             .safeDrawingPadding()
             .padding(20.dp),
         contentAlignment = Alignment.Center,
@@ -146,31 +168,63 @@ private fun WarningScreen(status: String, level: Float, closing: Boolean, onClos
                 }
                 .semantics { paneTitle = "Scam warning" },
             shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF7FAF9)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .drawWithCache {
+                        val glow = Brush.radialGradient(
+                            colors = listOf(Color(0xFF2B4396), Color(0xFF17204A), Color(0xFF0D1228)),
+                            center = Offset(size.width * 0.5f, size.height * 0.48f),
+                            radius = size.height * 0.72f,
+                        )
+                        onDrawBehind { drawRect(glow) }
+                    }
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Box(Modifier.fillMaxWidth()) {
-                    Text(
-                        "ANTISCAM",
-                        modifier = Modifier.align(Alignment.CenterStart),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFF48645D),
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_scamcatch_logo),
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
+                        )
+                        Column {
+                            Text(
+                                "ScamCatch",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "SCAM INTERVENTION",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                    }
                     FilledIconButton(
                         onClick = onClose,
                         enabled = !closing,
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .size(64.dp)
+                            .size(56.dp)
                             .semantics { contentDescription = "Close warning and stop voice" },
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color(0xFFCB292F),
+                            containerColor = Color(0xFFFF4D4F),
                             contentColor = Color.White,
                             disabledContainerColor = Color(0xFFB66E71),
                             disabledContentColor = Color.White,
@@ -187,10 +241,9 @@ private fun WarningScreen(status: String, level: Float, closing: Boolean, onClos
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    AssistantFace(level)
                     Text(
                         "We believe you are being scammed",
-                        color = Color(0xFF1F3430),
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
@@ -198,19 +251,20 @@ private fun WarningScreen(status: String, level: Float, closing: Boolean, onClos
                     Text(
                         "Pause before you send money or share information.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color(0xFF425C55),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
+                    VoiceOrb(level = level, closing = closing)
                     Text(
                         status,
                         modifier = Modifier.heightIn(min = 44.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                        color = Color(0xFF006B5E),
+                        color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                     )
                     Text(
                         "Screen checks are paused. Close this warning to continue them.",
-                        color = Color(0xFF536A63),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                     )
@@ -221,51 +275,78 @@ private fun WarningScreen(status: String, level: Float, closing: Boolean, onClos
 }
 
 @Composable
-private fun AssistantFace(level: Float) {
-    val mouth by animateFloatAsState(targetValue = level.coerceIn(0f, 1f), animationSpec = tween(80), label = "voice mouth")
-    val animation = rememberInfiniteTransition(label = "assistant blink")
-    val eyes by animation.animateFloat(
-        initialValue = 1f,
+private fun VoiceOrb(level: Float, closing: Boolean) {
+    val voice by animateFloatAsState(
+        targetValue = if (closing) 0f else level.coerceIn(0f, 1f),
+        animationSpec = tween(80),
+        label = "voice waveform",
+    )
+    val animation = rememberInfiniteTransition(label = "voice orb")
+    val ripple by animation.animateFloat(
+        initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = keyframes {
-                durationMillis = 4_600
-                1f at 0
-                1f at 4_200
-                0.1f at 4_290
-                1f at 4_390
-            },
+            animation = tween(3_200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "blink",
+        label = "voice ripple",
     )
-    Canvas(Modifier.size(152.dp).semantics { contentDescription = "AI voice assistant" }) {
-        val w = size.width
-        val h = size.height
-        val ink = Color(0xFF07584E)
-        drawCircle(color = Color(0xFFD7F1E8))
-        drawCircle(color = Color(0xFFEAF9F2), radius = w * 0.36f, center = Offset(w * 0.43f, h * 0.39f))
-        val eyeHeight = h * 0.18f * eyes
-        drawRoundRect(
-            color = ink,
-            topLeft = Offset(w * 0.31f, h * 0.42f - eyeHeight / 2),
-            size = Size(w * 0.105f, eyeHeight),
-            cornerRadius = CornerRadius(w * 0.07f),
+    val breathe by animation.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(1_300), RepeatMode.Reverse),
+        label = "voice glow",
+    )
+    // This is a voice indicator, not a button. Native voice starts when the warning opens.
+    Canvas(Modifier.size(248.dp).semantics { contentDescription = "ScamCatch voice" }) {
+        val radius = size.minDimension * 0.31f
+        val blue = Color(0xFF7AB0FF)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(blue.copy(alpha = 0.4f), blue.copy(alpha = 0f)),
+                radius = size.minDimension * 0.5f,
+            ),
         )
-        drawRoundRect(
-            color = ink,
-            topLeft = Offset(w * 0.585f, h * 0.42f - eyeHeight / 2),
-            size = Size(w * 0.105f, eyeHeight),
-            cornerRadius = CornerRadius(w * 0.07f),
+        if (!closing) {
+            repeat(2) { index ->
+                val phase = (ripple + index * 0.5f) % 1f
+                drawCircle(
+                    color = blue.copy(alpha = (1f - phase) * 0.5f),
+                    radius = radius * (1f + phase * 0.5f),
+                    style = Stroke(2.dp.toPx()),
+                )
+            }
+        }
+        val coreRadius = radius * if (closing) 1f else breathe + voice * 0.06f
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to Color(0xFFE3EDFF),
+                0.24f to Color(0xFF9CC3FF),
+                0.55f to Color(0xFF5A8CFF),
+                1f to Color(0xFF2342B8),
+                center = center - Offset(coreRadius * 0.32f, coreRadius * 0.44f),
+                radius = coreRadius * 1.5f,
+            ),
+            radius = coreRadius,
         )
-        drawOval(Color(0xFFF0ADA8).copy(alpha = 0.65f), topLeft = Offset(w * 0.2f, h * 0.55f), size = Size(w * 0.14f, h * 0.065f))
-        drawOval(Color(0xFFF0ADA8).copy(alpha = 0.65f), topLeft = Offset(w * 0.66f, h * 0.55f), size = Size(w * 0.14f, h * 0.065f))
-        val mouthHeight = h * (0.045f + mouth * 0.145f)
-        drawRoundRect(
-            color = ink,
-            topLeft = Offset(w * (0.415f - mouth * 0.025f), h * 0.67f - mouthHeight / 2),
-            size = Size(w * (0.17f + mouth * 0.05f), mouthHeight),
-            cornerRadius = CornerRadius(w * 0.09f),
-        )
+        drawCircle(blue.copy(alpha = 0.7f), radius = coreRadius + 5.dp.toPx(), style = Stroke(2.dp.toPx()))
+        // The website uses seven symmetric bars at 30%, 55%, 80%, 100%, 80%, 55%, 30%.
+        repeat(7) { index ->
+            val proportion = when (index) {
+                0, 6 -> 0.3f
+                1, 5 -> 0.55f
+                2, 4 -> 0.8f
+                else -> 1f
+            }
+            val halfHeight = radius * 0.34f * proportion * (1f + voice * 0.65f)
+            val x = center.x + (index - 3) * radius * 0.1f
+            drawLine(
+                color = Color.White.copy(alpha = 0.92f),
+                start = Offset(x, center.y - halfHeight),
+                end = Offset(x, center.y + halfHeight),
+                strokeWidth = radius * 0.056f,
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }
