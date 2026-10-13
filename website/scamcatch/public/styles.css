@@ -91,11 +91,13 @@ button{font:inherit;color:inherit}
 .brand-bar{position:absolute;top:clamp(1.4rem,3vw,2.2rem);left:var(--pad);z-index:5}
 
 .demo-copy{padding-left:var(--pad);padding-right:1rem;max-width:38rem}
-.story{display:grid}
+.hero-title{font-family:var(--display);font-weight:420;font-size:clamp(2.4rem,1.2rem + 3.4vw,4.6rem);line-height:1.02;letter-spacing:-.022em;font-variation-settings:"opsz" 72;text-wrap:balance}
+.story{display:grid;margin-top:1.4rem}
 .story-line{grid-area:1/1;opacity:0;transform:translateY(.5rem);transition:opacity .6s ease,transform .6s ease;pointer-events:none}
 .story-line.is-active{opacity:1;transform:none;pointer-events:auto}
-.story-head{display:block;font-family:var(--display);font-weight:420;font-size:clamp(2.4rem,1.2rem + 3.4vw,4.6rem);line-height:1.02;letter-spacing:-.022em;font-variation-settings:"opsz" 72;text-wrap:balance}
-.story-sub{display:block;margin-top:1.25rem;max-width:27rem;font-size:clamp(1rem,.9rem + .3vw,1.15rem);color:var(--mist);line-height:1.55}
+/* each step narrates the phone in one line: a white lead-in, then the rest in gray */
+.story-line{max-width:30rem;font-size:clamp(1rem,.9rem + .3vw,1.15rem);line-height:1.55;color:var(--mist)}
+.story-head{font-weight:650;color:var(--paper)}
 
 .tracker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-top:2.6rem;max-width:30rem;font-size:.8rem;color:var(--mist)}
 .tracker li{transition:color .3s}
@@ -583,8 +585,9 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
   .brand-words{gap:.22rem}
   .brand-tag{font-size:.58rem}
   .demo-copy{padding:0 1.4rem;max-width:none}
-  .story-head{font-size:clamp(1.75rem,7.4vw,2.3rem)}
-  .story-sub{font-size:.95rem;margin-top:.6rem}
+  .hero-title{font-size:clamp(1.75rem,7.4vw,2.3rem)}
+  .story{margin-top:.6rem}
+  .story-line{font-size:.95rem}
   .progress-row{margin-top:1rem}
   .tracker{margin-top:1rem;gap:.5rem;font-size:.72rem}
   .tracker .bar{margin-bottom:.4rem}
