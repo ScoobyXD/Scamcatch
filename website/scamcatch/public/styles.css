@@ -455,20 +455,22 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 /* Stage 3: why a voice. Two zones with a line between them: a scam keeps you in emotional thinking (System 1);
    at the line ScamCatch steps in, and the voice brings in logical thinking (System 2). The steps use the vision's timeline. */
 #why{--alert:#ff2e4c;--alert-deep:#ff7a1f}
-.card-why{display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(1.25rem,3.5svh,2.25rem);background:radial-gradient(45% 60% at 22% 70%,rgba(255,46,76,.08),transparent 70%),radial-gradient(45% 60% at 80% 70%,rgba(61,109,240,.2),transparent 70%),var(--night)}
+.card-why{display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(1.5rem,4svh,2.5rem);background:radial-gradient(45% 60% at 22% 70%,rgba(255,46,76,.08),transparent 70%),radial-gradient(45% 60% at 80% 70%,rgba(61,109,240,.2),transparent 70%),var(--night)}
 .card-why.card{padding-top:clamp(1.5rem,5svh,4rem);padding-bottom:clamp(1.5rem,5svh,4rem)}
 /* from the top: the title in the top-left corner, the line right under it, the zones, then the paragraph in white across most of the width */
-.why-top{display:grid;gap:.55rem}
-.why-line{font-family:var(--display);font-size:clamp(1.5rem,.9rem + 1.3vw,2.4rem);font-weight:420;line-height:1.1;letter-spacing:-.015em;color:var(--paper);font-variation-settings:"opsz" 60;text-wrap:balance}
+.why-top{display:grid;gap:clamp(.6rem,1.6svh,1rem)}
+.card-why .tempo{margin-top:auto}
+.card-why .why-lede{margin-bottom:auto}
+.why-line{font-family:var(--display);font-size:clamp(1.3rem,.95rem + .75vw,1.9rem);font-weight:420;line-height:1.2;letter-spacing:-.015em;color:var(--paper);font-variation-settings:"opsz" 60;text-wrap:balance}
 .why-lede{max-width:68rem;font-size:clamp(1.02rem,.9rem + .3vw,1.2rem);line-height:1.55;color:var(--paper);text-wrap:pretty}
 /* rows shared across both zones and the line (subgrid): zone heading, step icons, step titles, what's said */
-.tempo{--mid:clamp(5.5rem,7vw,7.5rem);display:grid;grid-template-columns:minmax(0,1fr) var(--mid) minmax(0,1fr);grid-template-rows:repeat(4,auto);row-gap:.85rem}
-.tempo-zone{grid-row:1/-1;display:grid;grid-template-rows:subgrid;row-gap:normal;padding:1.05rem 1.1rem 1.2rem;border-radius:22px}
+.tempo{--mid:clamp(5.5rem,7vw,7.5rem);display:grid;grid-template-columns:minmax(0,1fr) var(--mid) minmax(0,1fr);grid-template-rows:repeat(4,auto);row-gap:1rem}
+.tempo-zone{grid-row:1/-1;display:grid;grid-template-rows:subgrid;row-gap:normal;padding:1.35rem 1.4rem 1.5rem;border-radius:22px}
 .tempo-fast{background:rgba(255,46,76,.06);border:1px solid rgba(255,46,76,.3)}
 .tempo-slow{background:rgba(61,109,240,.1);border:1px solid rgba(122,176,255,.32)}
 .tempo-head{display:grid;gap:.4rem;font-size:.88rem;line-height:1.35;color:var(--mist)}
 /* zone titles: "System 1" or "System 2" in the zone color, then the kind of thinking; they break between the two when narrow */
-.tempo-head b{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:.3em;font-family:var(--display);font-size:clamp(1.5rem,.3rem + 2.1vw,2.5rem);font-weight:450;line-height:1.08;letter-spacing:-.012em;color:var(--paper)}
+.tempo-head b{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:.3em;font-family:var(--display);font-size:clamp(1.4rem,.45rem + 1.6vw,2.25rem);font-weight:450;line-height:1.08;letter-spacing:-.012em;color:var(--paper)}
 .tempo-sys,.tempo-mode{white-space:nowrap}
 .tempo-fast .tempo-sys{color:#ff9aa8}
 .tempo-slow .tempo-sys{color:var(--catch)}
@@ -495,8 +497,8 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 @keyframes tempo-wave-y{to{background-position:50% 72px}}
 .timeline-tempo li p{font-size:.95rem;line-height:1.35;color:var(--paper)}
 .tempo-bubble{justify-self:start;align-self:start;padding:.45rem .7rem;border-radius:.9rem .9rem .9rem .3rem;background:#eef0f3;color:#0b0e14;font-family:var(--phone-ui);font-size:.8rem;line-height:1.3;text-wrap:pretty;box-shadow:0 0 0 2px var(--alert),0 0 16px rgba(255,46,76,.35)}
-.tempo-tags{display:flex;flex-wrap:wrap;align-self:start;gap:.35rem}
-.tempo-tags span{padding:.25rem .6rem;border-radius:999px;font-size:.75rem;font-weight:650;line-height:1.2;color:#ff9aa8;background:rgba(255,46,76,.12);border:1px solid rgba(255,46,76,.45)}
+.tempo-tags{display:flex;flex-wrap:wrap;align-self:start;gap:.3rem}
+.tempo-tags span{padding:.22rem .55rem;border-radius:999px;font-size:.72rem;font-weight:650;line-height:1.2;color:#ff9aa8;background:rgba(255,46,76,.12);border:1px solid rgba(255,46,76,.45)}
 .timeline-tempo q{align-self:start;font-family:var(--display);font-size:clamp(1rem,.85rem + .35vw,1.18rem);line-height:1.3;color:var(--catch);font-variation-settings:"opsz" 24;text-wrap:pretty}
 /* the line: a dashed rule, ScamCatch's logo on it level with the step icons */
 .tempo-divide{grid-row:1/-1;display:grid;grid-template-rows:subgrid;row-gap:normal;justify-items:center;background:repeating-linear-gradient(to bottom,rgba(238,240,247,.38) 0 7px,transparent 7px 13px) 50% 0/2px 100% no-repeat}
@@ -567,12 +569,13 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
   .demo-copy{padding-top:4.5rem}
   .card-why{gap:1rem}
   .why-lede{font-size:.95rem}
-  .tempo{row-gap:.55rem}
-  .tempo-zone{padding:.8rem .95rem .9rem}
+  .tempo{row-gap:.6rem}
+  .tempo-zone{padding:.95rem 1.05rem 1.05rem}
   .tempo-head{gap:.1rem;font-size:.8rem}
   .why-title{font-size:clamp(1.8rem,1rem + 1.8vw,2.6rem)}
-  .why-line{font-size:clamp(1.2rem,.8rem + .9vw,1.6rem)}
-  .tempo-head b{font-size:clamp(1.3rem,.3rem + 1.7vw,2rem)}
+  .why-line{font-size:clamp(1.15rem,.85rem + .6vw,1.5rem)}
+  .tempo-head b{font-size:clamp(1.25rem,.35rem + 1.45vw,1.85rem)}
+  .tempo-tags span{font-size:.68rem}
   .timeline-tempo li p{font-size:.86rem}
   .tempo-bubble{padding:.35rem .6rem;font-size:.74rem}
   .timeline-tempo q{font-size:.95rem}
@@ -643,7 +646,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
   .card-why{justify-content:flex-start;gap:1.6rem}
   .tempo{grid-template-columns:1fr;grid-template-rows:none;row-gap:0}
   .tempo-zone{grid-row:auto;grid-template-rows:none;row-gap:1rem;padding:1rem 1rem 1.1rem}
-  .tempo-head b{font-size:1.6rem}
+  .tempo-head b{font-size:1.5rem}
   .tempo-divide{grid-row:auto;grid-template-rows:none;grid-auto-flow:column;justify-content:center;align-items:center;gap:.7rem;padding:.9rem 0;background:repeating-linear-gradient(to right,rgba(238,240,247,.38) 0 7px,transparent 7px 13px) 0 50%/100% 2px no-repeat}
   .tempo-divide img,.tempo-divide p{grid-row:auto;align-self:center}
   .tempo-divide img{width:44px;height:44px;box-shadow:0 0 0 6px var(--night)}
