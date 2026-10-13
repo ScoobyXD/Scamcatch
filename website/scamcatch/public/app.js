@@ -569,6 +569,7 @@
   const links = new Map([...document.querySelectorAll('.index a')].map((a) => [a.hash.slice(1), a]));
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
+      entry.target.classList.toggle('is-onscreen', entry.isIntersecting);
       if (entry.target.id === 'demo') entry.isIntersecting ? resume() : pause();
       if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
         links.forEach((a, id) => a.setAttribute('aria-current', id === entry.target.id ? 'true' : 'false'));
