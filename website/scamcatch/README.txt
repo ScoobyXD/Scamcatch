@@ -23,4 +23,4 @@
 23. A small note names System 1 and System 2 (Daniel Kahneman, Thinking, Fast and Slow) and cites Kircanski et al., 2018 (Stanford, with AARP's Fraud Watch Network and the FINRA Foundation), linked to PubMed Central.
 24. The lines and orb rings move only while the stage is on screen (app.js adds is-onscreen to each stage in view). Under reduced motion they hold still.
 25. The demo's voice step reads "Then it slows things down." The voice stage's lede says anyone can be rushed and the voice doesn't hurry you.
-26. The tagline under the logo reads "A new kind of scam alert."
+26. The tagline under the logo reads "A new kind of scam intervention."
