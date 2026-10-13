@@ -453,7 +453,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .card-vision.card{padding-top:clamp(1.1rem,3svh,1.9rem)}
 
 /* Stage 3: why a voice. Two zones with a line between them: a scam keeps you in emotional thinking (System 1);
-   at the line ScamCatch steps in, and the voice brings in logical thinking (System 2). The steps use the vision's timeline. */
+   at the line ScamCatch intervenes, and the voice brings in logical thinking (System 2). The steps use the vision's timeline. */
 #why{--alert:#ff2e4c;--alert-deep:#ff7a1f}
 .card-why{display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(1.5rem,4svh,2.5rem);background:radial-gradient(45% 60% at 22% 70%,rgba(255,46,76,.08),transparent 70%),radial-gradient(45% 60% at 80% 70%,rgba(61,109,240,.2),transparent 70%),var(--night)}
 .card-why.card{padding-top:clamp(1.5rem,5svh,4rem);padding-bottom:clamp(1.5rem,5svh,4rem)}
