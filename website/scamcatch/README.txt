@@ -25,3 +25,5 @@
 25. The demo's voice step reads "Then it slows things down." The voice stage's lede says anyone can be rushed and the voice doesn't hurry you.
 26. The demo's big white headline is the tagline "A new kind of scam intervention." It is the same for every scam. The tag under the logo stays "Scam intervention."
 27. Under the headline, each step narrates the phone in one line: the step's title in white, then the rest in gray. Trust and ask lines come from SCENARIOS in app.js.
+28. The headline sits on two lines, "A new kind of / scam intervention." The demo's text column is wider than the phone's (1.15fr to 1fr).
+29. The progress row narrows on laptop screens so Replay never sits under the "Click here" cue.
