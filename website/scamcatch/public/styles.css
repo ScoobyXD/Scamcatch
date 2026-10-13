@@ -68,7 +68,7 @@ button{font:inherit;color:inherit}
 .brand-tag{font-family:var(--text);font-size:.68rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--lamp)}
 
 /* ---------- Stage 1: demo ---------- */
-.card-demo{--ph:clamp(460px,calc(100svh - 112px),880px);--pw:calc(var(--ph)*.4615);display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.15fr);align-items:center;padding-right:var(--index-room);border-radius:0 0 28px 28px;background:var(--night)}
+.card-demo{--ph:clamp(460px,calc(100svh - 112px),880px);--pw:calc(var(--ph)*.4615);display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center;padding-right:var(--index-room);border-radius:0 0 28px 28px;background:var(--night)}
 .night{position:absolute;inset:0;z-index:-1;background:radial-gradient(120% 90% at 72% 0%,#28326c 0%,#161d40 46%,#0e1430 100%)}
 .night::before{content:"";position:absolute;inset:0;filter:blur(1.5px);opacity:.9;background:
   radial-gradient(circle at 8% 78%,rgba(244,194,122,.42) 0 7px,transparent 30px),
@@ -90,13 +90,14 @@ button{font:inherit;color:inherit}
 
 .brand-bar{position:absolute;top:clamp(1.4rem,3vw,2.2rem);left:var(--pad);z-index:5}
 
-.demo-copy{padding-left:var(--pad);padding-right:1rem;max-width:38rem}
-.hero-title{font-family:var(--display);font-weight:420;font-size:clamp(2.4rem,1.2rem + 3.4vw,4.6rem);line-height:1.02;letter-spacing:-.022em;font-variation-settings:"opsz" 72;text-wrap:balance}
+.demo-copy{padding-left:var(--pad);padding-right:1rem;max-width:46rem}
+.hero-title{font-family:var(--display);font-weight:420;font-size:clamp(2.4rem,1rem + 3.2vw,4.4rem);line-height:1.02;letter-spacing:-.022em;font-variation-settings:"opsz" 72;text-wrap:balance}
+.hero-keep{white-space:nowrap}
 .story{display:grid;margin-top:1.4rem}
 .story-line{grid-area:1/1;opacity:0;transform:translateY(.5rem);transition:opacity .6s ease,transform .6s ease;pointer-events:none}
 .story-line.is-active{opacity:1;transform:none;pointer-events:auto}
 /* each step narrates the phone in one line: a white lead-in, then the rest in gray */
-.story-line{max-width:30rem;font-size:clamp(1rem,.9rem + .3vw,1.15rem);line-height:1.55;color:var(--mist)}
+.story-line{max-width:36rem;font-size:clamp(1rem,.9rem + .3vw,1.15rem);line-height:1.55;color:var(--mist)}
 .story-head{font-weight:650;color:var(--paper)}
 
 .tracker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-top:2.6rem;max-width:30rem;font-size:.8rem;color:var(--mist)}
@@ -110,14 +111,14 @@ button{font:inherit;color:inherit}
 .card-demo[data-phase="warn"] .tracker li.is-active .bar i{background:var(--alert)}
 .card-demo[data-phase="voice"] .tracker li.is-active .bar i{background:var(--catch)}
 
-.progress-row{display:flex;align-items:flex-end;gap:1.1rem;margin-top:2.6rem;max-width:38rem}
+.progress-row{display:flex;align-items:flex-end;gap:1.1rem;margin-top:2.6rem;max-width:32rem}
 .progress-row .tracker{flex:1;margin-top:0}
 .replay{display:inline-flex;align-items:center;gap:.45rem;flex-shrink:0;margin-bottom:-.35rem;padding:.5rem .95rem;border:1px solid rgba(238,240,247,.3);border-radius:999px;background:rgba(238,240,247,.07);color:var(--paper);font-size:.85rem;font-weight:600;cursor:pointer;transition:background .2s,border-color .2s}
 .replay:hover{background:rgba(238,240,247,.14);border-color:var(--lamp)}
 .replay svg{width:16px;height:16px}
 
 /* scam picker: one small round button per scenario */
-.scams{margin-top:2rem;max-width:38rem}
+.scams{margin-top:2rem;max-width:32rem}
 .scams-label{margin-bottom:.8rem;font-size:.7rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--mist)}
 .scam-list{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:.4rem}
 .scam{display:flex;flex-direction:column;align-items:center;gap:.45rem;min-width:0;padding:0;border:0;background:none;color:var(--mist);font-size:.7rem;font-weight:600;line-height:1.15;text-align:center;cursor:pointer;transition:color .2s}
@@ -561,6 +562,14 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 }
 @media (max-width:1000px){
   .traits li{grid-template-columns:1fr;gap:.35rem}
+}
+/* the "Click here" cue reaches left from the phone; keep Replay, at the end of the progress row, clear of it */
+@media (min-width:1181px){
+  .progress-row{max-width:min(32rem,calc(72vw - 28svh - 286px))}
+}
+/* narrow two-column screens: the demo headline wraps freely */
+@media (min-width:761px) and (max-width:1023px){
+  .hero-keep{white-space:normal}
 }
 /* tall, narrow screens (tablets): the lede goes under the headline */
 @media (min-width:761px) and (max-width:900px) and (min-height:861px){
