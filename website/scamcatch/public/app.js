@@ -567,7 +567,7 @@
   });
   ['pointermove', 'focusin'].forEach((type) => phone.addEventListener(type, () => { lastInteraction = Date.now(); }));
 
-  /* ---- Why a voice: the story plays in order, one step at a time, left to right, like the vision's timeline ---- */
+  /* ---- System 1 & System 2: the story plays in order, one step at a time, left to right, like the vision's timeline ---- */
   // [step that lights up, how long it stays lit in ms]: the scam's steps rush by, the voice's steps take their time,
   // then a short rest with nothing lit before the story starts over. "catch" is the line where ScamCatch intervenes.
   const WHY_SEQUENCE = [['message', 1400], ['emotions', 1400], ['ask', 1400], ['catch', 2600], ['calm', 2600], ['think', 2600], ['check', 2600], ['rest', 1100]];
