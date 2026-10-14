@@ -509,8 +509,22 @@
     };
   }
 
+  // Call screen hooks for ScamCatchLive.start, shared by the demo and "Click to hear explanation".
+  // root shows whose turn it is and the mic level; status and words show the status line and the voice's words.
+  const voiceHooks = (root, status, words) => ({
+    onStatus: (text) => { status.textContent = text; },
+    onCaption: (text) => { words.textContent = text; },
+    // after the voice finishes talking, the call screen shows it's the visitor's turn to talk back
+    onTurn: (turn) => {
+      root.dataset.turn = turn;
+      status.textContent = turn === 'you' ? 'Listening to you' : 'ScamCatch is talking';
+    },
+    onMicLevel: (level) => root.style.setProperty('--mic', level.toFixed(2)),
+  });
+
   function startCall() {
     if (calling) return;
+    endExplain();   // one voice call at a time
     if (card.dataset.phase !== 'voice') showFinalState();
     clearTimeout(timer);
     calling = true;
@@ -523,16 +537,7 @@
     const live = window.ScamCatchLive;
     if (live && typeof live.start === 'function') {
       // Live voice hooks in here: ScamCatchLive.start(context, { onStatus, onCaption }) → session with end()
-      liveSession = live.start(context, {
-        onStatus: (text) => { callStatus.textContent = text; },
-        onCaption: (text) => { caption.textContent = text; },
-        // after the voice finishes talking, the call screen shows it's the visitor's turn to talk back
-        onTurn: (turn) => {
-          card.dataset.turn = turn;
-          callStatus.textContent = turn === 'you' ? 'Listening to you' : 'ScamCatch is talking';
-        },
-        onMicLevel: (level) => card.style.setProperty('--mic', level.toFixed(2)),
-      });
+      liveSession = live.start(context, voiceHooks(card, callStatus, caption));
     } else {
       setTimeout(() => {
         if (!calling) return;
@@ -555,6 +560,32 @@
     if (!reduceMotion) schedule(script.length - 1, LOOP_HOLD);
   }
 
+  /* ---- "Click to hear explanation": the live voice explains a page (data-page, its section id), then takes questions ---- */
+  let explaining = null;   // { box, session } while a page is being explained
+  function startExplain(box) {
+    if (!box || explaining?.box === box) return;
+    endExplain();
+    endCall();   // one voice call at a time
+    const status = box.querySelector('.explain-status');
+    const words = box.querySelector('.explain-caption');
+    box.classList.add('is-calling');
+    status.textContent = 'Connecting…';
+    words.textContent = 'ScamCatch will start explaining.';
+    const live = window.ScamCatchLive;
+    const session = live && typeof live.start === 'function' ? live.start({ page: box.dataset.page }, voiceHooks(box, status, words)) : null;
+    if (!session) status.textContent = 'Live voice isn’t connected in this build yet';
+    explaining = { box, session };
+  }
+  function endExplain() {
+    if (!explaining) return;
+    const { box, session } = explaining;
+    explaining = null;
+    if (session) session.end();
+    box.classList.remove('is-calling');
+    delete box.dataset.turn;
+    box.style.removeProperty('--mic');
+  }
+
   /* ---- Controls ---- */
   document.addEventListener('click', (event) => {
     const action = event.target.closest('[data-action]');
@@ -562,6 +593,8 @@
     const kind = action.dataset.action;
     if (kind === 'talk') startCall();
     if (kind === 'end') endCall();
+    if (kind === 'explain') startExplain(action.closest('.explain'));
+    if (kind === 'explain-end') endExplain();
     if (kind === 'scenario') selectScenario(action.dataset.scenario);
     if (kind === 'replay') { lastInteraction = 0; reduceMotion ? showFinalState() : play(0); }
   });
@@ -599,6 +632,8 @@
       entry.target.classList.toggle('is-onscreen', entry.isIntersecting);
       if (entry.target.id === 'demo') entry.isIntersecting ? resume() : pause();
       if (entry.target.id === 'why') entry.isIntersecting ? whyPlay() : whyStop();
+      // leaving the page being explained ends its explanation
+      if (!entry.isIntersecting && explaining && entry.target.contains(explaining.box)) endExplain();
       if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
         links.forEach((a, id) => a.setAttribute('aria-current', id === entry.target.id ? 'true' : 'false'));
       }

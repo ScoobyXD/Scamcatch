@@ -29,7 +29,10 @@ MAX_EVIDENCE_CHARS = 6000  # Same bound as LiveVoice.
 VOICES = ("alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse")
 START_GAP_SECONDS = 10
 PROMPTS = ("VOICE_MODEL", "VOICE_NAME", "VOICE_INSTRUCTIONS", "VOICE_GREETING", "VOICE_EVIDENCE_PREFIX",
-           "VOICE_TRUNCATED_EVIDENCE_SUFFIX", "VOICE_NO_BACKEND_COMMENTARY")
+           "VOICE_TRUNCATED_EVIDENCE_SUFFIX", "VOICE_NO_BACKEND_COMMENTARY", "VOICE_PAGE_INSTRUCTIONS",
+           "VOICE_PAGE_WHY", "VOICE_PAGE_VISION")
+# Pages with "Click to hear explanation": section id on the page -> its page notes in AIInstructions.kt.
+PAGES = {"why": "VOICE_PAGE_WHY", "vision": "VOICE_PAGE_VISION"}
 TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png", ".jpg": "image/jpeg",
          ".webp": "image/webp", ".ico": "image/x-icon"}
@@ -119,6 +122,16 @@ def evidence_text(context, prompts):
     return prompts["VOICE_EVIDENCE_PREFIX"] + evidence
 
 
+def session_input(context, prompts):
+    """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
+    page = context.get("page") if isinstance(context, dict) else None
+    if page is None:
+        return prompts["VOICE_INSTRUCTIONS"], evidence_text(context, prompts)
+    if not (isinstance(page, str) and page in PAGES):
+        raise VoiceError(400, "Voice can’t explain that page.")
+    return prompts["VOICE_PAGE_INSTRUCTIONS"], prompts[PAGES[page]]
+
+
 class Voice:
     def __init__(self):
         self.lock = threading.Lock()
@@ -187,7 +200,7 @@ class Voice:
         voice = body.get("voice", self.prompts["VOICE_NAME"])
         if voice not in VOICES:
             raise VoiceError(400, "That voice name isn't one of OpenAI's built-in voices.")
-        evidence = evidence_text(body.get("context"), self.prompts)
+        instructions, evidence = session_input(body.get("context"), self.prompts)
         with self.lock:
             now = time.monotonic()
             if now - self.last_start < START_GAP_SECONDS:
@@ -195,14 +208,13 @@ class Voice:
             # Each accepted start may create a billable session, so failures also wait out the gap.
             self.last_start = now
             key = self.read_key()
-        answer = self.create_session(key, offer, evidence, voice)
+        answer = self.create_session(key, offer, instructions, evidence, voice)
         return {"sdp": answer, "greeting": self.prompts["VOICE_GREETING"],
                 "noBackendCommentary": self.prompts["VOICE_NO_BACKEND_COMMENTARY"]}
 
-    def create_session(self, key, offer, evidence, voice):
-        prompts = self.prompts
+    def create_session(self, key, offer, instructions, evidence, voice):
         session = {
-            "model": prompts["VOICE_MODEL"], "store": False, "instructions": prompts["VOICE_INSTRUCTIONS"],
+            "model": self.prompts["VOICE_MODEL"], "store": False, "instructions": instructions,
             "delegation": {"type": "client"}, "audio": {"output": {"voice": voice}},
             "input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": evidence}]}],
         }
