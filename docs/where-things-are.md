@@ -17,7 +17,7 @@ Hosting and publishing
 
 Live voice
 10. On scamcatch.io, /api/* goes through CloudFront to the scamcatch-voice Lambda (website/scamcatch/infra/voice/handler.py). Deploy Voice.cmd deploys it and logs to website/scamcatch/infra/voice-deploy-log.txt.
-11. Voice prompts, key handling, and cost limits are in docs/voice.md. All Jev questions and voice prompts come from app/ai-instructions/AIInstructions.kt.
+11. Voice prompts, key handling, and cost limits are in docs/voice.md. All Jev questions and voice prompts come from app/ai-instructions/AIInstructions.kt, except the "Click to hear explanation" scripts, which are in website/scamcatch/public/voice-pages.json and go live with every website publish.
 
 Rest of the repository
 12. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.

@@ -29,10 +29,9 @@ MAX_EVIDENCE_CHARS = 6000  # Same bound as LiveVoice.
 VOICES = ("alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse")
 START_GAP_SECONDS = 10
 PROMPTS = ("VOICE_MODEL", "VOICE_NAME", "VOICE_INSTRUCTIONS", "VOICE_GREETING", "VOICE_EVIDENCE_PREFIX",
-           "VOICE_TRUNCATED_EVIDENCE_SUFFIX", "VOICE_NO_BACKEND_COMMENTARY", "VOICE_PAGE_INSTRUCTIONS",
-           "VOICE_PAGE_WHY", "VOICE_PAGE_VISION")
-# Pages with "Click to hear explanation": section id on the page -> its page notes in AIInstructions.kt.
-PAGES = {"why": "VOICE_PAGE_WHY", "vision": "VOICE_PAGE_VISION"}
+           "VOICE_TRUNCATED_EVIDENCE_SUFFIX", "VOICE_NO_BACKEND_COMMENTARY")
+# "Click to hear explanation" scripts, published with the site. Read on every page call, so edits need no restart.
+PAGES_FILE = PUBLIC / "voice-pages.json"
 TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png", ".jpg": "image/jpeg",
          ".webp": "image/webp", ".ico": "image/x-icon"}
@@ -122,14 +121,31 @@ def evidence_text(context, prompts):
     return prompts["VOICE_EVIDENCE_PREFIX"] + evidence
 
 
+def page_scripts(data):
+    """voice-pages.json as (instructions, {page id: notes}), each list of lines joined; None when it isn't in that shape."""
+    def text(value):
+        return "\n".join(value) if isinstance(value, list) and value and all(isinstance(line, str) for line in value) else None
+    pages = data.get("pages") if isinstance(data, dict) else None
+    instructions = text(data.get("instructions")) if isinstance(data, dict) else None
+    notes = {page: text(value) for page, value in pages.items()} if isinstance(pages, dict) else {}
+    return (instructions, notes) if instructions and notes and all(notes.values()) else None
+
+
 def session_input(context, prompts):
     """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
     page = context.get("page") if isinstance(context, dict) else None
     if page is None:
         return prompts["VOICE_INSTRUCTIONS"], evidence_text(context, prompts)
-    if not (isinstance(page, str) and page in PAGES):
+    try:
+        scripts = page_scripts(json.loads(PAGES_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        scripts = None
+    if not scripts:
+        raise VoiceError(503, "Voice can’t load this page’s explanation right now.", f"{PAGES_FILE.name} is missing or not in the expected shape.")
+    instructions, notes = scripts
+    if not (isinstance(page, str) and page in notes):
         raise VoiceError(400, "Voice can’t explain that page.")
-    return prompts["VOICE_PAGE_INSTRUCTIONS"], prompts[PAGES[page]]
+    return instructions, notes[page]
 
 
 class Voice:
