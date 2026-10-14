@@ -17,6 +17,7 @@ __pycache__/
 .env
 .env.*
 .aws/
+application/scamcatch/output/
 application/scamcatch/.deck-build/*
 !application/scamcatch/.deck-build/build-deck.mjs
 !application/scamcatch/.deck-build/export-preview-pdf.py
