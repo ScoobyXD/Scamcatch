@@ -12,6 +12,7 @@
   const CAPTION_CHARS = 90;
   const CAPTION_PAUSE_MS = 1200;
   const TURN_SILENCE_MS = 1200;         // the voice has been quiet this long after talking: it's the user's turn
+  const LISTEN_ONLY_END_MS = 3000;      // without a microphone, the call ends once the voice has been quiet this long
   const VOICE_LEVEL = 0.01;             // remote audio above this RMS counts as the voice talking
   const LEVEL_MS = 100;                 // how often the call screen reads audio levels
   const UNEXPECTED = 'Voice sent something unexpected and stopped.';
@@ -39,6 +40,7 @@
     let closeTimer = null;
     let micTimer = null;
     let micOpen = false;
+    let micProblem = '';   // set when the microphone couldn't open: the visitor can listen but not talk
     let voiceStarted = false;
     let captionText = '';
     let captionEnd = NaN;
@@ -50,9 +52,14 @@
     let micMeter = null;
     // Created during the tap, so the browser lets it run. It only measures levels for the call screen; nothing plays through it.
     const meters = window.AudioContext ? new AudioContext() : null;
+    // Silence, sent in place of a microphone the visitor didn't allow, so the input keeps flowing.
+    const silence = meters ? meters.createMediaStreamDestination().stream : null;
     const levelTimer = setInterval(watchLevels, LEVEL_MS);
     const audio = new Audio();
     audio.autoplay = true;
+    // Started during the tap, so Safari lets the voice play later even when no microphone is capturing.
+    audio.srcObject = silence;
+    audio.play().catch(() => {});
     const limitTimer = setTimeout(() => stop('Time’s up. Calls end after 3 minutes.'), CALL_LIMIT_MS);
     const say = (text) => { if (!stopped) onStatus(text); };
 
@@ -125,8 +132,13 @@
       if (voiceMeter && level(voiceMeter) > VOICE_LEVEL) lastVoiceAt = now;
       if (micMeter && micOpen) onMicLevel(Math.min(1, level(micMeter) * 8));
       if (!voiceStarted) return;
-      const quiet = lastVoiceAt ? now - lastVoiceAt > TURN_SILENCE_MS : now - lastWordsAt > TURN_SILENCE_MS * 2;
-      const next = quiet && now - lastWordsAt > TURN_SILENCE_MS / 2 ? 'you' : 'voice';
+      const quietFor = (ms) => (lastVoiceAt ? now - lastVoiceAt > ms : now - lastWordsAt > ms * 2) && now - lastWordsAt > ms / 2;
+      // Listen only: nobody can talk back, so the call ends once the voice's opening is done.
+      if (micProblem) {
+        if (quietFor(LISTEN_ONLY_END_MS)) stop(micProblem);
+        return;
+      }
+      const next = quietFor(TURN_SILENCE_MS) ? 'you' : 'voice';
       if (next !== turn) {
         turn = next;
         onTurn(next);
@@ -237,6 +249,7 @@
             voiceStarted = true;
             clearTimeout(micTimer);
             micTimer = setTimeout(openMic, MIC_GRACE_MS);
+            if (micProblem) say('ScamCatch is talking. Your mic is off.');
           }
           caption(event);
           break;
@@ -247,14 +260,17 @@
     }
 
     async function connect() {
-      if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+      if (!window.RTCPeerConnection) {
         throw problem('This browser can’t run live voice. Try a recent Chrome, Edge, or Safari.');
       }
-      // An already allowed microphone opens while the call connects. Otherwise ask first, so no session starts
-      // (and bills) for a microphone the visitor then blocks.
+      // An already allowed microphone opens while the call connects. Otherwise ask first, so the call knows
+      // before it starts whether the visitor can talk. Without a microphone, the visitor still hears the voice's opening.
       const allowed = await microphoneAllowed();
       if (!allowed) say('Allow the microphone to talk');
-      const microphone = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      const asked = navigator.mediaDevices?.getUserMedia
+        ? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+        : Promise.reject(new Error('no getUserMedia'));
+      const microphone = asked
         .then((opened) => {
           if (stopped) {   // the call ended while the microphone was opening
             opened.getTracks().forEach((track) => track.stop());
@@ -265,13 +281,16 @@
           stream.getAudioTracks().forEach((track) => { track.enabled = false; });
           micMeter = meter(stream);
           return stream.getAudioTracks()[0];
-        }, (error) => { throw problem(MIC_ERRORS[error?.name] || 'The microphone couldn’t start.'); });
+        }, (error) => {
+          micProblem = MIC_ERRORS[error?.name] || 'The microphone couldn’t start.';
+          return silence ? silence.getAudioTracks()[0] : null;
+        });
       if (!allowed) await microphone;
       if (stopped) {
         release();
         return;
       }
-      say('Connecting…');
+      say(micProblem ? 'Connecting… Your mic is off, so you can listen.' : 'Connecting…');
       startTimer = setTimeout(() => stop('The voice took too long to connect. Try again.'), START_TIMEOUT_MS);
       peer = new RTCPeerConnection();
       peer.ontrack = (event) => {
@@ -294,7 +313,7 @@
       if (stopped) return;
       const voice = new URLSearchParams(location.search).get('voice');
       const answer = post({ sdp: peer.localDescription.sdp, context, ...(voice ? { voice } : {}) });
-      answer.catch(() => {});   // a microphone failure below ends the call first
+      answer.catch(() => {});   // awaited below; this keeps a call that ends first from leaving it unhandled
       const track = await microphone;
       if (stopped) {
         release();
