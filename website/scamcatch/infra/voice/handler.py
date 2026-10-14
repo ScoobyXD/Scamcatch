@@ -29,6 +29,8 @@ OPENAI_KEY = re.compile(r"sk-[A-Za-z0-9_-]{20,}")
 HEADER_SAFE = re.compile(r"[\x21-\x7e]{1,2048}")
 SAFE_ID = re.compile(r"[a-z][a-z0-9_]*(?:[.\[][a-z0-9_]+\]?)*")
 KEY_UNAVAILABLE = "Live voice can’t read its key right now."
+# Pages with "Click to hear explanation": section id on the page -> its page notes in AIInstructions.kt.
+PAGES = {"why": "VOICE_PAGE_WHY", "vision": "VOICE_PAGE_VISION"}
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts.json"), encoding="utf-8") as prompts_file:
     PROMPTS = json.load(prompts_file)
@@ -118,6 +120,16 @@ def evidence_text(context):
     return PROMPTS["VOICE_EVIDENCE_PREFIX"] + evidence
 
 
+def session_input(context):
+    """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
+    page = context.get("page") if isinstance(context, dict) else None
+    if page is None:
+        return PROMPTS["VOICE_INSTRUCTIONS"], evidence_text(context)
+    if not (isinstance(page, str) and page in PAGES):
+        raise VoiceError(400, "Voice can’t explain that page.")
+    return PROMPTS["VOICE_PAGE_INSTRUCTIONS"], PROMPTS[PAGES[page]]
+
+
 def reserve_call():
     """Count the call before creating it: at most DAILY_LIMIT calls per UTC day, one new call every START_GAP_SECONDS."""
     now = int(time.time())
@@ -164,9 +176,9 @@ def provider_error(status, result):
     return VoiceError(502, public, detail)
 
 
-def create_session(key, offer, evidence, voice):
+def create_session(key, offer, instructions, evidence, voice):
     session = {
-        "model": PROMPTS["VOICE_MODEL"], "store": False, "instructions": PROMPTS["VOICE_INSTRUCTIONS"],
+        "model": PROMPTS["VOICE_MODEL"], "store": False, "instructions": instructions,
         "delegation": {"type": "client"}, "audio": {"output": {"voice": voice}},
         "input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": evidence}]}],
     }
@@ -207,11 +219,11 @@ def start(body):
     voice = body.get("voice", PROMPTS["VOICE_NAME"])
     if voice not in VOICES:
         raise VoiceError(400, "That voice name isn't one of OpenAI's built-in voices.")
-    evidence = evidence_text(body.get("context"))
+    instructions, evidence = session_input(body.get("context"))
     # Each accepted start may create a billable session, so it is counted before OpenAI is called, and failures count too.
     reserve_call()
     key = read_key()
-    answer = create_session(key, offer, evidence, voice)
+    answer = create_session(key, offer, instructions, evidence, voice)
     return {"sdp": answer, "greeting": PROMPTS["VOICE_GREETING"], "noBackendCommentary": PROMPTS["VOICE_NO_BACKEND_COMMENTARY"]}
 
 
