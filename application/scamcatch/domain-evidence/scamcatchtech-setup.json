@@ -10,10 +10,28 @@
   "domainAutoRenew": true,
   "dnsProvider": "Namecheap BasicDNS",
   "websiteDestination": "https://scamcatch.io",
-  "websiteStatus": "Live; apex and www HTTP/HTTPS redirects to https://scamcatch.io verified October 9, 2026",
+  "websiteStatus": "Live; apex and www redirect to https://scamcatch.io through CloudFront; rechecked October 12, 2026 after email migration",
   "requestedMailbox": "jonathan.kim@scamcatchtech.com",
-  "mailboxStatus": "Create Mailbox form prepared with jonathan.kim and 5 GB; user password entry and submission pending",
-  "emailOrderStatus": "Completed; $11.88 charged with user approval",
+  "mailboxStatus": "Active in Google Workspace on 2026-10-12; Gmail activated; existing user renamed to jonathan.kim@scamcatchtech.com; no second user created",
+  "emailProvider": "Google Workspace",
+  "googleWorkspace": {
+    "organization": "ScamCatch",
+    "separateFromCtrlLoop": true,
+    "plan": "Business Starter",
+    "billingCycle": "Monthly; cancel anytime",
+    "licensedUsers": 1,
+    "monthlyTotalBeforeTaxUSD": 8.4,
+    "trialStartedAtLocalDate": "2026-10-12",
+    "paidBillingStartsAtLocalDate": "2026-10-26",
+    "userId": "1fob9te2l40ya3",
+    "alternateEmail": "scamcatchadmin@scamcatchtech.com",
+    "alternateEmailStatus": "Alias on the same user after rename; no additional license",
+    "domainVerified": true,
+    "gmailActivated": true,
+    "inboxStatus": "Incoming delivery confirmed in the Gmail inbox for jonathan.kim@scamcatchtech.com at 16:38 PDT on 2026-10-12; outgoing authentication passed but the earlier outgoing test arrived in Spam"
+  },
+  "emailOrderProvider": "Namecheap Private Email (canceled; historical order below)",
+  "emailOrderStatus": "Canceled on 2026-10-12; Namecheap subscription list confirms no Private Email subscription remains; refund not requested",
   "emailOrderId": "216243056",
   "emailSubscriptionId": "4440869",
   "emailPurchasedAtLocalDate": "2026-10-09",
@@ -24,15 +42,25 @@
   "emailAutoRenew": false,
   "emailPromoCode": "MAILDEAL",
   "emailDns": {
-    "verificationDate": "2026-10-09",
-    "verificationScope": "MX, SPF, DKIM and DMARC resolve through the system DNS resolver; mail delivery not tested",
+    "verificationDate": "2026-10-12",
+    "verificationScope": "At 16:36 PDT on 2026-10-12, both Namecheap authoritative nameservers and Google and Cloudflare DNS returned one Google MX and no Private Email MX; outgoing message passed SPF, DKIM and DMARC; an authorized incoming test appeared in the ScamCatch Gmail inbox at 16:38 PDT",
     "mx": [
-      {"host": "mx1.privateemail.com", "priority": 10},
-      {"host": "mx2.privateemail.com", "priority": 10}
+      {
+        "host": "smtp.google.com",
+        "priority": 1
+      }
     ],
-    "spf": "v=spf1 include:spf.privateemail.com ~all",
-    "dkimHost": "privateemail._domainkey",
-    "dkimStatus": "Published and matches subscription public key",
+    "spf": "v=spf1 include:_spf.google.com ~all",
+    "dkimHost": "google._domainkey",
+    "dkimKeyBits": 2048,
+    "dkimStatus": "Published in Namecheap DNS; receiving Gmail reported DKIM PASS with the google selector for the 16:32 PDT message on 2026-10-12",
     "dmarc": "v=DMARC1; p=none"
+  },
+  "deliveryChecks": {
+    "outgoing": "Google Workspace message at 16:32 PDT on 2026-10-12 passed SPF, DKIM and DMARC but arrived in Spam; Gmail did not disclose the exact classification cause",
+    "incoming": "ScamCatch delivery check sent from the user's personal Gmail with explicit permission appeared in the ScamCatch Gmail inbox at 16:38 PDT on 2026-10-12",
+    "earlierIncomingFailure": "Message sent at 16:34 PDT on 2026-10-12 was rejected by the old mx2.privateemail.com server with 554 5.7.1 Relay access denied",
+    "incomingDiagnosis": "Current authoritative DNS is consistent and points to Google; evidence supports an old MX cache for the earlier failure; the 16:38 PDT test succeeded",
+    "incomingCheckMessageId": "1a1327b9162d134e"
   }
 }

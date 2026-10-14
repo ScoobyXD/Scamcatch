@@ -1,17 +1,17 @@
-2026-10-11 16:32:13  1/5 Building the voice package
-2026-10-11 16:32:13  Built the voice package (6 KB) with model gpt-live-1, voice marin.
-2026-10-11 16:32:13  2/5 Deploying the voice stack (function, daily call counter, permissions)
-2026-10-11 16:32:14  Reusing the existing CloudFront route token.
-2026-10-11 16:32:17  Voice function URL host: s3jpy2xh7dp76vpyyfbymrspzy0rmzcm.lambda-url.us-east-1.on.aws
-2026-10-11 16:32:17  3/5 Uploading the function code
-2026-10-11 16:32:20  Function code is live.
-2026-10-11 16:32:22  The function reads the OpenAI key. Calls today: 13 of 50.
-2026-10-11 16:32:22  4/5 Adding the /api route to scamcatch-site (CloudFront updates can take several minutes)
-2026-10-11 16:32:24  Keeping site settings: DomainName=scamcatch.io, RedirectDomainName=scamcatchtech.com, CertificateArn=arn:aws:acm:us-east-1:686458136219:certificate/5d8de856-f052-4896-91ec-3adb4f8afc72
-2026-10-11 16:32:26  Site stack updated.
-2026-10-11 16:32:26  5/5 Checking the live endpoint
-2026-10-11 16:32:26  Checking https://scamcatch.io/api/voice/session (no call is started; this request has no WebRTC offer).
-2026-10-11 16:32:26  Voice endpoint answers through CloudFront: HTTP 400.
-2026-10-11 16:32:26  Requests from other websites are refused: HTTP 403.
+2026-10-13 22:06:02  1/5 Building the voice package
+2026-10-13 22:06:02  Built the voice package (6 KB) with model gpt-live-1, voice marin.
+2026-10-13 22:06:02  2/5 Deploying the voice stack (function, daily call counter, permissions)
+2026-10-13 22:06:03  Reusing the existing CloudFront route token.
+2026-10-13 22:06:07  Voice function URL host: s3jpy2xh7dp76vpyyfbymrspzy0rmzcm.lambda-url.us-east-1.on.aws
+2026-10-13 22:06:07  3/5 Uploading the function code
+2026-10-13 22:06:09  Function code is live.
+2026-10-13 22:06:11  The function reads the OpenAI key. Calls today: 18 of 50.
+2026-10-13 22:06:11  4/5 Adding the /api route to scamcatch-site (CloudFront updates can take several minutes)
+2026-10-13 22:06:14  Keeping site settings: DomainName=scamcatch.io, RedirectDomainName=scamcatchtech.com, CertificateArn=arn:aws:acm:us-east-1:686458136219:certificate/5d8de856-f052-4896-91ec-3adb4f8afc72
+2026-10-13 22:06:16  Site stack updated.
+2026-10-13 22:06:16  5/5 Checking the live endpoint
+2026-10-13 22:06:16  Checking https://scamcatch.io/api/voice/session (no call is started; this request has no WebRTC offer).
+2026-10-13 22:06:16  Voice endpoint answers through CloudFront: HTTP 400.
+2026-10-13 22:06:16  Requests from other websites are refused: HTTP 403.
 
-2026-10-11 16:32:26  DONE. Live voice is on at https://scamcatch.io with up to 50 calls a day.
+2026-10-13 22:06:16  DONE. Live voice is on at https://scamcatch.io with up to 50 calls a day.
