@@ -24,7 +24,7 @@
   --gap:16px;
   --index-room:11rem;  /* space kept clear inside each card for the floating section index */
   --pad:clamp(2rem,4.4vw,4.75rem);
-  --head-gap:clamp(2rem,5vw,6rem);  /* gap in the vision's headline row and the Why a voice title row */
+  --head-gap:clamp(2rem,5vw,6rem);  /* gap in the vision's headline row and the System 1 & System 2 title row */
   --card-h:calc(100svh - var(--peek)*2);
   --ph:clamp(430px,calc(var(--card-h) - 96px),760px);
   --pw:calc(var(--ph)*.4615);
@@ -365,7 +365,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .stage-head h2{max-width:17ch}
 .stage-head p{color:var(--mist);max-width:30rem;font-size:1.04rem}
 
-/* Stage 2: the vision (the map) */
+/* Stage 3: the vision (the map) */
 .card-vision{display:flex;flex-direction:column;gap:clamp(1rem,3svh,2rem);background:radial-gradient(60% 55% at 55% 62%,rgba(61,109,240,.17),transparent 70%),radial-gradient(45% 45% at 0% 0%,rgba(244,194,122,.08),transparent 70%),var(--night)}
 .eyebrow{margin-bottom:1rem;font-size:.72rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--lamp)}
 .vision-head,.why-top{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr)}
@@ -449,14 +449,14 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 }
 .card-vision.card{padding-top:clamp(1.1rem,3svh,1.9rem)}
 
-/* Stage 3: why a voice. Two zones with a line between them: a scam keeps you in emotional thinking (System 1);
+/* Stage 2: System 1 & System 2. Two zones with a line between them: a scam keeps you in emotional thinking (System 1);
    at the line ScamCatch intervenes, and the voice brings in logical thinking (System 2). The steps use the vision's timeline. */
 #why{--alert:#ff2e4c;--alert-deep:#ff7a1f}
 .card-why{display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(1.5rem,4svh,2.5rem);background:radial-gradient(45% 60% at 22% 70%,rgba(255,46,76,.08),transparent 70%),radial-gradient(45% 60% at 80% 70%,rgba(61,109,240,.2),transparent 70%),var(--night)}
 .card-why.card{padding-top:clamp(1.5rem,5svh,4rem);padding-bottom:clamp(1.5rem,5svh,4rem)}
 /* from the top: the title in the top-left corner, the emblem on its row, the line right under the title, the zones, then the paragraph in white across most of the width.
    The row has the vision's headline-row columns, gap and reach into the index room, and the emblem fills the box the vision's timeline fills
-   (column 2, up to 52rem) and centers in it, so it sits where the timeline sits on the page before */
+   (column 2, up to 52rem) and centers in it, so it sits where the timeline sits on the next page */
 .why-top{--title-size:clamp(2rem,1.1rem + 2.4vw,3.6rem);container-type:inline-size;display:grid;grid-template-areas:"title title" "line line";align-items:center;column-gap:var(--head-gap);row-gap:clamp(.6rem,1.6svh,1rem)}
 .why-title{grid-area:title;font-size:var(--title-size)}
 .why-line{grid-area:line}
@@ -613,7 +613,7 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 @media (min-width:761px) and (max-width:1023px){
   .hero-keep{white-space:normal}
 }
-/* narrow two-column screens: the Why a voice zones stack, each keeping its three steps in a row; the emblem moves beside the two lines */
+/* narrow two-column screens: the System 1 & System 2 zones stack, each keeping its three steps in a row; the emblem moves beside the two lines */
 @media (min-width:761px) and (max-width:999px){
   #why{height:auto;min-height:var(--card-h)}
   .why-top{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"title title" "line emblem";margin-right:0}
