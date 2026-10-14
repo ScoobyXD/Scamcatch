@@ -9,6 +9,7 @@ local.properties
 .DS_Store
 captures/
 test-artifacts/
+tmp/
 runs/
 .dashboard/
 __pycache__/
