@@ -26,11 +26,12 @@
      steps: the messages that arrive one by one before the flagged one
      flagged: the message ScamCatch catches
      avatar: a letter for a saved contact, 'photo' for a contact photo, null for an unknown number
-     app: the chat look, 'imessage', 'whatsapp' (dark) or 'messenger' (dark). Styled after those apps, never their names or logos. */
+     app: the chat look, 'imessage', 'whatsapp' (dark) or 'messenger' (dark). Styled after those apps, never their names or logos.
+     pace: optional; below 1 plays the trust and ask parts faster (romance, the first scam people see, uses it) */
   const SCENARIOS = {
     romance: {
       key: 'romance_crypto_investment',
-      app: 'whatsapp', contact: 'Simon', avatar: 'S', first: 'Trust',
+      app: 'whatsapp', contact: 'Simon', avatar: 'S', first: 'Trust', pace: 0.6,
       trust: ['It starts with someone who feels real.', 'Romance scammers spend weeks earning trust before money ever comes up.'],
       ask: ['Then comes the ask.', 'Often it’s crypto, through a “friend” who’s doing really well. And they’ll match whatever you put in.'],
       thread: [
@@ -407,21 +408,22 @@
   const readFor = (text) => Math.max(1100, Math.min(3600, 500 + text.length * 30));
   let script = [];
   function buildScript() {
+    const pace = SCENARIOS[current].pace || 1;   // shortens the trust and ask parts; the warning and voice keep their timing
     const rows = [
       [0, () => { reset(); setPhase('trust', trustFor); }],
-      [300, () => card.classList.add('has-watch')],
-      [300, () => show(typing)],
+      [300 * pace, () => card.classList.add('has-watch')],
+      [300 * pace, () => show(typing)],
     ];
     let askAt = 0;
     stepped.forEach((m, i) => {
-      rows.push([TYPING, () => { hide(typing); show(m); }]);
+      rows.push([TYPING * pace, () => { hide(typing); show(m); }]);
       if (m === flagged) return;
       if (i === 0) askAt = rows.length;
-      rows.push([readFor(msgText(m)), () => { show(typing); if (i === 0) setPhase('ask', askFor); }]);
+      rows.push([readFor(msgText(m)) * pace, () => { show(typing); if (i === 0) setPhase('ask', askFor); }]);
     });
     const flagAt = rows.length;
     rows.push(
-      [900, () => { flagged.classList.add('is-scanned'); card.classList.add('has-flag'); }],
+      [900 * pace, () => { flagged.classList.add('is-scanned'); card.classList.add('has-flag'); }],
       [1200, () => {
         setPhase('warn', 1700);
         phone.classList.remove('buzz');
