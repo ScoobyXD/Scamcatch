@@ -565,19 +565,49 @@
   });
   ['pointermove', 'focusin'].forEach((type) => phone.addEventListener(type, () => { lastInteraction = Date.now(); }));
 
+  /* ---- Why a voice: the story plays in order, one step at a time, left to right, like the vision's timeline ---- */
+  // [step that lights up, how long it stays lit in ms]: the scam's steps rush by, the voice's steps take their time,
+  // then a short rest with nothing lit before the story starts over. "catch" is the line where ScamCatch intervenes.
+  const WHY_SEQUENCE = [['message', 1400], ['emotions', 1400], ['ask', 1400], ['catch', 2600], ['calm', 2600], ['think', 2600], ['check', 2600], ['rest', 1100]];
+  const whyCard = document.querySelector('.card-why');
+  let whyTimer = 0;
+  let whyLit = null;
+  function whyLight(index) {
+    const [step, ms] = WHY_SEQUENCE[index];
+    whyCard.dataset.active = step;
+    if (whyLit) whyLit.classList.remove('is-lit');
+    whyLit = whyCard.querySelector(`[data-step="${step}"]`);
+    if (whyLit) whyLit.classList.add('is-lit');
+    whyTimer = setTimeout(() => whyLight((index + 1) % WHY_SEQUENCE.length), ms);
+  }
+  function whyPlay() { if (!reduceMotion && !whyTimer) whyLight(0); }
+  // off screen it stops and shows every step lit and still, which is also the reduced-motion view
+  function whyStop() {
+    clearTimeout(whyTimer);
+    whyTimer = 0;
+    delete whyCard.dataset.active;
+    if (whyLit) whyLit.classList.remove('is-lit');
+    whyLit = null;
+  }
+
   /* ---- Section index + pause the demo when it's off screen ---- */
   const links = new Map([...document.querySelectorAll('.index a')].map((a) => [a.hash.slice(1), a]));
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       entry.target.classList.toggle('is-onscreen', entry.isIntersecting);
       if (entry.target.id === 'demo') entry.isIntersecting ? resume() : pause();
+      if (entry.target.id === 'why') entry.isIntersecting ? whyPlay() : whyStop();
       if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
         links.forEach((a, id) => a.setAttribute('aria-current', id === entry.target.id ? 'true' : 'false'));
       }
     });
   }, { threshold: [0, 0.5] });
   document.querySelectorAll('.stage').forEach((stage) => observer.observe(stage));
-  document.addEventListener('visibilitychange', () => (document.hidden ? pause() : resume()));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { pause(); whyStop(); return; }
+    resume();
+    if (whyCard.closest('.stage').classList.contains('is-onscreen')) whyPlay();
+  });
 
   window.ScamCatchDemo = { context: demoContext, startCall, endCall, replay: () => play(0), scenario: selectScenario, scenarios: SCENARIOS };
 

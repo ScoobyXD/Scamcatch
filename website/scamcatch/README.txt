@@ -29,7 +29,8 @@
 29. The progress row narrows on laptop screens so Replay never sits under the "Click here" cue.
 30. Why a voice spacing: the title and line sit in the top-left corner; the zones and the white paragraph stay together, centered in the space below.
 31. The emblem: a fast red jagged line into the logo, a slow blue wave out of it. It sits on the title's row, its right end in line with the System 2 zone; on narrow two-column screens, beside the two lines; on phones, under them.
-32. System 1 motion: the red lines race left to right and shake; the icons buzz one after another, left to right; steps 1 to 3 come in quickly.
-33. System 2 motion: the blue waves drift; the icons breathe one after another; the voice orb's bars talk slowly; steps 4 to 6 come in slowly.
-34. Both lighthouse logos on the stage (the emblem's and the line's) are beacons: the beam swings right, toward you, left and back, and the lamp flares as it faces you.
-35. The stage moves only while it is on screen (app.js adds is-onscreen to each stage in view). Under reduced motion everything holds still and the beam is hidden.
+32. The stage plays its story in order, one step at a time, left to right (top to bottom on phones), on a loop (WHY_SEQUENCE in app.js): steps 1 to 3 quickly, then "ScamCatch intervenes", then steps 4 to 6 slowly, then a short rest with nothing lit.
+33. While it plays, the steps sit dim and the step it is on lights up, the same way the vision's timeline lights its steps.
+34. Only the step it is on moves: the line out of it runs (red races, blue drifts); at step 4 the voice orb's bars talk; at "ScamCatch intervenes" both lighthouse logos fire their beam (from the left, toward you, to the right) and the lamp flares. Nothing shakes, buzzes or vibrates, and nothing moves all at once.
+35. The emblem follows the same story: its red line lights and runs during steps 1 to 3, its lighthouse fires at the intervention, and its blue wave lights and drifts during steps 4 to 6.
+36. It plays only while the stage is on screen. Off screen and under reduced motion, every step shows lit and still, and the beam is hidden.
