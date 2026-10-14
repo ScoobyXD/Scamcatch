@@ -457,8 +457,23 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 #why{--alert:#ff2e4c;--alert-deep:#ff7a1f}
 .card-why{display:flex;flex-direction:column;justify-content:flex-start;gap:clamp(1.5rem,4svh,2.5rem);background:radial-gradient(45% 60% at 22% 70%,rgba(255,46,76,.08),transparent 70%),radial-gradient(45% 60% at 80% 70%,rgba(61,109,240,.2),transparent 70%),var(--night)}
 .card-why.card{padding-top:clamp(1.5rem,5svh,4rem);padding-bottom:clamp(1.5rem,5svh,4rem)}
-/* from the top: the title in the top-left corner, the line right under it, the zones, then the paragraph in white across most of the width */
-.why-top{display:grid;gap:clamp(.6rem,1.6svh,1rem)}
+/* from the top: the title in the top-left corner with the emblem at the right of its row, the line right under the title, the zones, then the paragraph in white across most of the width */
+.why-top{display:grid;grid-template-columns:auto minmax(12rem,1fr);grid-template-areas:"title emblem" "line line";align-items:center;column-gap:clamp(2rem,4vw,4rem);row-gap:clamp(.6rem,1.6svh,1rem)}
+.why-title{grid-area:title}
+.why-line{grid-area:line}
+/* the emblem: a fast red line racing into the lighthouse and shaking, a slow blue wave drifting out of it */
+.why-emblem{grid-area:emblem;justify-self:end;display:flex;align-items:center;gap:.8rem;width:100%;max-width:30rem;height:56px}
+.emblem-line{flex:1;min-width:0;height:100%;-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent)}
+.emblem-fast{--tile:80px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 56'%3E%3Cpath d='M0 28h9l3-14 4 28 3-20 3 12 2-6h8l3-22 4 44 3-30 3 16 2-8h8l2-8 3 16 2-8H80' fill='none' stroke='%23ff2e4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-x 0 50%/80px 56px;filter:drop-shadow(0 0 4px rgba(255,46,76,.6));animation:tempo-zig .5s linear infinite,tempo-shake .2s steps(1) infinite}
+.emblem-slow{--tile:160px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 56'%3E%3Cpath d='M0 28C27 12 53 12 80 28S133 44 160 28' fill='none' stroke='%237ab0ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/160px 56px;filter:drop-shadow(0 0 5px rgba(122,176,255,.5));animation:tempo-wave 5s linear infinite}
+.why-emblem img{display:block;width:52px;height:52px;border-radius:13px;box-shadow:0 12px 26px -12px rgba(0,0,0,.8)}
+/* lighthouse beacon: the lamp's beam (the logo's lamp sits 26.67% down) swings right, toward you, left and back,
+   the way a turning light looks from the side; the lamp flares as the beam faces you */
+.beacon{position:relative;display:grid;place-items:center;isolation:isolate}
+.beacon::before{content:"";position:absolute;left:50%;top:-8.33%;width:125%;height:70%;pointer-events:none;transform-origin:0 50%;background:conic-gradient(from 0deg at 0 50%,transparent 74deg,rgba(255,226,150,.9) 90deg,transparent 106deg);-webkit-mask-image:linear-gradient(90deg,#000 20%,transparent);mask-image:linear-gradient(90deg,#000 20%,transparent);mix-blend-mode:screen;animation:beacon-sweep 4s infinite}
+.beacon::after{content:"";position:absolute;left:27%;top:3.67%;width:46%;height:46%;border-radius:50%;pointer-events:none;background:radial-gradient(closest-side,rgba(255,236,190,.95),rgba(255,214,140,0));mix-blend-mode:screen;opacity:.45;animation:beacon-flash 4s ease-in-out infinite}
+@keyframes beacon-sweep{0%{transform:scaleX(1);animation-timing-function:ease-in}25%{transform:scaleX(0);animation-timing-function:ease-out}50%{transform:scaleX(-1);animation-timing-function:ease-in}75%{transform:scaleX(0);animation-timing-function:ease-out}100%{transform:scaleX(1)}}
+@keyframes beacon-flash{0%,15%,35%,100%{opacity:.45;transform:none}25%{opacity:1;transform:scale(1.5)}75%{opacity:.15}}
 .card-why .tempo{margin-top:auto}
 .card-why .why-lede{margin-bottom:auto}
 .why-line{font-family:var(--display);font-size:clamp(1.3rem,.95rem + .75vw,1.9rem);font-weight:420;line-height:1.2;letter-spacing:-.015em;color:var(--paper);font-variation-settings:"opsz" 60;text-wrap:balance}
@@ -480,22 +495,31 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .tempo-fast li{--c:var(--alert)}
 .timeline-tempo .timeline-mark{align-self:center}
 .timeline-tempo .timeline-icon{opacity:1;color:#fff;background:#3d6df0}
-.tempo-fast .timeline-icon{background:linear-gradient(135deg,var(--alert),var(--alert-deep))}
+.tempo-fast .timeline-icon{background:linear-gradient(135deg,var(--alert),var(--alert-deep));animation:tempo-buzz 2.4s ease-in-out infinite}
+.tempo-slow .timeline-icon{animation:breathe 3.6s ease-in-out infinite}
+.tempo-fast li:nth-child(2) .timeline-icon{animation-delay:.8s}
+.tempo-fast li:nth-child(3) .timeline-icon{animation-delay:1.6s}
+.tempo-slow li:nth-child(2) .timeline-icon{animation-delay:1.2s}
+.tempo-slow li:nth-child(3) .timeline-icon{animation-delay:2.4s}
+@keyframes tempo-buzz{0%,25%,100%{transform:none}5%{transform:translateX(-3px) rotate(-4deg)}10%{transform:translateX(3px) rotate(4deg)}15%{transform:translateX(-3px) rotate(-3deg)}20%{transform:translateX(2px) rotate(2deg)}}
 .timeline-tempo .timeline-icon svg{width:26px;height:26px;fill:#fff}
 .timeline-tempo li[data-step="message"] svg circle{fill:var(--alert)}
 .timeline-tempo svg.tempo-stroke{fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 /* step 4 is the voice itself: the app's light blue orb with white bars */
 .timeline-tempo .tempo-voice{grid-auto-flow:column;justify-content:center;align-content:center;gap:3px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#e3edff 0%,#9cc3ff 24%,#5a8cff 55%,#2342b8 100%);box-shadow:0 0 18px rgba(122,176,255,.55)}
-.tempo-voice i{width:3px;height:9px;border-radius:2px;background:#fff}
+.tempo-voice i{width:3px;height:9px;border-radius:2px;background:#fff;animation:talk 1.5s ease-in-out infinite}
+.tempo-voice i:nth-child(2n){animation-duration:1.2s}
+.tempo-voice i:nth-child(3n){animation-duration:1.8s}
 .tempo-voice i:nth-child(2),.tempo-voice i:nth-child(4){height:15px}
 .tempo-voice i:nth-child(3){height:21px}
 /* fast red jagged line between the fast steps, slow blue wave between the slow ones */
-.tempo-fast .timeline-tempo li:not(:last-child) .timeline-mark::after{height:22px;border-radius:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 22'%3E%3Cpath d='M0 11h7l3-8 4 16 3-11 2.5 6 2-3H36' fill='none' stroke='%23ff2e4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-x 0 50%/36px 22px;filter:drop-shadow(0 0 4px rgba(255,46,76,.6));animation:tempo-zig .45s linear infinite}
-.tempo-slow .timeline-tempo li:not(:last-child) .timeline-mark::after{height:22px;border-radius:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 22'%3E%3Cpath d='M0 11C12 3 24 3 36 11S60 19 72 11' fill='none' stroke='%237ab0ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/72px 22px;filter:drop-shadow(0 0 4px rgba(122,176,255,.5));animation:tempo-wave 3.6s linear infinite}
-@keyframes tempo-zig{to{background-position:36px 50%}}
-@keyframes tempo-wave{to{background-position:72px 50%}}
+.tempo-fast .timeline-tempo li:not(:last-child) .timeline-mark::after{height:22px;border-radius:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 22'%3E%3Cpath d='M0 11h7l3-8 4 16 3-11 2.5 6 2-3H36' fill='none' stroke='%23ff2e4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-x 0 50%/36px 22px;filter:drop-shadow(0 0 4px rgba(255,46,76,.6));animation:tempo-zig .4s linear infinite,tempo-shake .2s steps(1) infinite}
+.tempo-slow .timeline-tempo li:not(:last-child) .timeline-mark::after{height:22px;border-radius:0;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 22'%3E%3Cpath d='M0 11C12 3 24 3 36 11S60 19 72 11' fill='none' stroke='%237ab0ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x 0 50%/72px 22px;filter:drop-shadow(0 0 4px rgba(122,176,255,.5));animation:tempo-wave 2.8s linear infinite}
+@keyframes tempo-zig{to{background-position:var(--tile,36px) 50%}}
+@keyframes tempo-wave{to{background-position:var(--tile,72px) 50%}}
 @keyframes tempo-zig-y{to{background-position:50% 36px}}
 @keyframes tempo-wave-y{to{background-position:50% 72px}}
+@keyframes tempo-shake{0%,100%{transform:translate(-1px,1px)}25%{transform:translate(1px,-1px)}50%{transform:translate(-1px,-1px)}75%{transform:translate(1px,1px)}}
 .timeline-tempo li p{font-size:.95rem;line-height:1.35;color:var(--paper)}
 .tempo-bubble{justify-self:start;align-self:start;padding:.45rem .7rem;border-radius:.9rem .9rem .9rem .3rem;background:#eef0f3;color:#0b0e14;font-family:var(--phone-ui);font-size:.8rem;line-height:1.3;text-wrap:pretty;box-shadow:0 0 0 2px var(--alert),0 0 16px rgba(255,46,76,.35)}
 .tempo-tags{display:flex;flex-wrap:wrap;align-self:start;gap:.3rem}
@@ -503,9 +527,10 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 .timeline-tempo q{align-self:start;font-family:var(--display);font-size:clamp(1rem,.85rem + .35vw,1.18rem);line-height:1.3;color:var(--catch);font-variation-settings:"opsz" 24;text-wrap:pretty}
 /* the line: a dashed rule, ScamCatch's logo on it level with the step icons */
 .tempo-divide{grid-row:1/-1;display:grid;grid-template-rows:subgrid;row-gap:normal;justify-items:center;background:repeating-linear-gradient(to bottom,rgba(238,240,247,.38) 0 7px,transparent 7px 13px) 50% 0/2px 100% no-repeat}
-.tempo-divide img{grid-row:2;align-self:center;display:block;width:56px;height:56px;border-radius:14px;box-shadow:0 0 0 7px var(--night),0 10px 24px -10px rgba(0,0,0,.8)}
-.tempo-divide p{grid-row:3;align-self:start;padding:.25rem .45rem;border-radius:8px;background:var(--night);font-size:.78rem;font-weight:650;line-height:1.25;text-align:center;color:var(--paper)}
-/* fast steps arrive quickly, slow steps take their time; the lines move only while the stage is on screen (app.js marks it) */
+.tempo-divide .beacon{grid-row:2;align-self:center;border-radius:14px;box-shadow:0 0 0 7px var(--night)}
+.tempo-divide img{display:block;width:56px;height:56px;border-radius:14px;box-shadow:0 10px 24px -10px rgba(0,0,0,.8)}
+.tempo-divide p{position:relative;grid-row:3;align-self:start;padding:.25rem .45rem;border-radius:8px;background:var(--night);font-size:.78rem;font-weight:650;line-height:1.25;text-align:center;color:var(--paper)}
+/* fast steps arrive quickly, slow steps take their time; everything on the stage moves only while it is on screen (app.js marks it) */
 @keyframes tempo-in{from{opacity:0;transform:translateY(10px)}}
 #why.is-onscreen .timeline-tempo li{animation:tempo-in .4s ease-out both}
 #why.is-onscreen .tempo-fast li:nth-child(2){animation-delay:.1s}
@@ -515,9 +540,9 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 #why.is-onscreen .tempo-slow li:nth-child(1){animation-delay:.9s}
 #why.is-onscreen .tempo-slow li:nth-child(2){animation-delay:1.5s}
 #why.is-onscreen .tempo-slow li:nth-child(3){animation-delay:2.1s}
-#why .timeline-tempo .timeline-mark::after,#why .timeline-tempo li::after{animation-play-state:paused}
-#why.is-onscreen .timeline-tempo .timeline-mark::after,#why.is-onscreen .timeline-tempo li::after{animation-play-state:running}
-@media (prefers-reduced-motion:reduce){#why.is-onscreen .timeline-tempo li,#why.is-onscreen .tempo-divide{animation:none}}
+#why .timeline-tempo .timeline-mark::after,#why .timeline-tempo li::after,#why .timeline-tempo .timeline-icon,#why .tempo-voice i,#why .emblem-line,#why .beacon::before,#why .beacon::after{animation-play-state:paused}
+#why.is-onscreen .timeline-tempo .timeline-mark::after,#why.is-onscreen .timeline-tempo li::after,#why.is-onscreen .timeline-tempo .timeline-icon,#why.is-onscreen .tempo-voice i,#why.is-onscreen .emblem-line,#why.is-onscreen .beacon::before,#why.is-onscreen .beacon::after{animation-play-state:running}
+@media (prefers-reduced-motion:reduce){#why.is-onscreen .timeline-tempo li,#why.is-onscreen .tempo-divide{animation:none}.beacon::before{display:none}}
 
 /* Stage 4: the voice */
 .card-voice{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:3rem;align-items:center;background:radial-gradient(60% 80% at 100% 50%,rgba(61,109,240,.28),transparent 70%),var(--night)}
@@ -593,15 +618,16 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
 @media (min-width:761px) and (max-width:1023px){
   .hero-keep{white-space:normal}
 }
-/* narrow two-column screens: the Why a voice zones stack, each keeping its three steps in a row */
+/* narrow two-column screens: the Why a voice zones stack, each keeping its three steps in a row; the emblem moves beside the two lines */
 @media (min-width:761px) and (max-width:999px){
   #why{height:auto;min-height:var(--card-h)}
+  .why-top{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"title title" "line emblem"}
   .tempo{grid-template-columns:1fr;grid-template-rows:none;row-gap:0}
   .tempo-zone{grid-row:auto;grid-template-rows:none;row-gap:.85rem}
   .timeline.timeline-tempo{grid-row:auto;grid-template-rows:none}
   .timeline-tempo li{grid-row:auto;grid-template-rows:none;row-gap:.65rem}
   .tempo-divide{grid-row:auto;grid-template-rows:none;grid-auto-flow:column;justify-content:center;align-items:center;gap:.8rem;padding:1rem 0;background:repeating-linear-gradient(to right,rgba(238,240,247,.38) 0 7px,transparent 7px 13px) 0 50%/100% 2px no-repeat}
-  .tempo-divide img,.tempo-divide p{grid-row:auto;align-self:center}
+  .tempo-divide .beacon,.tempo-divide p{grid-row:auto;align-self:center}
 }
 
 /* ---------- Phones ---------- */
@@ -645,20 +671,24 @@ h3{font-size:1.06rem;font-weight:650;line-height:1.3;letter-spacing:-.005em}
   .timeline{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:1.1rem}
   .timeline li:nth-child(2) .timeline-mark::after{display:none}
   .card-why{justify-content:flex-start;gap:1.6rem}
+  .why-top{grid-template-columns:1fr;grid-template-areas:"title" "line" "emblem"}
+  .why-emblem{justify-self:stretch;max-width:none;height:48px;margin-top:.3rem}
+  .why-emblem img{width:44px;height:44px}
   .tempo{grid-template-columns:1fr;grid-template-rows:none;row-gap:0}
   .tempo-zone{grid-row:auto;grid-template-rows:none;row-gap:1rem;padding:1rem 1rem 1.1rem}
   .tempo-head b{font-size:1.5rem}
   .tempo-divide{grid-row:auto;grid-template-rows:none;grid-auto-flow:column;justify-content:center;align-items:center;gap:.7rem;padding:.9rem 0;background:repeating-linear-gradient(to right,rgba(238,240,247,.38) 0 7px,transparent 7px 13px) 0 50%/100% 2px no-repeat}
-  .tempo-divide img,.tempo-divide p{grid-row:auto;align-self:center}
-  .tempo-divide img{width:44px;height:44px;box-shadow:0 0 0 6px var(--night)}
+  .tempo-divide .beacon,.tempo-divide p{grid-row:auto;align-self:center}
+  .tempo-divide .beacon{box-shadow:0 0 0 6px var(--night)}
+  .tempo-divide img{width:44px;height:44px;box-shadow:none}
   .timeline.timeline-tempo{grid-row:auto;grid-template-rows:none;grid-template-columns:1fr;row-gap:1.3rem;padding:0 0 0 8px}
   .timeline-tempo li{position:relative;grid-row:auto;grid-template-rows:none;grid-template-columns:46px minmax(0,1fr);align-content:start;column-gap:.9rem;row-gap:.35rem;min-height:5.6rem}
   .timeline-tempo .timeline-mark{grid-row:1/3;align-self:start}
   .timeline-tempo li > :not(.timeline-mark){grid-column:2}
   .timeline-tempo li .timeline-mark::after{display:none}
   .timeline-tempo li:not(:last-child)::after{content:"";position:absolute;left:12px;top:52px;bottom:calc(-1.3rem + 6px);width:22px}
-  .tempo-fast .timeline-tempo li:not(:last-child)::after{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 36'%3E%3Cpath d='M11 0v7l-8 3 16 4-11 3 6 2.5-3 2V36' fill='none' stroke='%23ff2e4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-y 50% 0/22px 36px;filter:drop-shadow(0 0 4px rgba(255,46,76,.6));animation:tempo-zig-y .45s linear infinite}
-  .tempo-slow .timeline-tempo li:not(:last-child)::after{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 72'%3E%3Cpath d='M11 0C3 12 3 24 11 36S19 60 11 72' fill='none' stroke='%237ab0ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") repeat-y 50% 0/22px 72px;filter:drop-shadow(0 0 4px rgba(122,176,255,.5));animation:tempo-wave-y 3.6s linear infinite}
+  .tempo-fast .timeline-tempo li:not(:last-child)::after{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 36'%3E%3Cpath d='M11 0v7l-8 3 16 4-11 3 6 2.5-3 2V36' fill='none' stroke='%23ff2e4c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") repeat-y 50% 0/22px 36px;filter:drop-shadow(0 0 4px rgba(255,46,76,.6));animation:tempo-zig-y .4s linear infinite,tempo-shake .2s steps(1) infinite}
+  .tempo-slow .timeline-tempo li:not(:last-child)::after{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 72'%3E%3Cpath d='M11 0C3 12 3 24 11 36S19 60 11 72' fill='none' stroke='%237ab0ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") repeat-y 50% 0/22px 72px;filter:drop-shadow(0 0 4px rgba(122,176,255,.5));animation:tempo-wave-y 2.8s linear infinite}
   .card-voice{grid-template-columns:1fr;align-content:center;gap:2rem}
   .big-orb{display:none}
   .status-grid{grid-template-columns:1fr}
