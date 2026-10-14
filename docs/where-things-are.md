@@ -11,7 +11,7 @@ Website (scamcatch.io)
 
 Hosting and publishing
 6. The site is on AWS: profile mangorts-dev, region us-east-1, stack scamcatch-site, private S3 bucket scamcatch-site-686458136219 behind CloudFront distribution E1FTFPRB048HY.
-7. Publishing goes through GitHub (ScoobyXD/Scamcatch). A push to main that changes website/scamcatch/public runs .github/workflows/publish-website.yml, which uploads to S3, clears CloudFront, and checks scamcatch.io. Push only when the user asks to publish. Publish Website.cmd in the repository root does the same upload by hand from the user's PC.
+7. Publishing goes through GitHub (ScoobyXD/Scamcatch). A push to main that changes website/scamcatch/public runs .github/workflows/publish-website.yml, which uploads to S3, clears CloudFront, and checks scamcatch.io. Push only when the user asks to publish. To upload by hand instead, use the aws s3 sync command in website/scamcatch/infra/README.txt.
 8. To publish from a cloud session: attach ScoobyXD/Scamcatch with push access, copy the changed files from the user's antiscam folder into the clone, commit to main, and push. The cloud session's GitHub proxy blocks the Actions API, so confirm the publish by fetching scamcatch.io (the workflow fails unless the live index.html matches the push), or ask the user to check the Actions tab. The user's local folder keeps the same files, so their next pull merges cleanly once they have committed their own changes.
 9. Hosting, DNS, certificate, and domain rules are in website/scamcatch/infra/README.txt. scamcatch.io is registered at Namecheap with DNS in Route 53. scamcatchtech.com redirects to scamcatch.io.
 
