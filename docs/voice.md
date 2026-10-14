@@ -79,5 +79,5 @@
 26. The Lambda reads voice-pages.json from the visitor's site (scamcatch.io/voice-pages.json) and reuses it for 60 seconds. If the site can't be read, it keeps its last good copy; with no copy, the page call fails before a session starts.
 27. The local server reads public/voice-pages.json on every page call, so edits need no restart.
 28. Editing voice-pages.json needs no Deploy Voice.cmd: a push to main publishes it with the site. Edits to AIInstructions.kt or handler.py still need Deploy Voice.cmd.
-24. System 1 & System 2 opening: no definitions up front; scammers keep you in System 1 with love, hope, fear and urgency; ScamCatch steps in to slow the pace; then it brings in System 2.
+24. System 1 & System 2 opening: no definitions up front; scammers keep you in System 1 (the red side) with love, hope, fear and urgency; ScamCatch (the lighthouse in the middle) steps in to slow the pace; then it brings in System 2 (the blue side).
 25. Vision opening: starts with "Our vision is to", then the page's four steps, one by one: a scam comes in; ScamCatch intervenes; with approval or pre-approval, it contacts the bank, the authorities, and trusted contacts; if crypto was involved, a crypto trace. It doesn't say "This is our vision" or bring up zero dollars lost.
