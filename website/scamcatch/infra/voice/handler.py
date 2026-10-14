@@ -1,7 +1,8 @@
 """ScamCatch live voice for scamcatch.io: AWS Lambda behind CloudFront /api/*.
 
 Mirrors POST /api/voice/session in website/scamcatch/server.py. Deployed as index.py by infra/deploy_voice.py,
-next to prompts.json (the voice constants from AIInstructions.kt). The OpenAI key stays in AWS Secrets Manager
+next to prompts.json (the voice constants from AIInstructions.kt). "Click to hear explanation" scripts come from
+the site itself (/voice-pages.json), so they go live with every website publish. The OpenAI key stays in AWS Secrets Manager
 and Lambda memory; it never reaches the browser, logs, or error text.
 """
 from __future__ import annotations
@@ -29,8 +30,10 @@ OPENAI_KEY = re.compile(r"sk-[A-Za-z0-9_-]{20,}")
 HEADER_SAFE = re.compile(r"[\x21-\x7e]{1,2048}")
 SAFE_ID = re.compile(r"[a-z][a-z0-9_]*(?:[.\[][a-z0-9_]+\]?)*")
 KEY_UNAVAILABLE = "Live voice can’t read its key right now."
-# Pages with "Click to hear explanation": section id on the page -> its page notes in AIInstructions.kt.
-PAGES = {"why": "VOICE_PAGE_WHY", "vision": "VOICE_PAGE_VISION"}
+PAGES_PATH = "/voice-pages.json"   # "Click to hear explanation" scripts, published with the site
+PAGES_SECONDS = 60                  # how long a warm function reuses the scripts before reading them again
+MAX_PAGES_BYTES = 64 * 1024
+_pages = {"at": 0.0, "scripts": None}
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts.json"), encoding="utf-8") as prompts_file:
     PROMPTS = json.load(prompts_file)
@@ -120,14 +123,46 @@ def evidence_text(context):
     return PROMPTS["VOICE_EVIDENCE_PREFIX"] + evidence
 
 
-def session_input(context):
+def page_scripts(data):
+    """voice-pages.json as (instructions, {page id: notes}), each list of lines joined; None when it isn't in that shape."""
+    def text(value):
+        return "\n".join(value) if isinstance(value, list) and value and all(isinstance(line, str) for line in value) else None
+    pages = data.get("pages") if isinstance(data, dict) else None
+    instructions = text(data.get("instructions")) if isinstance(data, dict) else None
+    notes = {page: text(value) for page, value in pages.items()} if isinstance(pages, dict) else {}
+    return (instructions, notes) if instructions and notes and all(notes.values()) else None
+
+
+def load_pages(site):
+    """The site's voice-pages.json, reused for PAGES_SECONDS. A failed read keeps the last good copy."""
+    now = time.time()
+    if _pages["scripts"] and now - _pages["at"] < PAGES_SECONDS:
+        return _pages["scripts"]
+    try:
+        request = urllib.request.Request(site + PAGES_PATH, headers={"User-Agent": "ScamCatch voice"})
+        with OPENER.open(request, timeout=5) as response:
+            raw = response.read(MAX_PAGES_BYTES + 1)
+        scripts = page_scripts(json.loads(raw)) if len(raw) <= MAX_PAGES_BYTES else None
+    except (urllib.error.URLError, OSError, ValueError):
+        scripts = None
+    if scripts:
+        _pages.update(at=now, scripts=scripts)
+    elif not _pages["scripts"]:
+        raise VoiceError(503, "Voice can’t load this page’s explanation right now.", f"Could not read {PAGES_PATH} from {site}.")
+    return _pages["scripts"]
+
+
+def session_input(context, site):
     """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
     page = context.get("page") if isinstance(context, dict) else None
     if page is None:
         return PROMPTS["VOICE_INSTRUCTIONS"], evidence_text(context)
-    if not (isinstance(page, str) and page in PAGES):
+    if not isinstance(page, str):
         raise VoiceError(400, "Voice can’t explain that page.")
-    return PROMPTS["VOICE_PAGE_INSTRUCTIONS"], PROMPTS[PAGES[page]]
+    instructions, notes = load_pages(site)
+    if page not in notes:
+        raise VoiceError(400, "Voice can’t explain that page.")
+    return instructions, notes[page]
 
 
 def reserve_call():
@@ -212,14 +247,14 @@ def create_session(key, offer, instructions, evidence, voice):
     return answer
 
 
-def start(body):
+def start(body, site):
     offer = body.get("sdp")
     if not (isinstance(offer, str) and offer.startswith("v=0") and len(offer) <= 20000):
         raise VoiceError(400, "Voice needs a WebRTC offer to start.")
     voice = body.get("voice", PROMPTS["VOICE_NAME"])
     if voice not in VOICES:
         raise VoiceError(400, "That voice name isn't one of OpenAI's built-in voices.")
-    instructions, evidence = session_input(body.get("context"))
+    instructions, evidence = session_input(body.get("context"), site)
     # Each accepted start may create a billable session, so it is counted before OpenAI is called, and failures count too.
     reserve_call()
     key = read_key()
@@ -270,7 +305,7 @@ def handler(event, _context):
         body = json.loads(data)
         if not isinstance(body, dict):
             raise ValueError
-        answer = start(body)
+        answer = start(body, headers["origin"])   # the visitor's site, already checked against ALLOWED_ORIGINS
     except VoiceError as error:
         if error.detail:
             print(f"Voice: {error.detail}", flush=True)

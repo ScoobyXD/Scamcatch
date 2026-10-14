@@ -2,7 +2,7 @@
 
 ## Edit questions and prompts
 
-1. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) is the single source for all Jev questions and voice prompts.
+1. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) is the single source for all Jev questions and voice prompts, except the website's "Click to hear explanation" scripts, which are in [website/scamcatch/public/voice-pages.json](../website/scamcatch/public/voice-pages.json).
 2. It contains the voice system instructions, greeting, evidence prefix, truncation suffix, and no-backend commentary. It also defines model settings and the Jev threshold.
 3. The debug build compiles this Kotlin file directly. The website server parses its voice constants at startup. Neither uses a generated instruction copy.
 4. Stop the run after edits. Build, install, and restart Antiscam. Restore or enter the required keys before another run. Edits do not reload live.
@@ -73,8 +73,11 @@
 18. Keep `VOICE_GREETING` short. The session reads the whole greeting before the voice starts, so every extra word delays the first words. The opening itself is in `VOICE_INSTRUCTIONS`. Measured on scamcatch.io on October 11, 2026: about 1.9 seconds from `session.started` to the first words with the old 70-word greeting, about 1.45 seconds with a two-word one.
 19. A blocked, missing, or busy microphone does not stop the call. live.js sends silence instead, and the visitor hears the voice's opening. The status says the mic is off, the visitor's turn never shows, and the call ends once the voice has been quiet for 3 seconds, showing why the microphone couldn't open.
 20. live.js starts its audio element with silence during the tap, so Safari plays the voice even when no microphone is capturing.
-21. "Click to hear explanation" sends `context` as `{"page": "<section id>"}`. The server and the Lambda then use `VOICE_PAGE_INSTRUCTIONS` and that page's notes (`PAGES` in server.py and handler.py: `why` → `VOICE_PAGE_WHY`, `vision` → `VOICE_PAGE_VISION`) instead of the demo chat. An unknown page is refused before a session starts.
+21. "Click to hear explanation" sends `context` as `{"page": "<section id>"}`. The server and the Lambda then use `instructions` and that page's notes from voice-pages.json instead of the demo chat. An unknown page is refused before a session starts.
 22. Page explanations reuse `VOICE_GREETING`, the voice name, the 3-minute cap, and the daily and 10-second limits. The voice skips any greeting or introduction, gives the page's opening from its page notes slowly and calmly, pausing after each point, then asks for questions.
-23. Page notes go in as the session's first input, like the demo's evidence. Restart the local server and run `Deploy Voice.cmd` after editing them.
+23. Page notes go in as the session's first input, like the demo's evidence.
+26. The Lambda reads voice-pages.json from the visitor's site (scamcatch.io/voice-pages.json) and reuses it for 60 seconds. If the site can't be read, it keeps its last good copy; with no copy, the page call fails before a session starts.
+27. The local server reads public/voice-pages.json on every page call, so edits need no restart.
+28. Editing voice-pages.json needs no Deploy Voice.cmd: a push to main publishes it with the site. Edits to AIInstructions.kt or handler.py still need Deploy Voice.cmd.
 24. System 1 & System 2 opening: no definitions up front; scammers keep you in System 1 with love, hope, fear and urgency; ScamCatch steps in to slow the pace; then it brings in System 2.
 25. Vision opening: starts with "Our vision is to", then the page's four steps, one by one: a scam comes in; ScamCatch intervenes; with approval or pre-approval, it contacts the bank, the authorities, and trusted contacts; if crypto was involved, a crypto trace. It doesn't say "This is our vision" or bring up zero dollars lost.

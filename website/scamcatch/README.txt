@@ -1,4 +1,4 @@
-1. Publish only the public directory: index.html, styles.css, app.js, vision.js, live.js, logo.svg, favicon.svg, jonathan-kim.jpg, and fonts/. The site needs no build step or package install.
+1. Publish only the public directory: index.html, styles.css, app.js, vision.js, live.js, logo.svg, favicon.svg, jonathan-kim.jpg, voice-pages.json, and fonts/. The site needs no build step or package install.
 2. Serve index.html for the root path. Serve app.js, vision.js, and live.js as text/javascript, styles.css as text/css, fonts/*.woff2 as font/woff2, logo.svg and favicon.svg as image/svg+xml, and jonathan-kim.jpg as image/jpeg.
 3. Fonts are self-hosted Newsreader and Hanken Grotesk variable fonts from @fontsource-variable (SIL Open Font License). Do not load fonts from Google.
 4. The page has five snap-scrolling stages and a right-side section index: Live demo, System 1 & System 2, The vision, The voice, About us.
@@ -37,4 +37,4 @@
 37. The System 1 & System 2 and vision stages each have a "Click to hear explanation" pill (.explain, data-page is the stage's section id): the voice's blue orb with white bars and that text. On System 1 & System 2 it sits beside the two lines (under them on tablets and phones); on the vision it sits under the headline.
 38. Clicking it starts the live voice with {"page": "<section id>"}. The voice explains that page first, then answers questions. The pill becomes a call bar: the orb (a microphone on the visitor's turn), the status line, the voice's words (or "Your turn. Ask a question!"), and a red end button.
 39. One voice call at a time: starting the demo call ends an explanation, and starting an explanation ends the demo call. Scrolling the explained stage off screen ends its explanation.
-40. What the voice says about each page is in AIInstructions.kt (VOICE_PAGE_INSTRUCTIONS, VOICE_PAGE_WHY, VOICE_PAGE_VISION). Update the page notes when a page changes.
+40. What the voice says about each page is in public/voice-pages.json: "instructions" for every page, and "pages" keyed by section id. Update a page's notes when the page changes. It publishes with the site, and the live voice picks it up within a minute; no Deploy Voice.cmd.
