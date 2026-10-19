@@ -78,21 +78,35 @@ function renderStatus() {
   byId("connect").textContent = connected ? "Switch device" : "Connect";
   byId("jev-key-open").disabled = commandBusy || !connected || differentDevice;
   byId("openai-key-open").disabled = commandBusy || !connected || differentDevice;
+  const phoneKey = state.phoneKeys?.[keyProvider];
+  const phoneBusy = Boolean(phoneKey?.working);
+  const phoneSaveUnavailable = byId("api-key-remember-phone").checked && !phoneKey;
   byId("api-key-input").disabled = commandBusy || !connected || differentDevice;
-  byId("api-key-send").disabled = commandBusy || !connected || differentDevice;
-  byId("api-key-clear").disabled = commandBusy || !connected || differentDevice;
+  byId("api-key-send").disabled = commandBusy || !connected || differentDevice || phoneBusy || phoneSaveUnavailable;
+  byId("api-key-clear").disabled = commandBusy || !connected || differentDevice || phoneBusy;
+  byId("api-key-remember-phone").disabled = commandBusy || !connected || differentDevice || phoneBusy;
   byId("api-key-send").textContent = keySending ? "Sending…" : "Send to phone";
   const keyStorage = model.keyStorage;
   const savedKey = !differentDevice && Boolean(keyStorage?.saved?.[keyProvider]);
   byId("api-key-remember").disabled = commandBusy || !connected || differentDevice || !keyStorage?.available;
   byId("api-key-use-saved").hidden = !savedKey;
-  byId("api-key-use-saved").disabled = commandBusy || !connected || differentDevice || !keyStorage?.available;
-  byId("api-key-clear").textContent = savedKey ? "Forget saved key" : "Clear key";
-  byId("api-key-clear").title = savedKey ? "Remove the saved key from this PC and clear the phone key" : "Clear the phone key";
+  byId("api-key-use-saved").disabled = commandBusy || !connected || differentDevice || !keyStorage?.available || phoneBusy || phoneSaveUnavailable;
+  byId("api-key-clear").title = phoneKey
+    ? "Remove saved copies on this PC and phone, and clear the active phone key"
+    : "Remove the saved PC copy and clear the active phone key. Clear saved phone keys in Antiscam.";
+  byId("api-key-phone-status").className = `key-message${connected && !differentDevice && phoneKey?.error ? " error" : ""}`;
+  byId("api-key-phone-status").textContent = !connected || differentDevice
+    ? "Connect the selected phone to check phone storage."
+    : !phoneKey ? "Update Antiscam Dev to save keys on this phone. Uncheck Remember on this phone for temporary delivery."
+      : phoneKey.working ? phoneKey.message || "Updating phone storage…"
+        : phoneKey.error ? phoneKey.message || "Phone storage failed. Check Phone keys in Antiscam."
+          : phoneKey.saved === true ? "Key saved on this phone. It will load after app restarts."
+            : phoneKey.saved === false ? "No key is saved on this phone."
+              : "Phone storage status is not confirmed.";
   byId("api-key-saved-status").textContent = !connected || differentDevice
     ? "Connect the selected phone to check its saved key."
     : keyStorage?.error || (!keyStorage?.available
-      ? "Saving keys is unavailable on this PC. You can still send a key to phone memory."
+      ? "Saving keys on this PC is unavailable. You can still send a key to the phone."
       : `${keyProviders[keyProvider].label} key ${savedKey ? "saved" : "not saved"} on this PC for this phone.`);
   if ((!connected || differentDevice) && byId("api-key-dialog").open) {
     byId("api-key-input").value = "";
@@ -474,11 +488,14 @@ async function sendApiKey(action = "send") {
   const clear = action === "clear";
   const useSaved = action === "saved";
   const remember = Boolean(model.keyStorage?.available && byId("api-key-remember").checked);
+  const phoneKey = model.state?.phoneKeys?.[keyProvider];
+  const rememberOnPhone = clear ? Boolean(phoneKey) : byId("api-key-remember-phone").checked;
   const hadSavedKey = Boolean(model.keyStorage?.saved?.[keyProvider]);
+  if (phoneKey?.working || (rememberOnPhone && !phoneKey)) return;
   if (useSaved && (!model.keyStorage?.available || !hadSavedKey)) return;
   let payload = JSON.stringify(useSaved
-    ? { useSaved: true, serial: model.selectedDevice }
-    : { apiKey: clear ? "" : byId("api-key-input").value, remember: !clear && remember, serial: model.selectedDevice });
+    ? { useSaved: true, rememberOnPhone, serial: model.selectedDevice }
+    : { apiKey: clear ? "" : byId("api-key-input").value, remember: !clear && remember, rememberOnPhone, serial: model.selectedDevice });
   byId("api-key-input").value = "";
   keySending = true;
   commandBusy = true;
@@ -493,10 +510,11 @@ async function sendApiKey(action = "send") {
     if (!response.ok) throw new Error(result.error || "The key request failed. Check the phone connection and try again.");
     if (result.keyStorage) model.keyStorage = result.keyStorage;
     const deliveryMessage = useSaved ? "Saved key sent to phone." : remember
-      ? "Key saved on this PC and sent to phone." : "Key sent to phone memory only. Any saved copy was removed.";
+      ? "Key saved on this PC and sent to phone." : "Key sent to phone. No copy remains on this PC.";
     byId("api-key-message").textContent = clear
-      ? hadSavedKey ? "Saved key forgotten. Clear request sent to phone." : "Clear request sent to phone."
-      : `${deliveryMessage} ${keyProvider === "jev" ? "Jev readiness confirms receipt, not key validity." : "The OpenAI indicator confirms loading, not key validity. Voice also needs consent and microphone permission."}`;
+      ? rememberOnPhone ? "PC copy removed. Phone clear requested. Wait for phone storage to confirm removal."
+        : "PC copy removed. Active phone key clear requested. Any saved phone copy remains."
+      : `${deliveryMessage} ${rememberOnPhone ? "Phone save requested. Wait for phone storage to confirm before disconnecting." : "Phone delivery is temporary. Any saved phone copy is unchanged."} A loaded key does not confirm access to its service.`;
   } catch (error) {
     byId("api-key-message").textContent = error.message || "The request could not be sent. Check the phone connection and try again.";
     byId("api-key-message").className = "key-message error";
@@ -526,6 +544,7 @@ byId("openai-key-open").addEventListener("click", () => openApiKey("openai"));
 byId("api-key-form").addEventListener("submit", (event) => { event.preventDefault(); sendApiKey(); });
 byId("api-key-clear").addEventListener("click", () => sendApiKey("clear"));
 byId("api-key-use-saved").addEventListener("click", () => sendApiKey("saved"));
+byId("api-key-remember-phone").addEventListener("change", renderStatus);
 byId("api-key-close").addEventListener("click", () => byId("api-key-dialog").close());
 byId("api-key-dialog").addEventListener("cancel", () => { byId("api-key-input").value = ""; });
 byId("api-key-dialog").addEventListener("close", () => { byId("api-key-input").value = ""; });

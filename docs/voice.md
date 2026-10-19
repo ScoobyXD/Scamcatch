@@ -17,7 +17,7 @@
 5. Animate the entrance with a 420-millisecond fade and scale. Request two 65-millisecond vibration pulses with a 120-millisecond gap, even if the warning cannot open.
 6. Use the website's navy colors, lighthouse logo, and blue voice orb with seven white bars. Animate the orb from remote WebRTC audio levels, sampled every 100 milliseconds. The orb is not tappable.
 7. Require capture/cloud consent, separate automatic voice consent, microphone permission, and an OpenAI key before starting voice.
-8. Enter the OpenAI key in Antiscam setup or the desktop console. Desktop keys reach phone memory through the local server and ADB bridge.
+8. Enter the OpenAI key in Antiscam setup or the desktop console. Desktop delivery uses the local server and ADB bridge.
 9. Key readiness confirms that a key is loaded. It does not confirm authentication, billing, or model access.
 10. Start native voice automatically when the warning opens and the existing consent, microphone, and key requirements are met. Require no tap. Permit one connection attempt per warning.
 11. The assistant speaks first. It explains the supplied evidence and the kind of scam it could be, then quickly asks the user to explain what they think is going on. It preserves uncertainty and asks the user to pause before sending money or sensitive information.
@@ -43,13 +43,19 @@
 31. Active voice costs $0.05 per minute, billed per second. WebRTC initialization bills 15 seconds, credited against the session duration. See [OpenAI's WebRTC guide](https://developers.openai.com/api/docs/guides/voice-webrtc#understand-the-connection-sequence).
 32. Builds and lint do not verify live voice. Check speech, interruption, closing, backgrounding, and capture resumption with the laptop disconnected.
 33. Update this document when voice behavior changes. Keep each rule consistent with `LiveVoice`, `ScamIntervention`, and `ScamWarningActivity`.
-34. Windows restores a saved OpenAI key after reconnect or reinstall only when the selected phone reports that its OpenAI key is missing.
+34. Automatic Windows restore after reconnect or reinstall supplies only phone memory, and only when the selected phone reports its OpenAI key missing.
 35. Start Run on the phone uses the same capture, OCR, Jev, warning, and voice flow. The phone needs Internet access.
 36. Leaving Antiscam setup does not stop a phone run. The accessibility service continues screen checks while the user uses other apps.
 37. Connecting or disconnecting the desktop does not stop a phone run. The desktop receives phone status, without its OCR or evidence records.
-38. Remember on this phone is optional and off by default. Saved keys use Android Keystore encryption and stay outside Android backups.
+38. **Remember on this phone** is optional. It starts cleared in phone setup and selected in the desktop key dialog.
 39. Restore saved phone keys when the app process starts. A newer key entry or clear action takes priority over restoration.
 40. If Android blocks the warning, keep capture paused. Open the notification or select Return to scam warning in Antiscam.
+41. For one-time computer setup, send each key with **Remember on this phone** selected. **Use saved key** can also save the Windows key on the phone.
+42. Wait for both phone save confirmations before disconnecting. Saved keys use Android Keystore encryption and stay outside Android backups.
+43. The PC and phone checkboxes control separate copies. Sending with the phone checkbox cleared leaves the saved phone copy unchanged.
+44. Desktop **Clear key** removes the active key, Windows copy, and saved phone copy. Wait for confirmation that the phone erase finished.
+45. Phone saves and erases from the desktop require an updated app. Older apps support memory-only desktop actions.
+46. Saved keys survive app restarts and phone reboots. Start another run manually after either event.
 
 ## Website voice rules
 

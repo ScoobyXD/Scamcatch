@@ -80,6 +80,11 @@ object RunMonitor {
                     emitNow("state_changed", emptyMap())
                 }
             }
+            scope.launch {
+                PhoneCredentials.status.collect {
+                    emitNow("state_changed", emptyMap())
+                }
+            }
         }
     }
 
@@ -154,18 +159,25 @@ object RunMonitor {
         }
         when (message.optString("command")) {
             "jev_key", "openai_key" -> {
-                val isVoice = message.optString("command") == "openai_key"
-                val provider = if (isVoice) "openai" else "jev"
+                val provider = if (message.optString("command") == "openai_key")
+                    PhoneCredentials.Provider.OPENAI else PhoneCredentials.Provider.JEV
                 val key = message.opt("apiKey") as? String
+                val rememberOnPhone = if (message.has("rememberOnPhone")) message.opt("rememberOnPhone") else false
                 when {
-                    !(if (isVoice) LiveVoice.available else JevAnalysis.available) ->
-                        emitNow("command_error", mapOf("reason" to "${provider}_unavailable"))
-                    key == null -> emitNow("command_error", mapOf("reason" to "invalid_${provider}_key"))
-                    key.isEmpty() -> if (isVoice) LiveVoice.clearKey() else JevAnalysis.clearKey()
-                    !(if (isVoice) LiveVoice.setKey(key) else JevAnalysis.setKey(key)) ->
-                        emitNow("command_error", mapOf("reason" to "invalid_${provider}_key"))
+                    rememberOnPhone !is Boolean ->
+                        emitNow("command_error", mapOf("reason" to "invalid_remember_on_phone"))
+                    !provider.available ->
+                        emitNow("command_error", mapOf("reason" to "${provider.id}_unavailable"))
+                    key == null -> emitNow("command_error", mapOf("reason" to "invalid_${provider.id}_key"))
+                    rememberOnPhone && key.isEmpty() -> PhoneCredentials.clearKey(provider)
+                    rememberOnPhone -> if (!PhoneCredentials.setKey(provider, key, true)) {
+                        emitNow("command_error", mapOf("reason" to "invalid_${provider.id}_key"))
+                    }
+                    key.isEmpty() -> provider.clear()
+                    !provider.set(key) ->
+                        emitNow("command_error", mapOf("reason" to "invalid_${provider.id}_key"))
                 }
-                // Only readiness enters the event stream. Never include the received command.
+                // Only readiness and storage status enter the event stream. Never include the received command.
                 emitNow("state_changed", emptyMap())
             }
             "start" -> {
@@ -278,6 +290,16 @@ object RunMonitor {
             put("jevStatus", config.jevStatus)
             put("jevFlagged", config.jevFlagged ?: JSONObject.NULL)
             put("jevCaptureId", config.jevCaptureId ?: JSONObject.NULL)
+            put("phoneKeys", JSONObject().apply {
+                PhoneCredentials.status.value.forEach { (provider, status) ->
+                    put(provider.id, JSONObject().apply {
+                        put("working", status.working)
+                        put("saved", status.saved ?: JSONObject.NULL)
+                        put("message", status.message ?: JSONObject.NULL)
+                        put("error", status.error)
+                    })
+                }
+            })
             put("counters", JSONObject(counters.toMap()))
             put("captureScope", "display")
             put("consentGranted", config.consentGranted)

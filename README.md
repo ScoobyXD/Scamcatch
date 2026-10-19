@@ -20,14 +20,16 @@
 5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
 7. Select the device and choose **Connect** or **Switch device**.
-8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key and send it to the phone. Windows selects **Remember on this PC** by default.
-9. Select **OpenAI key** and send the OpenAI API key. Saved keys restore on reconnect. Key indicators confirm loading only, not valid credentials or permissions.
-10. In Android setup, allow automatic voice warnings and microphone access. Then select **Start run** in the dashboard.
-11. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
-12. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
-13. A flagged check opens a centered warning and starts voice automatically when setup is complete. The red X closes it and resumes capture.
-14. Select **Stop**. The saved folder under `runs` contains the record for analysis.
-15. Select **Export ZIP** to share the saved run for analysis.
+8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key if no Windows copy is saved.
+9. Keep **Remember on this phone** selected to save an encrypted phone copy. **Remember on this PC** controls the separate Windows copy.
+10. Send the entered key, or select **Use saved key**. Repeat for **OpenAI key**. Wait for both phone save confirmations before disconnecting.
+11. This setup saves both keys for future phone runs. Key indicators confirm loading only, not valid credentials or permissions.
+12. In Android setup, allow automatic voice warnings and microphone access. Then select **Start run** in the dashboard.
+13. Use an app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
+14. Read Jev results on the left, full OCR text in the middle, and activity on the right. Each list shows newest entries first.
+15. A flagged check opens a centered warning and starts voice automatically when setup is complete. The red X closes it and resumes capture.
+16. Select **Stop**. The saved folder under `runs` contains the record for analysis.
+17. Select **Export ZIP** to share the saved run for analysis.
 
 ```powershell
 .\scripts\build.ps1
@@ -40,8 +42,8 @@
 1. Install the current **Antiscam Dev** build with the build and install scripts above.
 2. Open Antiscam. Accept the version 3 capture/cloud disclosure, which covers phone and desktop runs.
 3. Enable **Antiscam interaction capture** in Android Accessibility settings. Enable monitoring in Antiscam.
-4. Enter the TypeSafe and OpenAI API keys under **Phone keys**. Key readiness confirms loading, not authentication or model access.
-5. Select **Remember on this phone** only if you want encrypted keys retained across app restarts. The checkbox starts cleared.
+4. Keys saved from the desktop restore automatically. If either key is missing, enter it under **Phone keys**.
+5. The phone's **Remember on this phone** checkbox starts cleared. Select it before saving to retain encrypted keys across app restarts.
 6. Allow automatic voice warnings and microphone access. Allow notifications for the fallback if Android cannot open a warning.
 7. Keep the phone connected to the Internet. Select **Start Run**, then use other apps.
 8. A flagged check vibrates the phone and opens the warning. Voice starts automatically when the warning opens and setup remains complete.
@@ -121,7 +123,7 @@
 12. A completed flagged check from the active run opens the centered scam warning. Old Jev results cannot reopen a dismissed warning.
 13. If Android blocks the warning launch, a notification can reopen it. Android 13 and later require notification permission for this fallback.
 14. Stopping a run clears the phone warning. Checks continue, and late results remain attached to the stopped run.
-15. The local dashboard forwards the key through the ADB debug bridge to phone memory. Windows can retain a copy under the saved-key rules below.
+15. The local dashboard forwards the key through the ADB debug bridge. Phone and Windows copies follow the saved-key rules below.
 16. The phone's Jev readiness state confirms a loaded key. It does not validate credentials.
 17. Clearing the key prevents new Jev submissions. Already submitted requests continue with their original key. Ending the phone process ends in-memory work.
 
@@ -133,18 +135,22 @@
 
 1. On Windows, **Remember on this PC** saves the submitted key in Windows Credential Manager. The checkbox starts selected.
 2. Save Jev and OpenAI credentials separately for each phone serial and Windows user. Use `CRED_PERSIST_LOCAL_MACHINE` to retain them on this PC.
-3. Reconnects and reinstalls restore saved keys for the selected phone only when Android reports that the provider key is missing.
-4. **Use saved key** manually loads that provider's saved key into the selected phone.
-5. Desktop **Forget saved key** deletes the Windows credential and clears the active phone key. It does not delete a separately saved phone copy.
-6. Sending a key with **Remember on this PC** cleared deletes any previous saved copy. The phone keeps the new key only in process memory.
-7. Windows credentials remain outside this repository, browser storage, logs, and exports. The desktop server holds keys briefly in memory during delivery.
-8. The browser receives saved-key availability only. It never receives a saved key value through responses, snapshots, or events.
-9. Other operating systems retain manual key entry and memory-only delivery. No cloud vault or credentials bundled in APKs are part of this development feature.
-10. Phone **Remember on this phone** is optional and starts cleared. It saves that provider's key with AES-GCM encryption protected by Android Keystore.
-11. Encrypted phone keys stay under `noBackupFilesDir`, outside Android backups. Never store plaintext keys in preferences or logs.
-12. Saved phone keys restore when the app process starts. A newer key entry or clear action takes priority over restoration.
-13. Phone **Clear key** deletes the active key and that provider's saved phone copy. It does not delete Windows credentials.
-14. Desktop key delivery and clearing affect phone memory only. Manage a separately saved phone copy from **Phone keys**.
+3. Desktop **Remember on this phone** starts selected for manual submissions. It applies to entered keys and **Use saved key**.
+4. Phone storage uses the existing `PhoneCredentials` AES-GCM encryption, protected by Android Keystore. Encrypted keys stay under `noBackupFilesDir`, outside Android backups.
+5. **Remember on this PC** and **Remember on this phone** are independent. Clearing the PC checkbox when sending deletes only the Windows copy.
+6. Sending with the phone checkbox cleared changes the active key in memory. It leaves any saved phone copy unchanged.
+7. Desktop **Clear key** deletes the active phone key, the Windows copy, and the saved phone copy on an updated app.
+8. Phone saves and erases finish asynchronously. Wait for the desktop to confirm success before disconnecting the phone.
+9. Older apps support memory-only desktop actions. Update the app before saving or erasing phone copies from the desktop.
+10. Automatic Windows restore after reconnect or reinstall supplies only phone memory, and only when Android reports that provider's key missing.
+11. **Use saved key** sends the selected phone's Windows credential. The phone checkbox controls whether this manual action also saves it on the phone.
+12. Windows credentials remain outside this repository, browser storage, logs, and exports. The desktop server holds keys briefly in memory during delivery.
+13. The browser receives saved-key availability only. It never receives a saved key value through responses, snapshots, or events.
+14. Other operating systems support manual delivery and optional phone storage. No cloud vault or credentials bundled in APKs are part of this feature.
+15. In **Phone keys**, **Remember on this phone** is optional and starts cleared. This differs from the desktop default.
+16. Saved phone keys restore when the app process starts. A newer key entry or clear action takes priority over restoration.
+17. Saved keys survive app restarts and phone reboots. They do not survive app data removal or uninstall. Start each new run manually.
+18. Phone **Clear** deletes the active key and that provider's saved phone copy. It does not delete Windows credentials.
 
 ## Data boundary
 

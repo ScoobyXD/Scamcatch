@@ -44,7 +44,7 @@ fun PhoneKeysCard(state: CaptureState) {
                     PhoneKeyInput(provider, provider.ready(state), statuses.getValue(provider))
                 }
             }
-            Text("Desktop key buttons change this app session only. Clear here also removes the saved phone key.",
+            Text("Desktop key buttons can also save encrypted keys on this phone. Clear here or desktop Clear key removes the saved phone key.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }

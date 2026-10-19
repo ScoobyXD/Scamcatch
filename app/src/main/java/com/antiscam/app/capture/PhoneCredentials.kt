@@ -22,7 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** Only keys entered on the phone can opt into encrypted, device-local storage. */
+/** Keys from phone setup or the desktop console can use encrypted, device-local storage. */
 object PhoneCredentials {
     enum class Provider(val label: String, internal val id: String) {
         JEV("Jev / TypeSafe", "jev"),

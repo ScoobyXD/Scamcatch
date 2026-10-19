@@ -397,8 +397,14 @@ class Console:
             provider = command.removesuffix("_key")
             use_saved = body.get("useSaved", False)
             remember = body.get("remember", False)
-            if not isinstance(use_saved, bool) or not isinstance(remember, bool):
-                raise ValueError("Choose whether to remember this key on this PC.")
+            remember_on_phone = body.get("rememberOnPhone", False)
+            if not all(isinstance(value, bool) for value in (use_saved, remember, remember_on_phone)):
+                raise ValueError("Choose whether to remember this key on this PC and phone.")
+            phone_key = self.state.get("phoneKeys", {}).get(provider)
+            if remember_on_phone and not isinstance(phone_key, dict):
+                raise ValueError("Update Antiscam Dev before saving keys on the phone from this console.")
+            if isinstance(phone_key, dict) and phone_key.get("working"):
+                raise ValueError("Wait for the phone to finish updating this key.")
             api_key = body.pop("apiKey", None)
             try:
                 if use_saved:
@@ -415,7 +421,7 @@ class Console:
                     elif credential_store.AVAILABLE:
                         # A memory-only replacement must not restore an older saved key later.
                         credential_store.delete(self.selected_device, provider)
-                self.send_command({"command": command, "apiKey": api_key})
+                self.send_command({"command": command, "apiKey": api_key, "rememberOnPhone": remember_on_phone})
             except credential_store.CredentialStoreError as error:
                 raise ValueError(str(error)) from None
             finally:

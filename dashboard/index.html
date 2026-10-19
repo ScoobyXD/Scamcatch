@@ -85,12 +85,15 @@
   <dialog id="api-key-dialog" class="key-dialog" aria-labelledby="api-key-title" aria-describedby="api-key-help">
     <form id="api-key-form" method="dialog" autocomplete="off">
       <h2 id="api-key-title">Jev API key</h2>
-      <p id="api-key-help">The console sends this key through local ADB to the phone's memory.</p>
+      <p id="api-key-help">Enter the key once here, then save it on your phone to run without this computer.</p>
       <p id="api-key-voice-help" hidden>GPT-Live 1 voice costs $0.05 per minute, billed per second. Voice starts when a scam warning appears.</p>
       <label for="api-key-input">API key</label>
       <input id="api-key-input" name="apiKey" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="2048" pattern="[!-~]+" required aria-describedby="api-key-help" autofocus>
+      <label class="key-remember" for="api-key-remember-phone"><input id="api-key-remember-phone" name="rememberOnPhone" type="checkbox" checked aria-describedby="api-key-phone-help"> Remember on this phone</label>
+      <p id="api-key-phone-help">The phone encrypts the key and restores it after restarts. Uncheck to change only the active key and keep any saved phone copy. Clear key removes saved copies from both devices.</p>
+      <p id="api-key-phone-status" class="key-message" role="status"></p>
       <label class="key-remember" for="api-key-remember"><input id="api-key-remember" name="remember" type="checkbox" checked aria-describedby="api-key-storage-help"> Remember on this PC</label>
-      <p id="api-key-storage-help">Windows Credential Manager stores the key for this phone. The console reloads it when the phone reconnects. Uncheck to use phone memory only and remove any saved copy.</p>
+      <p id="api-key-storage-help">Windows Credential Manager keeps a separate copy for this phone. Uncheck to remove the PC copy when sending a new key. Use saved key can copy an existing PC key to phone storage.</p>
       <p id="api-key-saved-status" role="status"></p>
       <p id="api-key-message" class="key-message" role="status"></p>
       <div class="key-actions">
