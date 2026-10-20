@@ -37,7 +37,13 @@ object RunMonitor {
     private var ocrStatus = "idle"
     private val counters = linkedMapOf("requests" to 0, "screenshots" to 0, "failed" to 0, "ocrCompleted" to 0, "ocrFailed" to 0, "skipped" to 0)
 
-    private data class RunSession(val id: String, val startedAt: Long, val mode: RunMode)
+    private data class RunSession(val id: String, val startedAt: Long, val mode: RunMode, val voiceScript: VoiceScripts.VoiceScript)
+
+    fun activeVoiceScript(): VoiceScripts.VoiceScript? = session?.voiceScript
+
+    private fun scriptRecord(script: VoiceScripts.VoiceScript) = mapOf(
+        "id" to script.id, "name" to script.name, "revision" to script.revision, "instructions" to script.instructions,
+    )
 
     fun initialize(context: Context) {
         CaptureStore.initialize(context)
@@ -46,6 +52,7 @@ object RunMonitor {
             initialized = true
             appContext = context.applicationContext
             PhoneCredentials.initialize(appContext)
+            VoiceScripts.initialize(appContext)
             @Suppress("DEPRECATION")
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             appVersion = "${packageInfo.versionName ?: "unknown"} (${packageInfo.longVersionCode})"
@@ -84,6 +91,9 @@ object RunMonitor {
                 PhoneCredentials.status.collect {
                     emitNow("state_changed", emptyMap())
                 }
+            }
+            scope.launch {
+                VoiceScripts.state.collect { emitNow("state_changed", emptyMap()) }
             }
         }
     }
@@ -180,6 +190,23 @@ object RunMonitor {
                 // Only readiness and storage status enter the event stream. Never include the received command.
                 emitNow("state_changed", emptyMap())
             }
+            "voice_scripts", "voice_script_select" -> {
+                val reason = when {
+                    session != null -> "Stop the current run before changing voice scripts."
+                    message.optString("command") == "voice_scripts" -> {
+                        val markdown = message.opt("markdown") as? String
+                        if (markdown == null) "Send a Markdown script file." else VoiceScripts.importMarkdown(markdown)
+                    }
+                    else -> {
+                        val id = message.optString("scriptId")
+                        val script = VoiceScripts.state.value.scripts.find { it.id == id }
+                        if (script == null || script.revision != message.optString("revision"))
+                            "Copy the current script file to the phone before selecting this version."
+                        else VoiceScripts.select(id)
+                    }
+                }
+                if (reason != null) emitNow("command_error", mapOf("reason" to reason))
+            }
             "start" -> {
                 val reason = start(message.optString("runId"), RunMode.DASHBOARD, message.opt("recordOcr") == true)
                 if (reason != null) emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
@@ -234,6 +261,7 @@ object RunMonitor {
 
     private fun start(id: String, mode: RunMode, recordOcr: Boolean): String? {
         val state = CaptureStore.state.value
+        val script = VoiceScripts.selected()
         val reason = when {
             session != null -> "run_already_active"
             !RUN_ID.matches(id) -> "invalid_run_id"
@@ -242,6 +270,7 @@ object RunMonitor {
             !state.consentGranted -> "consent_required"
             !state.monitoringEnabled -> "capture_paused"
             !state.serviceConnected -> "service_disconnected"
+            script == null -> "Wait for a valid voice script to load before starting a run."
             else -> null
         }
         if (reason != null) return reason
@@ -251,9 +280,9 @@ object RunMonitor {
         lastInteraction = "none"
         captureStatus = "idle"
         ocrStatus = "idle"
-        session = RunSession(id, SystemClock.elapsedRealtime(), mode).also { sessions[id] = it }
+        session = RunSession(id, SystemClock.elapsedRealtime(), mode, requireNotNull(script)).also { sessions[id] = it }
         CaptureStore.setRunId(id, mode)
-        emitNow("run_started", mapOf("recordOcr" to recordOcr, "runMode" to mode.wireName))
+        emitNow("run_started", mapOf("recordOcr" to recordOcr, "runMode" to mode.wireName, "voiceScript" to scriptRecord(script)))
         return null
     }
 
@@ -274,6 +303,10 @@ object RunMonitor {
         return JSONObject().apply {
             put("runId", config.runId ?: JSONObject.NULL)
             put("runMode", config.runMode?.wireName ?: JSONObject.NULL)
+            put("voiceScripts", VoiceScripts.snapshot())
+            put("voiceScript", session?.voiceScript?.let {
+                JSONObject().put("id", it.id).put("name", it.name).put("revision", it.revision)
+            } ?: JSONObject.NULL)
             put("dashboardConnected", config.dashboardConnected)
             put("currentApp", currentApp)
             put("currentPackage", currentPackage ?: JSONObject.NULL)

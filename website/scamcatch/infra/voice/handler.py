@@ -1,7 +1,7 @@
 """ScamCatch live voice for scamcatch.io: AWS Lambda behind CloudFront /api/*.
 
 Mirrors POST /api/voice/session in website/scamcatch/server.py. Deployed as index.py by infra/deploy_voice.py,
-next to prompts.json (the voice constants from AIInstructions.kt). "Click to hear explanation" scripts come from
+next to prompts.json (shared settings from AIInstructions.kt and baseline from voice-scripts.md). "Click to hear explanation" scripts come from
 the site itself (/voice-pages.json), so they go live with every website publish. The OpenAI key stays in AWS Secrets Manager
 and Lambda memory; it never reaches the browser, logs, or error text.
 """

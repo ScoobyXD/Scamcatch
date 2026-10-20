@@ -4,12 +4,25 @@
 2. Desktop runs add a dashboard and saved run records.
 3. The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 
-## Edit Jev questions and voice prompts
+## Edit Jev questions and voice scripts
 
-1. Edit [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt). It is the single source for all Jev questions and voice prompts.
-2. The file also defines both models, the Jev question-set version and threshold, and the voice name. The debug build compiles it directly.
-3. After an edit, stop the run, build, install, and restart Antiscam. Restore or enter the required keys. Edits do not reload live.
+1. [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt) defines Jev questions, models, thresholds, the voice name, greeting, and shared evidence framing.
+2. [app/src/main/assets/voice-scripts.md](app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and the website's baseline script.
+3. After a Kotlin edit, stop the run, build, install, and restart Antiscam. Markdown script edits use the desktop copy process below.
 4. Ask the user to audit any new Jev question before adding it.
+
+## Manage voice scripts
+
+1. Keep 1 to 100 named scripts in [voice-scripts.md](app/src/main/assets/voice-scripts.md). Each section uses `## script_id | Display name`.
+2. The initial library contains only `baseline`. Add variants manually. The app does not assign scripts or run A/B experiments automatically.
+3. Set `ACTIVE_VOICE_SCRIPT = script_id` before the script sections. This variable chooses the script when the file reaches the phone.
+4. Stop the run before changing scripts. Edit the actual Markdown file in your editor.
+5. In the desktop console, open **Voice scripts** and select **Reload file**. The console displays a preview without changing the phone.
+6. Select **Copy file to phone** to save the library and select `ACTIVE_VOICE_SCRIPT`. Wait for phone confirmation before disconnecting.
+7. Select a copied script and choose **Use on phone** to change the phone selection. This does not edit the Markdown variable.
+8. On the phone, use **Voice script**, **Choose script**, then **Save selection**. The saved library and selection survive app restarts.
+9. Each run keeps its original script until it ends. A new run uses the saved selection.
+10. The website demo always uses `baseline`, independent of the phone selection and `ACTIVE_VOICE_SCRIPT`. Restart the local server or deploy voice after baseline edits.
 
 ## Start with the desktop
 
@@ -106,6 +119,7 @@
 9. Stop does not cancel analysis. Late OCR and Jev results save to their original run while the recording connection remains available.
 10. Older runs without Jev records remain readable and exportable.
 11. Phone runs retain results in app memory only. A connected dashboard receives status, without phone-run OCR or evidence records.
+12. Desktop `run.json` saves the run's exact voice instructions, script ID, name, and revision under `voiceScript`.
 
 ## Jev experiment rules
 

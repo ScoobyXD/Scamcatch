@@ -12,6 +12,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -25,6 +26,10 @@ import credential_store
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from voice_scripts import load_voice_scripts
+
+VOICE_SCRIPTS_FILE = ROOT / "app" / "src" / "main" / "assets" / "voice-scripts.md"
 ACTIVE = {"starting", "active", "stopping"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
@@ -458,6 +463,8 @@ class Console:
                 self.append_event(event, run)
                 if kind == "run_started":
                     run["status"] = "active"
+                    if isinstance(data.get("voiceScript"), dict):
+                        run["voiceScript"] = data["voiceScript"]
                 if kind == "ocr_completed":
                     self.save_ocr(event, run)
                 if kind in JEV_EVENTS:
@@ -507,6 +514,32 @@ class Console:
                 "sourceAttribution": data.get("sourceAttribution"),
                 "appLabel": data.get("appLabel") or state.get("currentApp"),
                 "packageName": data.get("packageName") or state.get("currentPackage")}
+
+    def update_voice_scripts(self, body):
+        with self.lock:
+            if self.connection != "connected" or not self.bridge or body.get("serial") != self.selected_device:
+                raise ValueError("Connect the selected phone before changing voice scripts.")
+            if self.state.get("runId") or (self.run and self.run["status"] in ACTIVE):
+                raise ValueError("Stop the current run before changing voice scripts.")
+            phone = self.state.get("voiceScripts")
+            if not isinstance(phone, dict) or not phone.get("available"):
+                raise ValueError("Update Antiscam Dev to use voice scripts.")
+            if phone.get("working"):
+                raise ValueError("Wait for the phone to finish saving voice scripts.")
+            markdown, catalog = load_voice_scripts(VOICE_SCRIPTS_FILE)
+            action = body.get("action")
+            if action == "sync":
+                self.send_command({"command": "voice_scripts", "markdown": markdown})
+            elif action == "select":
+                script = next((entry for entry in catalog["scripts"] if entry["id"] == body.get("scriptId")), None)
+                if script is None:
+                    raise ValueError("Choose a script from the current file.")
+                if not any(entry.get("id") == script["id"] and entry.get("revision") == script["revision"]
+                           for entry in phone.get("scripts", [])):
+                    raise ValueError("Copy the updated script file to the phone before selecting this version.")
+                self.send_command({"command": "voice_script_select", "scriptId": script["id"], "revision": script["revision"]})
+            else:
+                raise ValueError("Choose sync or select for voice scripts.")
 
     def start_run(self):
         with self.lock:
@@ -665,6 +698,11 @@ class Console:
                  f"Android API: {run.get('androidApi') or 'Unknown'}",
                  f"Capture scope: {scope}",
                  f"Events saved: {run.get('eventCount', 0)}", f"OCR files: {len(run.get('ocr', []))}"]
+        script = run.get("voiceScript")
+        if isinstance(script, dict):
+            lines += [f"Voice script: {script.get('id')} ({script.get('name')})",
+                      f"Voice script revision: {script.get('revision')}",
+                      "The exact voice script text is saved in run.json."]
         lines += [f"{label}: {counters.get(key, 0)}" for key, label in [("requests", "Capture requests"), ("screenshots", "Screenshots received"), ("failed", "Screenshot failures"), ("ocrCompleted", "OCR completed"), ("ocrFailed", "OCR failures"), ("skipped", "Captures skipped")]]
         analyses = [item["jev"] for item in run.get("ocr", []) if item.get("jev")]
         if analyses or run.get("jevExpected"):
@@ -823,6 +861,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/api/session":
             self.respond(200, self.console.snapshot())
+        elif path == "/api/voice-scripts":
+            try:
+                _, catalog = load_voice_scripts(VOICE_SCRIPTS_FILE)
+                self.respond(200, {"path": str(VOICE_SCRIPTS_FILE), **catalog})
+            except (OSError, ValueError) as error:
+                self.respond(409, {"error": str(error) if isinstance(error, ValueError) else "The voice script file could not be read."})
         elif path == "/api/events":
             self.stream()
         elif path == "/api/export":
@@ -864,6 +908,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.console.connect_device(body.get("serial"))
             elif path in KEY_COMMANDS:
                 self.console.set_key(KEY_COMMANDS[path], body)
+            elif path == "/api/voice-scripts":
+                self.console.update_voice_scripts(body)
             elif path == "/api/command":
                 command = body.get("command")
                 if command == "start":

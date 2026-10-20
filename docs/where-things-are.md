@@ -17,10 +17,19 @@ Hosting and publishing
 
 Live voice
 10. On scamcatch.io, /api/* goes through CloudFront to the scamcatch-voice Lambda (website/scamcatch/infra/voice/handler.py). Deploy Voice.cmd deploys it and logs to website/scamcatch/infra/voice-deploy-log.txt.
-11. Voice prompts, key handling, and cost limits are in docs/voice.md. All Jev questions and voice prompts come from app/ai-instructions/AIInstructions.kt, except the "Click to hear explanation" scripts, which are in website/scamcatch/public/voice-pages.json and go live with every website publish.
+11. Voice behavior, script selection, keys, and cost limits are in [docs/voice.md](voice.md). Website section explanations remain in website/scamcatch/public/voice-pages.json.
+
+Voice script library
+12. [app/src/main/assets/voice-scripts.md](../app/src/main/assets/voice-scripts.md) holds 1 to 100 named scripts. Only `baseline` exists initially.
+13. `ACTIVE_VOICE_SCRIPT` manually selects the script when the desktop copies the file to the phone. There is no automatic A/B assignment.
+14. Edit the actual Markdown file. In the desktop **Voice scripts** dialog, select **Reload file**, then **Copy file to phone**.
+15. Phone script code is in app/src/main/java/com/antiscam/app/capture/VoiceScripts.kt. The phone saves the library and selected ID across restarts.
+16. Stop the run before changing phone scripts. Each run keeps its original script. Desktop `run.json` records its exact instructions, ID, name, and revision.
+17. Website demo voice always uses `baseline`, independent of the phone selection. Local startup and voice deployment read it from the Markdown file.
+18. Shared models, greeting, voice settings, and Jev questions remain in [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt).
 
 Rest of the repository
-12. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.
-13. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved run records.
-14. application/scamcatch holds application answers, company and domain evidence, and video material.
-15. User preferences for agents are in AGENTS.md.
+19. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.
+20. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved run records. scripts/voice_scripts.py reads the shared script file.
+21. application/scamcatch holds application answers, company and domain evidence, and video material.
+22. User preferences for agents are in AGENTS.md.

@@ -15,7 +15,8 @@ import kotlin.concurrent.thread
 /** ADB forwards this abstract socket. No network permission, TCP listener, or Logcat text is needed. */
 internal object RunBridge {
     private const val SOCKET_NAME = "antiscam_run"
-    private const val MAX_COMMAND_CHARS = 4096
+    // A 2 MiB Markdown library can expand sixfold when JSON escapes control characters.
+    private const val MAX_COMMAND_CHARS = 12 * 1024 * 1024 + 8192
     private const val MAX_PENDING_BYTES = 4 * 1024 * 1024
     private const val MAX_EVENT_BYTES = 1024 * 1024
     private val main = Handler(Looper.getMainLooper())

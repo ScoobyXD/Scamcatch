@@ -111,6 +111,7 @@ private fun SetupScreen(
         ) {
             Text("Antiscam", style = MaterialTheme.typography.titleLarge)
             RunControlsCard(state)
+            VoiceScriptsCard(state)
             Text(
                 if (state.serviceConnected) "Accessibility: connected" else "Accessibility: not connected",
                 style = MaterialTheme.typography.bodyLarge,

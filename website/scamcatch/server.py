@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -20,6 +21,10 @@ HERE = Path(__file__).resolve().parent
 PUBLIC = (HERE / "public").resolve()
 DEPLOYMENT = HERE / "infra" / "deployment.json"
 INSTRUCTIONS = HERE.parents[1] / "app" / "ai-instructions" / "AIInstructions.kt"
+sys.path.insert(0, str(HERE.parents[1] / "scripts"))
+from voice_scripts import load_voice_scripts
+
+VOICE_SCRIPTS_FILE = HERE.parents[1] / "app" / "src" / "main" / "assets" / "voice-scripts.md"
 LIVE_SESSIONS_URL = "https://api.openai.com/v1/live/sessions"
 VOICE_PATH = "/api/voice/session"
 MAX_REQUEST_BYTES = 32 * 1024
@@ -82,9 +87,14 @@ def unescape(name, code):
 
 
 def load_prompts():
-    """Read the voice constants from AIInstructions.kt, the single source shared with the Android app."""
+    """Keep the website on baseline, independent of the phone's active script selection."""
     source = INSTRUCTIONS.read_text(encoding="utf-8")
     found = {match[1]: kotlin_string(match[1], match[2]) for match in CONSTANT.finditer(source) if match[1] in PROMPTS}
+    _, catalog = load_voice_scripts(VOICE_SCRIPTS_FILE)
+    baseline = next((script for script in catalog["scripts"] if script["id"] == "baseline"), None)
+    if baseline is None:
+        raise ValueError("Keep a baseline script in voice-scripts.md for the website demo.")
+    found["VOICE_INSTRUCTIONS"] = baseline["instructions"]
     missing = [name for name in PROMPTS if not found.get(name)]
     if missing:
         raise ValueError(f"{INSTRUCTIONS.name} has no plain string constant for {', '.join(missing)}.")

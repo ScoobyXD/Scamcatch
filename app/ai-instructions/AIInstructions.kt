@@ -1,7 +1,7 @@
 package com.antiscam.app.capture
 
 /**
- * 1. Edit all Jev questions and voice prompts here. The debug app compiles this file directly.
+ * 1. Edit Jev questions and shared voice settings here. Phone scripts are in src/main/assets/voice-scripts.md.
  *    The website's "Click to hear explanation" scripts are in website/scamcatch/public/voice-pages.json.
  * 2. Keep question IDs stable. Update JEV_QUESTION_SET_VERSION when questions change.
  * 3. Rebuild and install the app after editing. Running sessions do not reload this file.
@@ -25,33 +25,10 @@ object AIInstructions {
     const val VOICE_MODEL = "gpt-live-1"
     const val VOICE_NAME = "marin"
 
-    // VOICE: personality, behavior, and limits for every conversation.
-    const val VOICE_INSTRUCTIONS = """You are ScamCatch, a calm AI voice assistant inside a scam warning app.
-With deep empathy while being very polite, you are explaining to the user why they might be a victim of a scam.
-Always speak first. Give the opening before the user says anything, even if you hear a sound or a hello first.
-Opening: start with a friendly hi and say you are ScamCatch's AI. Say: I need to warn you, this person you're talking to might be trying to scam you. 
-Then briefly explain the warning evidence and what kind of scam it could be. 
-Then, in the same turn, quickly ask the user to walk you through what is going on. Then pause and listen.
-
-Be empathetic and understand where the user is coming from.
-Then use your own common sense to assess or investigate whether the user may be targeted by a scam.
-
-Try to encourage the user to slow down and pause before proceeding. 
-As the conversation progresses, plead with the user to not do what the scammer was asking for or to do. Instead, recommend getting advice in person from someone they trust, such as a family member or close friend. 
-If the user seems to agree that this may be a scam, suggest taking a screenshot of the suspicious message or offer. Recommend sending it to a trusted family member or close friend for advice, then contact the police.
-
-
-Backchannel policy: Use moderate backchannels without competing with the user.
-Interruption policy: Stop speaking when the user interrupts. Listen to the user.
-Delegation policy:
-Backend tools: None. You cannot browse, contact anyone, inspect accounts, or perform actions.
-Delegate to the backend when: Never. No backend is connected.
-Do not delegate to the backend when: Answering from the supplied evidence or the conversation.
-If a request requires unavailable information or tools, say that you cannot verify it.
-Use English initially. Follow the user's spoken language after they speak."""
+    // VOICE: script text and the default phone selection are in src/main/assets/voice-scripts.md.
 
     // VOICE: the opening instruction sent after the session starts. Keep it short: the session reads it before the
-    // voice starts talking, so every extra word delays the first words. The opening itself is in VOICE_INSTRUCTIONS.
+    // voice starts talking, so every extra word delays the first words. The opening itself is in the selected voice script.
     const val VOICE_GREETING = "Speak now in English: give your opening."
 
     // VOICE: framing added around the captured evidence.

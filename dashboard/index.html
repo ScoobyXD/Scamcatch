@@ -28,6 +28,7 @@
         <button id="connect" class="button" disabled>Connect</button>
         <button id="jev-key-open" class="button" disabled>Jev key</button>
         <button id="openai-key-open" class="button" disabled>OpenAI key</button>
+        <button id="voice-scripts-open" class="button">Voice scripts</button>
       </div>
       <span id="connection" class="badge neutral">Connecting</span>
     </header>
@@ -102,6 +103,32 @@
         <button id="api-key-close" type="button" class="button">Close</button>
         <button id="api-key-send" type="submit" class="button primary">Send to phone</button>
       </div>
+    </form>
+  </dialog>
+  <dialog id="voice-scripts-dialog" class="key-dialog scripts-dialog" aria-labelledby="voice-scripts-title" aria-describedby="voice-scripts-help">
+    <form id="voice-scripts-form" method="dialog">
+      <h2 id="voice-scripts-title" tabindex="-1" autofocus>Voice scripts</h2>
+      <p id="voice-scripts-help">Edit the Markdown file to add or change up to 100 named scripts. Set ACTIVE_VOICE_SCRIPT to choose the file's default.</p>
+      <dl class="script-details">
+        <div><dt>Source file</dt><dd id="voice-scripts-path">app/src/main/assets/voice-scripts.md</dd></div>
+        <div><dt>File active ID</dt><dd id="voice-scripts-active">Not loaded</dd></div>
+      </dl>
+      <p id="voice-scripts-file-status" class="key-message" role="status" aria-live="polite"></p>
+      <label for="voice-script-select">Script from file</label>
+      <select id="voice-script-select" aria-describedby="voice-script-selection-help" disabled><option value="">No scripts loaded</option></select>
+      <p id="voice-script-selection-help">Select a script to preview it. Use on phone selects a matching saved copy for the next run.</p>
+      <label for="voice-script-preview">Script preview</label>
+      <textarea id="voice-script-preview" rows="12" readonly spellcheck="false" aria-describedby="voice-scripts-help"></textarea>
+      <div class="key-actions script-file-actions">
+        <button id="voice-scripts-reload" type="button" class="button">Reload file</button>
+        <button id="voice-scripts-sync" type="button" class="button" disabled>Copy file to phone</button>
+        <button id="voice-scripts-select" type="button" class="button primary" disabled>Use on phone</button>
+      </div>
+      <p id="voice-scripts-request-status" class="key-message" role="status" aria-live="polite"></p>
+      <dl class="script-details"><div><dt>Phone selection</dt><dd id="voice-scripts-phone-selection">Not connected</dd></div></dl>
+      <p id="voice-scripts-phone-status" class="key-message" role="status" aria-live="polite"></p>
+      <p id="voice-scripts-action-help">Connect the selected phone to copy or select scripts.</p>
+      <div class="key-actions"><button id="voice-scripts-close" type="submit" class="button">Close</button></div>
     </form>
   </dialog>
 </body>

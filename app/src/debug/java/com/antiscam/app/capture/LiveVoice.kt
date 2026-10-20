@@ -13,7 +13,6 @@ import android.os.Looper
 import android.os.SystemClock
 import com.antiscam.app.capture.AIInstructions.VOICE_EVIDENCE_PREFIX
 import com.antiscam.app.capture.AIInstructions.VOICE_GREETING
-import com.antiscam.app.capture.AIInstructions.VOICE_INSTRUCTIONS
 import com.antiscam.app.capture.AIInstructions.VOICE_MODEL
 import com.antiscam.app.capture.AIInstructions.VOICE_NAME
 import com.antiscam.app.capture.AIInstructions.VOICE_NO_BACKEND_COMMENTARY
@@ -101,16 +100,18 @@ object LiveVoice {
     ): VoiceConnection {
         checkMainThread()
         val key = apiKey
+        val script = RunMonitor.activeVoiceScript()
         val problem = when {
             active != null -> "A voice session is already active."
             key == null -> "Add your OpenAI key on this phone or in the console to enable voice."
+            script == null -> "Start a run with a selected voice script before opening voice."
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
                 "Microphone permission is required for voice."
             else -> null
         }
         if (problem != null) return unavailable(problem, onStatus)
         val connection = try {
-            Connection(context.applicationContext, onStatus, onLevel)
+            Connection(context.applicationContext, requireNotNull(script), onStatus, onLevel)
         } catch (_: Exception) {
             return unavailable("Voice could not prepare the phone's audio.", onStatus)
         }
@@ -128,6 +129,7 @@ object LiveVoice {
 
     private class Connection(
         private val context: Context,
+        private val script: VoiceScripts.VoiceScript,
         private val onStatus: (String) -> Unit,
         private val onLevel: (Float) -> Unit,
     ) : VoiceConnection {
@@ -225,7 +227,7 @@ object LiveVoice {
                 val session = JSONObject()
                     .put("model", VOICE_MODEL)
                     .put("store", false)
-                    .put("instructions", VOICE_INSTRUCTIONS)
+                    .put("instructions", script.instructions)
                     .put("delegation", JSONObject().put("type", "client"))
                     .put("audio", JSONObject().put("output", JSONObject().put("voice", VOICE_NAME)))
                     .put("input", JSONArray().put(JSONObject()
@@ -659,7 +661,8 @@ object LiveVoice {
         }
 
         private fun record(type: String, details: Map<String, Any?>) {
-            RunMonitor.emit(type, details + mapOf("runId" to runId, "model" to VOICE_MODEL, "transport" to "webrtc"))
+            RunMonitor.emit(type, details + mapOf("runId" to runId, "model" to VOICE_MODEL, "voice" to VOICE_NAME,
+                "scriptId" to script.id, "scriptRevision" to script.revision, "transport" to "webrtc"))
         }
 
         private fun onRtc(block: () -> Unit) {

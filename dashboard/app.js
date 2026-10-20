@@ -9,6 +9,10 @@ let commandBusy = false;
 let keySending = false;
 let keyProvider = "jev";
 let streamReady = false;
+let voiceScriptsFile = null;
+let voiceScriptsLoading = false;
+let voiceScriptsLoadError = "";
+let voiceScriptSelection = "";
 const keyProviders = {
   jev: { label: "Jev", endpoint: "/api/jev-key" },
   openai: { label: "OpenAI", endpoint: "/api/openai-key" },
@@ -147,6 +151,7 @@ function renderStatus() {
   byId("export").setAttribute("aria-disabled", String(!run));
   byId("save-status").textContent = run ? active ? "Recording locally" : run.status === "interrupted" ? "Partial run saved" : "Run saved" : "Runs save locally.";
   byId("save-folder").textContent = run?.folder || "";
+  renderVoiceScripts();
   if (!streamReady) notice("Dashboard connection lost. Reconnecting…", "warning");
   else if (!connected) notice(model.message || "Connect a phone or emulator to begin.", "warning");
   else if (differentDevice) notice("Select Switch device to connect to the selected device.");
@@ -157,6 +162,90 @@ function renderStatus() {
   else if (state.warningActive) notice("Scam warning open on the phone. Screenshots and OCR are paused. Close it with the red X to resume.", "warning");
   else if (!state.monitoringEnabled) notice("Capture paused. Select Resume, then Start run.", "warning");
   else notice(run?.status === "stopping" ? "Waiting for Stop confirmation…" : "");
+}
+
+function renderVoiceScripts() {
+  const connected = model.connection === "connected" && streamReady && Boolean(model.selectedDevice)
+    && byId("device").value === model.selectedDevice;
+  const phone = connected ? model.state?.voiceScripts : null;
+  const active = Boolean(model.state?.runId) || Boolean(model.run && activeStatuses.has(model.run.status));
+  const selected = voiceScriptsFile?.scripts.find((script) => script.id === voiceScriptSelection);
+  const saved = selected && phone?.scripts?.find((script) => script.id === selected.id && script.revision === selected.revision);
+  const disabled = commandBusy || voiceScriptsLoading || !voiceScriptsFile || !connected || !phone?.available || phone.working || active;
+  byId("voice-scripts-open").disabled = commandBusy;
+  byId("voice-scripts-reload").disabled = voiceScriptsLoading || commandBusy;
+  byId("voice-script-select").disabled = voiceScriptsLoading || !voiceScriptsFile;
+  byId("voice-scripts-sync").disabled = Boolean(disabled);
+  byId("voice-scripts-select").disabled = Boolean(disabled || !saved);
+  byId("voice-scripts-reload").textContent = voiceScriptsLoading ? "Loading…" : "Reload file";
+  byId("voice-scripts-path").textContent = voiceScriptsFile?.path || "app/src/main/assets/voice-scripts.md";
+  byId("voice-scripts-active").textContent = voiceScriptsFile?.activeScriptId || "Not loaded";
+  const fileStatus = byId("voice-scripts-file-status");
+  fileStatus.className = `key-message${voiceScriptsLoadError ? " error" : ""}`;
+  fileStatus.textContent = voiceScriptsLoading ? "Reading the script file…" : voiceScriptsLoadError
+    || (voiceScriptsFile ? `${voiceScriptsFile.scripts.length} of 100 scripts in the file.` : "");
+  const preview = byId("voice-script-preview");
+  const instructions = selected?.instructions || "";
+  if (preview.value !== instructions) preview.value = instructions;
+  const phoneSelection = phone?.scripts?.find((script) => script.id === phone.selectedId);
+  byId("voice-scripts-phone-selection").textContent = !connected ? "Not connected"
+    : !phone?.available ? "Unavailable"
+      : phoneSelection ? `${phoneSelection.name} (${phoneSelection.id})` : phone.selectedId || "Not confirmed";
+  const phoneStatus = byId("voice-scripts-phone-status");
+  phoneStatus.className = `key-message${phone?.error ? " error" : ""}`;
+  phoneStatus.textContent = !connected ? "Connect the selected phone to read its saved script status."
+    : !phone?.available ? "Update Antiscam Dev to manage saved voice scripts."
+      : phone.working ? phone.message || "Updating phone scripts…"
+        : phone.error ? phone.message || "The phone could not save the change."
+          : phone.message || "Phone script status received.";
+  byId("voice-scripts-action-help").textContent = !connected ? "Connect the selected phone to copy or select scripts."
+    : !phone?.available ? "The selected phone does not support script changes."
+      : active ? "Stop the active run before changing phone scripts."
+        : phone.working ? "Wait for the phone to finish saving."
+          : !voiceScriptsFile ? "Load a valid script file first."
+            : !saved ? "Copy the file to the phone before using this script. Copying selects the file's active ID."
+              : "Copying the file selects its active ID. Use on phone selects the script shown above. Wait for phone confirmation before disconnecting.";
+}
+
+async function loadVoiceScripts() {
+  if (voiceScriptsLoading) return;
+  voiceScriptsLoading = true;
+  voiceScriptsLoadError = "";
+  renderVoiceScripts();
+  try {
+    const response = await fetch("/api/voice-scripts", { cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.error || "The script file could not be read.");
+    voiceScriptsFile = result;
+    if (!result.scripts.some((script) => script.id === voiceScriptSelection)) voiceScriptSelection = result.activeScriptId;
+    const select = byId("voice-script-select");
+    select.replaceChildren();
+    for (const script of result.scripts) {
+      const option = document.createElement("option");
+      option.value = script.id;
+      option.textContent = `${script.name} (${script.id})${script.id === result.activeScriptId ? " · File active" : ""}`;
+      select.append(option);
+    }
+    select.value = voiceScriptSelection;
+  } catch (error) {
+    voiceScriptsFile = null;
+    voiceScriptsLoadError = error.message || "The local recorder is unavailable.";
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No scripts loaded";
+    byId("voice-script-select").replaceChildren(option);
+  } finally {
+    voiceScriptsLoading = false;
+    renderVoiceScripts();
+  }
+}
+
+function sendVoiceScripts(action) {
+  renderVoiceScripts();
+  if (byId(action === "sync" ? "voice-scripts-sync" : "voice-scripts-select").disabled) return;
+  const body = { action, serial: model.selectedDevice };
+  if (action === "select") body.scriptId = voiceScriptSelection;
+  request("/api/voice-scripts", body, "voice-scripts-request-status");
 }
 
 function renderDevices(selectConnected = false) {
@@ -463,15 +552,24 @@ function applySnapshot(snapshot) {
   }
 }
 
-async function request(path, body) {
+async function request(path, body, statusId = null) {
   commandBusy = true;
+  if (statusId) {
+    byId(statusId).textContent = "Sending request…";
+    byId(statusId).className = "key-message";
+  }
   renderStatus();
   try {
     const response = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "X-Antiscam-Token": token }, body: JSON.stringify(body) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "The command failed.");
+    if (statusId) byId(statusId).textContent = "Request sent. Check the phone status below for confirmation.";
   } catch (error) {
     notice(error.message || "The local recorder is unavailable.", "error");
+    if (statusId) {
+      byId(statusId).textContent = error.message || "The local recorder is unavailable.";
+      byId(statusId).className = "key-message error";
+    }
   } finally {
     commandBusy = false;
     // Keep a command error visible until the next device event.
@@ -548,6 +646,19 @@ byId("api-key-remember-phone").addEventListener("change", renderStatus);
 byId("api-key-close").addEventListener("click", () => byId("api-key-dialog").close());
 byId("api-key-dialog").addEventListener("cancel", () => { byId("api-key-input").value = ""; });
 byId("api-key-dialog").addEventListener("close", () => { byId("api-key-input").value = ""; });
+
+byId("voice-scripts-open").addEventListener("click", () => {
+  byId("voice-scripts-request-status").textContent = "";
+  byId("voice-scripts-dialog").showModal();
+  loadVoiceScripts();
+});
+byId("voice-scripts-reload").addEventListener("click", loadVoiceScripts);
+byId("voice-script-select").addEventListener("change", () => {
+  voiceScriptSelection = byId("voice-script-select").value;
+  renderVoiceScripts();
+});
+byId("voice-scripts-sync").addEventListener("click", () => sendVoiceScripts("sync"));
+byId("voice-scripts-select").addEventListener("click", () => sendVoiceScripts("select"));
 
 byId("start").addEventListener("click", () => request("/api/command", { command: "start" }));
 byId("stop").addEventListener("click", () => request("/api/command", { command: "stop" }));
