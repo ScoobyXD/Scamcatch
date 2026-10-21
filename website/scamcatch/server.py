@@ -87,14 +87,14 @@ def unescape(name, code):
 
 
 def load_prompts():
-    """Keep the website on baseline, independent of the phone's active script selection."""
+    """Keep the website on its original script, independent of the phone's active selection."""
     source = INSTRUCTIONS.read_text(encoding="utf-8")
     found = {match[1]: kotlin_string(match[1], match[2]) for match in CONSTANT.finditer(source) if match[1] in PROMPTS}
     _, catalog = load_voice_scripts(VOICE_SCRIPTS_FILE)
-    baseline = next((script for script in catalog["scripts"] if script["id"] == "baseline"), None)
-    if baseline is None:
-        raise ValueError("Keep a baseline script in voice-scripts.md for the website demo.")
-    found["VOICE_INSTRUCTIONS"] = baseline["instructions"]
+    website_script = next((script for script in catalog["scripts"] if script["id"] == "uses_scam_language"), None)
+    if website_script is None:
+        raise ValueError("Keep uses_scam_language in voice-scripts.md for the website demo.")
+    found["VOICE_INSTRUCTIONS"] = website_script["instructions"]
     missing = [name for name in PROMPTS if not found.get(name)]
     if missing:
         raise ValueError(f"{INSTRUCTIONS.name} has no plain string constant for {', '.join(missing)}.")

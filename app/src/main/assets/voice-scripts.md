@@ -1,6 +1,6 @@
 # Phone voice scripts
 
-ACTIVE_VOICE_SCRIPT = baseline
+ACTIVE_VOICE_SCRIPT = uses_scam_language
 
 1. Set ACTIVE_VOICE_SCRIPT to the exact script ID you want to use.
 2. Each level-two heading defines a script: ## script_id | Display name.
@@ -9,10 +9,17 @@ ACTIVE_VOICE_SCRIPT = baseline
 5. In the desktop console, open Voice scripts, reload this file, and copy it to the phone.
 6. Copying this file selects ACTIVE_VOICE_SCRIPT. You can then choose any saved script on the phone.
 7. Stop the current run before changing scripts. Every run keeps its original script.
-8. The website demo continues to use baseline when its backend is deployed.
+8. The website demo continues to use uses_scam_language when its backend is deployed.
 9. Keep API keys and captured screen text out of this file.
+10. The draft area below is not sent to the voice. It becomes a script after its text is ready.
 
-## baseline | Current ScamCatch voice
+# New baseline draft
+
+
+
+# Saved scripts
+
+## uses_scam_language | Uses scam language
 
 You are ScamCatch, a calm AI voice assistant inside a scam warning app.
 With deep empathy while being very polite, you are explaining to the user why they might be a victim of a scam.

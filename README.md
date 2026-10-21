@@ -7,22 +7,24 @@
 ## Edit Jev questions and voice scripts
 
 1. [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt) defines Jev questions, models, thresholds, the voice name, greeting, and shared evidence framing.
-2. [app/src/main/assets/voice-scripts.md](app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and the website's baseline script.
+2. [app/src/main/assets/voice-scripts.md](app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and the website demo script.
 3. After a Kotlin edit, stop the run, build, install, and restart Antiscam. Markdown script edits use the desktop copy process below.
 4. Ask the user to audit any new Jev question before adding it.
 
 ## Manage voice scripts
 
 1. Keep 1 to 100 named scripts in [voice-scripts.md](app/src/main/assets/voice-scripts.md). Each section uses `## script_id | Display name`.
-2. The initial library contains only `baseline`. Add variants manually. The app does not assign scripts or run A/B experiments automatically.
-3. Set `ACTIVE_VOICE_SCRIPT = script_id` before the script sections. This variable chooses the script when the file reaches the phone.
+2. The library currently contains only `uses_scam_language`, named **Uses scam language**. The app does not assign scripts or run A/B experiments automatically.
+3. `ACTIVE_VOICE_SCRIPT = uses_scam_language` selects the current script when the file reaches the phone. Change the variable manually to select another script.
 4. Stop the run before changing scripts. Edit the actual Markdown file in your editor.
 5. In the desktop console, open **Voice scripts** and select **Reload file**. The console displays a preview without changing the phone.
 6. Select **Copy file to phone** to save the library and select `ACTIVE_VOICE_SCRIPT`. Wait for phone confirmation before disconnecting.
 7. Select a copied script and choose **Use on phone** to change the phone selection. This does not edit the Markdown variable.
 8. On the phone, use **Voice script**, **Choose script**, then **Save selection**. The saved library and selection survive app restarts.
 9. Each run keeps its original script until it ends. A new run uses the saved selection.
-10. The website demo always uses `baseline`, independent of the phone selection and `ACTIVE_VOICE_SCRIPT`. Restart the local server or deploy voice after baseline edits.
+10. The website demo stays on `uses_scam_language`, independent of the phone selection. Restart the local server or deploy voice after editing that script.
+11. The blank `# New baseline draft` area precedes the first `##` heading. Draft text does not reach voice.
+12. Create a runnable `## baseline` section only from the user's completed draft.
 
 ## Start with the desktop
 
