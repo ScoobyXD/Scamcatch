@@ -33,7 +33,7 @@ MAX_EVIDENCE_CHARS = 6000  # Same bound as LiveVoice.
 # OpenAI's built-in voices. A request may pick one with "voice"; VOICE_NAME stays the default.
 VOICES = ("alloy", "ash", "ballad", "cedar", "coral", "echo", "fable", "marin", "nova", "onyx", "sage", "shimmer", "verse")
 START_GAP_SECONDS = 10
-PROMPTS = ("VOICE_MODEL", "VOICE_NAME", "VOICE_INSTRUCTIONS", "VOICE_GREETING", "VOICE_EVIDENCE_PREFIX",
+PROMPTS = ("VOICE_MODEL", "VOICE_NAME", "VOICE_GREETING", "VOICE_EVIDENCE_PREFIX",
            "VOICE_TRUNCATED_EVIDENCE_SUFFIX", "VOICE_NO_BACKEND_COMMENTARY")
 # "Click to hear explanation" scripts, published with the site. Read on every page call, so edits need no restart.
 PAGES_FILE = PUBLIC / "voice-pages.json"
@@ -87,14 +87,15 @@ def unescape(name, code):
 
 
 def load_prompts():
-    """Use baseline for the website, independent of the phone's active selection."""
+    """Load the two website scripts from the phone library, independent of its active selection."""
     source = INSTRUCTIONS.read_text(encoding="utf-8")
     found = {match[1]: kotlin_string(match[1], match[2]) for match in CONSTANT.finditer(source) if match[1] in PROMPTS}
     _, catalog = load_voice_scripts(VOICE_SCRIPTS_FILE)
-    website_script = next((script for script in catalog["scripts"] if script["id"] == "baseline"), None)
-    if website_script is None:
-        raise ValueError("Keep baseline in voice-scripts.md for the website demo.")
-    found["VOICE_INSTRUCTIONS"] = website_script["instructions"]
+    website_ids = ("baseline", "uses_scam_language")
+    found["VOICE_SCRIPTS"] = {script["id"]: script["instructions"] for script in catalog["scripts"]
+                             if script["id"] in website_ids}
+    if any(script_id not in found["VOICE_SCRIPTS"] for script_id in website_ids):
+        raise ValueError("Keep baseline and uses_scam_language in voice-scripts.md for the website demo.")
     missing = [name for name in PROMPTS if not found.get(name)]
     if missing:
         raise ValueError(f"{INSTRUCTIONS.name} has no plain string constant for {', '.join(missing)}.")
@@ -145,7 +146,10 @@ def session_input(context, prompts):
     """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
     page = context.get("page") if isinstance(context, dict) else None
     if page is None:
-        return prompts["VOICE_INSTRUCTIONS"], evidence_text(context, prompts)
+        script_id = context.get("scriptId", "baseline") if isinstance(context, dict) else "baseline"
+        if not isinstance(script_id, str) or script_id not in prompts["VOICE_SCRIPTS"]:
+            raise VoiceError(400, "Choose a supported voice script.")
+        return prompts["VOICE_SCRIPTS"][script_id], evidence_text(context, prompts)
     try:
         scripts = page_scripts(json.loads(PAGES_FILE.read_text(encoding="utf-8")))
     except (OSError, ValueError):

@@ -7,7 +7,7 @@
 ## Edit Jev questions and voice scripts
 
 1. [app/ai-instructions/AIInstructions.kt](app/ai-instructions/AIInstructions.kt) defines Jev questions, models, thresholds, the voice name, greeting, and shared evidence framing.
-2. [app/src/main/assets/voice-scripts.md](app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and the website demo script.
+2. [app/src/main/assets/voice-scripts.md](app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and website demo scripts.
 3. After a Kotlin edit, stop the run, build, install, and restart Antiscam. Markdown script edits use the desktop copy process below.
 4. Ask the user to audit any new Jev question before adding it.
 
@@ -22,7 +22,8 @@
 7. Select a copied script and choose **Use on phone** to change the phone selection. This does not edit the Markdown variable.
 8. On the phone, use **Voice script**, **Choose script**, then **Save selection**. The saved library and selection survive app restarts.
 9. Each run keeps its original script until it ends. A new run uses the saved selection.
-10. The website demo uses `baseline`, independent of the phone selection. Restart the local server or deploy voice after editing that script.
+10. The website's default talk action uses `baseline`. **Try the original voice** uses `uses_scam_language` for that call with the same selected scam evidence.
+11. Website script selection is independent of the phone selection. Restart the local server or deploy voice after editing either website script.
 
 ## Start with the desktop
 

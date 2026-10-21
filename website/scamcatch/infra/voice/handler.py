@@ -1,7 +1,7 @@
 """ScamCatch live voice for scamcatch.io: AWS Lambda behind CloudFront /api/*.
 
 Mirrors POST /api/voice/session in website/scamcatch/server.py. Deployed as index.py by infra/deploy_voice.py,
-next to prompts.json (shared settings from AIInstructions.kt and baseline from voice-scripts.md). "Click to hear explanation" scripts come from
+next to prompts.json (shared settings from AIInstructions.kt and both demo scripts from voice-scripts.md). "Click to hear explanation" scripts come from
 the site itself (/voice-pages.json), so they go live with every website publish. The OpenAI key stays in AWS Secrets Manager
 and Lambda memory; it never reaches the browser, logs, or error text.
 """
@@ -156,7 +156,10 @@ def session_input(context, site):
     """Instructions and first input: a page explanation when context names a page, otherwise the demo chat as evidence."""
     page = context.get("page") if isinstance(context, dict) else None
     if page is None:
-        return PROMPTS["VOICE_INSTRUCTIONS"], evidence_text(context)
+        script_id = context.get("scriptId", "baseline") if isinstance(context, dict) else "baseline"
+        if not isinstance(script_id, str) or script_id not in PROMPTS["VOICE_SCRIPTS"]:
+            raise VoiceError(400, "Choose a supported voice script.")
+        return PROMPTS["VOICE_SCRIPTS"][script_id], evidence_text(context)
     if not isinstance(page, str):
         raise VoiceError(400, "Voice can’t explain that page.")
     instructions, notes = load_pages(site)

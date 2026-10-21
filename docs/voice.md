@@ -2,7 +2,7 @@
 
 ## Edit questions and prompts
 
-1. [app/src/main/assets/voice-scripts.md](../app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and the website demo script.
+1. [app/src/main/assets/voice-scripts.md](../app/src/main/assets/voice-scripts.md) is the single source for phone voice scripts and website demo scripts.
 2. [app/ai-instructions/AIInstructions.kt](../app/ai-instructions/AIInstructions.kt) defines Jev questions, both models, the voice name, greeting, evidence framing, and no-backend commentary.
 3. The debug app compiles the Kotlin settings directly. Stop the run, rebuild, and install after editing those settings.
 4. The website's section explanations remain in [website/scamcatch/public/voice-pages.json](../website/scamcatch/public/voice-pages.json). These are separate from the phone script library.
@@ -22,7 +22,7 @@
 10. A saved phone library takes priority over the bundled file after an app update. Copy the edited file explicitly to update it.
 11. Desktop `run.json` saves `voiceScript` with the exact instructions, ID, name, and revision used for that run.
 12. Revisions are SHA-256 hashes of the script instructions. Selection is manual. There is no automatic rotation or A/B assignment.
-13. Keep `baseline` in the file for the website. Website demo voice uses it independently of the phone selection and `ACTIVE_VOICE_SCRIPT`.
+13. Keep `baseline` and `uses_scam_language` in the file for the website. Website script selection is independent of the phone selection and `ACTIVE_VOICE_SCRIPT`.
 14. Scripts contain instructions only. Keep API keys and captured screen text outside the Markdown file.
 15. Baseline contains the user's completed new text. Uses scam language preserves the previous text. Both are runnable script sections.
 
@@ -75,10 +75,18 @@
 45. Phone saves and erases from the desktop require an updated app. Older apps support memory-only desktop actions.
 46. Saved keys survive app restarts and phone reboots. Start another run manually after either event.
 
+## Website script selection
+
+1. The default talk action uses `baseline`. A missing `context.scriptId` also selects `baseline`.
+2. **Try the original voice**, below the eight scam circles, sends `context.scriptId = uses_scam_language` for that call.
+3. Both actions use the selected scam's evidence. The original voice button does not change the default script for later calls.
+4. Reject unknown or non-string script IDs before a provider request. Accept only `baseline` and `uses_scam_language` for demo calls.
+5. Section explanations still use `context.page` and voice-pages.json. Demo script selection does not change that path.
+
 ## Website voice rules
 
 1. `Start Website.cmd` runs [website/scamcatch/server.py](../website/scamcatch/server.py). It serves the site at http://localhost:5180 and creates voice sessions at `POST /api/voice/session`.
-2. At startup, the server reads `baseline` from voice-scripts.md and shared voice settings from AIInstructions.kt. Restart it after edits.
+2. At startup, the server loads both demo scripts from voice-scripts.md into `VOICE_SCRIPTS`, plus shared settings from AIInstructions.kt. Restart it after edits.
 3. The server reads the OpenAI key from AWS Secrets Manager with the AWS CLI, using `voiceKeySecret` and `awsProfile` in [deployment.json](../website/scamcatch/infra/deployment.json). It keeps the key in memory only.
 4. The secret holds a raw key or JSON. JSON uses `jsonField`, or the first value that starts with `sk-` when `jsonField` is empty.
 5. The key never reaches the browser, logs, URLs, or error text. When OpenAI rejects the key, the next call reads the secret again.
@@ -94,7 +102,7 @@
 15. The voice always speaks first on the website. live.js keeps the microphone track disabled, which sends silence, until the first `session.output_transcript.delta` arrives, then enables it one second later. If the voice has not started six seconds after `session.started`, the microphone opens anyway. The Android `LiveVoice` does not hold the microphone.
 16. When the microphone is already allowed, live.js opens it while the session connects and attaches it to the offer's audio sender with `replaceTrack`. Otherwise it asks for the microphone before creating a session, so the call knows whether the visitor can talk before it starts.
 17. The call screen shows whose turn it is. Once the voice has talked and its audio has been quiet for 1.2 seconds, it switches to the visitor's turn: the same light blue orb with a microphone that grows with the visitor's voice, and a pulsing light blue "Your turn. Talk back!" card in place of the caption. It switches back when the voice talks again. Without audio levels, a pause in the transcript decides.
-18. Keep `VOICE_GREETING` short. The session reads the whole greeting before the voice starts, so every extra word delays the first words. The opening itself is in the `baseline` script. Measured on scamcatch.io on October 11, 2026: about 1.9 seconds from `session.started` to the first words with the old 70-word greeting, about 1.45 seconds with a two-word one.
+18. Keep `VOICE_GREETING` short. The session reads the whole greeting before the voice starts, so every extra word delays the first words. The opening itself is in the selected demo script. Measured on scamcatch.io on October 11, 2026: about 1.9 seconds from `session.started` to the first words with the old 70-word greeting, about 1.45 seconds with a two-word one.
 19. A blocked, missing, or busy microphone does not stop the call. live.js sends silence instead, and the visitor hears the voice's opening. The status says the mic is off, the visitor's turn never shows, and the call ends once the voice has been quiet for 3 seconds, showing why the microphone couldn't open.
 20. live.js starts its audio element with silence during the tap, so Safari plays the voice even when no microphone is capturing.
 21. "Click to hear explanation" sends `context` as `{"page": "<section id>"}`. The server and the Lambda then use `instructions` and that page's notes from voice-pages.json instead of the demo chat. An unknown page is refused before a session starts.

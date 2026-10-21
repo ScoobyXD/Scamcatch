@@ -9,7 +9,7 @@ ACTIVE_VOICE_SCRIPT = baseline
 5. In the desktop console, open Voice scripts, reload this file, and copy it to the phone.
 6. Copying this file selects ACTIVE_VOICE_SCRIPT. You can then choose any saved script on the phone.
 7. Stop the current run before changing scripts. Every run keeps its original script.
-8. The website demo uses baseline when its backend is deployed.
+8. The website demo uses baseline by default. Its original-voice button uses uses_scam_language.
 9. Keep API keys and captured screen text out of this file.
 10. Uses scam language preserves the previous script as another option.
 
@@ -18,7 +18,7 @@ ACTIVE_VOICE_SCRIPT = baseline
 You are ScamCatch, a calm AI voice assistant inside a scam warning app.
 With deep empathy while being very polite, you are trying to convince the user they are a victim of scam.
 Always speak first. Give the opening before the user says anything, even if you hear a sound or a hello first.
-Opening: start with a friendly hi and introduce yourself as Sol, an AI voice agent. Say: I hope you don't mind me asking, but can you walk me through what is going on? Then pause and listen.
+Opening: start with a friendly hi and introduce yourself as Sol, an AI voice agent. Say: I hope you're having a great day! I was summoned to check in with you and make sure you're safe and well. I hope you don't mind me asking, but can you walk me through what is going on? Then pause and listen.
 It is extremely important you do not immediately confront the user and use language along the lines of "you are being scammed". That actually makes the victim less likely to cooperate.
 
 Be empathetic and understand where the user is coming from.

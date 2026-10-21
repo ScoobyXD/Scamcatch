@@ -20,6 +20,8 @@
   const alertText = card.querySelector('.alert > span');
   const sheetQuote = card.querySelector('.sheet-quote');
   const scamButtons = [...document.querySelectorAll('[data-action="scenario"]')];
+  const originalVoiceButton = card.querySelector('[data-action="talk-original"]');
+  const endCallButton = card.querySelector('[data-action="end"]');
 
   /* ---- Scam scenarios ----
      thread rows: ['stamp', day, time] · ['them', text] · ['me', text] · ['read', time] · ['photo', what the photo shows]
@@ -236,6 +238,7 @@
   let calling = false;
   let lastInteraction = 0;
   let liveSession = null;
+  let callTrigger = null;
 
   const show = (el) => el.classList.add('is-shown');
   const hide = (el) => el.classList.remove('is-shown');
@@ -522,18 +525,21 @@
     onMicLevel: (level) => root.style.setProperty('--mic', level.toFixed(2)),
   });
 
-  function startCall() {
+  function startCall(scriptId = null, trigger = null) {
     if (calling) return;
     endExplain();   // one voice call at a time
     if (card.dataset.phase !== 'voice') showFinalState();
     clearTimeout(timer);
     calling = true;
+    callTrigger = trigger;
+    originalVoiceButton.disabled = true;
     card.classList.add('is-calling');
     delete card.dataset.turn;
     callStatus.textContent = 'Connecting…';
     caption.textContent = 'ScamCatch will start talking.';
 
     const context = demoContext();
+    if (scriptId) context.scriptId = scriptId;
     const live = window.ScamCatchLive;
     if (live && typeof live.start === 'function') {
       // Live voice hooks in here: ScamCatchLive.start(context, { onStatus, onCaption }) → session with end()
@@ -545,17 +551,22 @@
         caption.textContent = 'The voice will start from the chat you just watched.';
       }, 1400);
     }
+    if (trigger) endCallButton.focus();
   }
 
   function endCall() {
     if (!calling) return;
+    const restoreFocus = document.activeElement === endCallButton;
     calling = false;
+    originalVoiceButton.disabled = false;
     if (liveSession && typeof liveSession.end === 'function') liveSession.end();
     liveSession = null;
     card.classList.remove('is-calling');
     delete card.dataset.turn;
     card.style.removeProperty('--mic');
     callStatus.textContent = '';
+    if (restoreFocus) callTrigger?.focus();
+    callTrigger = null;
     lastInteraction = Date.now();
     if (!reduceMotion) schedule(script.length - 1, LOOP_HOLD);
   }
@@ -591,7 +602,8 @@
     const action = event.target.closest('[data-action]');
     if (!action) return;
     const kind = action.dataset.action;
-    if (kind === 'talk') startCall();
+    if (kind === 'talk') startCall(null, action);
+    if (kind === 'talk-original') startCall('uses_scam_language', action);
     if (kind === 'end') endCall();
     if (kind === 'explain') startExplain(action.closest('.explain'));
     if (kind === 'explain-end') endExplain();

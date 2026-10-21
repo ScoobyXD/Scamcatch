@@ -1,7 +1,7 @@
 """Deploy ScamCatch live voice to scamcatch.io. Python 3.11+, standard library only, plus the AWS CLI.
 
 Run it with "Deploy Voice.cmd" in the repository root. It:
-1. builds the Lambda package from infra/voice/handler.py, shared settings in AIInstructions.kt, and baseline in voice-scripts.md,
+1. builds the Lambda package from infra/voice/handler.py, shared settings in AIInstructions.kt, and both demo scripts in voice-scripts.md,
 2. deploys the scamcatch-voice stack (Lambda function URL, daily call counter, permissions),
 3. uploads the function code,
 4. adds the /api/* route to the scamcatch-site CloudFront distribution,

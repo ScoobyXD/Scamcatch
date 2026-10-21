@@ -38,3 +38,6 @@
 38. Clicking it starts the live voice with {"page": "<section id>"}. The voice explains that page first, then answers questions. The pill becomes a call bar: the orb (a microphone on the visitor's turn), the status line, the voice's words (or "Your turn. Ask a question!"), and a red end button.
 39. One voice call at a time: starting the demo call ends an explanation, and starting an explanation ends the demo call. Scrolling the explained stage off screen ends its explanation.
 40. What the voice says about each page is in public/voice-pages.json: "instructions" for every page, and "pages" keyed by section id. Update a page's notes when the page changes. It publishes with the site, and the live voice picks it up within a minute; no Deploy Voice.cmd.
+41. Below the eight scam buttons, "Try the original voice" starts the existing demo call with context.scriptId set to uses_scam_language and the current scam evidence.
+42. The phone's normal talk button omits context.scriptId and uses baseline. The original script applies to one call only. Page explanations keep their existing page context.
+43. The original voice button is disabled during a demo call. Starting from either talk button moves focus to End the call. Ending there returns focus to the button that started it.
