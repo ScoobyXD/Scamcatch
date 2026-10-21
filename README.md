@@ -14,17 +14,15 @@
 ## Manage voice scripts
 
 1. Keep 1 to 100 named scripts in [voice-scripts.md](app/src/main/assets/voice-scripts.md). Each section uses `## script_id | Display name`.
-2. The library currently contains only `uses_scam_language`, named **Uses scam language**. The app does not assign scripts or run A/B experiments automatically.
-3. `ACTIVE_VOICE_SCRIPT = uses_scam_language` selects the current script when the file reaches the phone. Change the variable manually to select another script.
+2. The library contains `baseline` (**Baseline**) and `uses_scam_language` (**Uses scam language**). Baseline uses the user's new text. Uses scam language preserves the previous text.
+3. `ACTIVE_VOICE_SCRIPT = baseline` selects Baseline when the file reaches the phone. Selection is manual. The app does not run A/B experiments automatically.
 4. Stop the run before changing scripts. Edit the actual Markdown file in your editor.
 5. In the desktop console, open **Voice scripts** and select **Reload file**. The console displays a preview without changing the phone.
 6. Select **Copy file to phone** to save the library and select `ACTIVE_VOICE_SCRIPT`. Wait for phone confirmation before disconnecting.
 7. Select a copied script and choose **Use on phone** to change the phone selection. This does not edit the Markdown variable.
 8. On the phone, use **Voice script**, **Choose script**, then **Save selection**. The saved library and selection survive app restarts.
 9. Each run keeps its original script until it ends. A new run uses the saved selection.
-10. The website demo stays on `uses_scam_language`, independent of the phone selection. Restart the local server or deploy voice after editing that script.
-11. The blank `# New baseline draft` area precedes the first `##` heading. Draft text does not reach voice.
-12. Create a runnable `## baseline` section only from the user's completed draft.
+10. The website demo uses `baseline`, independent of the phone selection. Restart the local server or deploy voice after editing that script.
 
 ## Start with the desktop
 
