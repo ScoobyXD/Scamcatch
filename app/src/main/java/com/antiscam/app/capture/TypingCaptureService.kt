@@ -77,16 +77,6 @@ class TypingCaptureService : AccessibilityService() {
         val warningGeneration: Long = ScamIntervention.generation,
     )
 
-    private data class WindowRegion(
-        val id: Int,
-        val layer: Int,
-        val type: Int,
-        val bounds: Rect,
-        val packageName: String?,
-        val appLabel: String?,
-        val sourceKind: String,
-    )
-
     private data class MaskedRegion(val bounds: Rect, val reason: String) {
         fun details(): Map<String, Any?> = mapOf("bounds" to bounds.details(), "reason" to reason)
     }
@@ -94,7 +84,6 @@ class TypingCaptureService : AccessibilityService() {
     private data class DisplayPlan(
         val bounds: Rect,
         val rotation: Int,
-        val windows: List<WindowRegion>,
         val maskedRegions: List<MaskedRegion>,
     )
 
@@ -109,6 +98,7 @@ class TypingCaptureService : AccessibilityService() {
         scope.launch {
             CaptureStore.state.map { it.revision }.distinctUntilChanged().collect {
                 invalidate("Run or capture settings changed.")
+                observeForeground()
             }
         }
     }
@@ -122,7 +112,9 @@ class TypingCaptureService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null || destroyed) return
         observeForeground()
-        if (CaptureStore.state.value.warningActive) return
+        val state = CaptureStore.state.value
+        if (foregroundPackage == null || state.runId == null || !state.consentGranted ||
+            !state.monitoringEnabled || state.warningActive) return
         val eventPackage = event.packageName?.toString()
         // Keyboard and background events do not replace the visible app's interaction.
         if (eventPackage != null && eventPackage in inputMethodPackages) return
@@ -214,6 +206,7 @@ class TypingCaptureService : AccessibilityService() {
         // Keep observation live between runs, without generating capture work or skip events.
         if (state.runId == null || !state.consentGranted || !state.monitoringEnabled || state.warningActive) return null
         val target = foregroundPackage ?: return null
+        if (target !in state.approvedPackages) return null
         val windowId = foregroundWindowId ?: return null
         if (event.eventType != AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
             (event.packageName?.toString() != target || event.windowId != windowId)) return null
@@ -223,7 +216,7 @@ class TypingCaptureService : AccessibilityService() {
         if (kind == "content" && passiveCaptureBlocked) {
             // A new content event can resume capture once the window becomes eligible.
             // An unchanged blocked window must not restart waiting and skipped records.
-            if (displayPlan(request) == null) return null
+            if (displayPlan() == null) return null
         }
         return request
     }
@@ -261,10 +254,12 @@ class TypingCaptureService : AccessibilityService() {
         settleStartedAt = null
     }
 
-    private fun observeForeground() {
+    private fun observeForeground(scheduleCapture: Boolean = true) {
+        val state = CaptureStore.state.value
         var observedPackage: String? = null
         var observedWindowId: Int? = null
-        val root = rootInActiveWindow
+        val canObserve = state.consentGranted && state.monitoringEnabled && state.approvedPackages.isNotEmpty()
+        val root = if (canObserve) try { rootInActiveWindow } catch (_: RuntimeException) { null } else null
         try {
             val rootPackage = root?.packageName?.toString()
             if (root != null && rootPackage != null && rootPackage !in inputMethodPackages) {
@@ -274,15 +269,15 @@ class TypingCaptureService : AccessibilityService() {
         } finally {
             root?.recycleCompat()
         }
-        if (observedPackage == null) {
-            val allWindows = windows
+        if (canObserve && observedPackage == null) {
+            val allWindows = try { windows } catch (_: RuntimeException) { emptyList() }
             try {
                 val window = allWindows.firstOrNull {
                     it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD && it.isFocused
                 } ?: allWindows.firstOrNull {
                     it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD && it.isActive
                 }
-                val windowRoot = window?.root
+                val windowRoot = try { window?.root } catch (_: RuntimeException) { null }
                 try {
                     val candidate = windowRoot?.packageName?.toString()
                     if (window != null && candidate != null && candidate !in inputMethodPackages) {
@@ -296,21 +291,29 @@ class TypingCaptureService : AccessibilityService() {
                 allWindows.forEach { it.recycleCompat() }
             }
         }
+        // Keep only approved identity. Rejected names never reach state, labels, or the event stream.
+        if (observedPackage !in state.approvedPackages) {
+            observedPackage = null
+            observedWindowId = null
+        }
         val windowChanged = observedPackage != foregroundPackage || observedWindowId != foregroundWindowId
         if (windowChanged) {
             invalidate("The active app or window changed.")
         }
         if (!foregroundReported || observedPackage != foregroundPackage) {
-            RunMonitor.emit("app_changed", mapOf(
-                "packageName" to observedPackage,
-                "appLabel" to (observedPackage?.let(::appLabel) ?: "Unknown"),
-            ))
+            if (observedPackage == null) {
+                RunMonitor.clearForeground()
+            } else {
+                RunMonitor.emit("app_changed", mapOf(
+                    "packageName" to observedPackage,
+                    "appLabel" to appLabel(observedPackage),
+                ))
+            }
             foregroundReported = true
         }
         foregroundPackage = observedPackage
         foregroundWindowId = observedWindowId
-        if (windowChanged && observedPackage != null && observedWindowId != null) {
-            val state = CaptureStore.state.value
+        if (scheduleCapture && windowChanged && observedPackage != null && observedWindowId != null) {
             val runId = state.runId
             if (runId != null && state.consentGranted && state.monitoringEnabled && !state.warningActive) {
                 val request = Request(generation, state.revision, runId, observedPackage,
@@ -406,14 +409,17 @@ class TypingCaptureService : AccessibilityService() {
         return !destroyed && request.generation == generation && request.revision == state.revision &&
             request.runId == state.runId && state.consentGranted && state.monitoringEnabled &&
             !state.warningActive && request.warningGeneration == ScamIntervention.generation &&
+            request.target in state.approvedPackages &&
             request.target == foregroundPackage && request.windowId == foregroundWindowId
     }
 
     private fun capture(request: Request) {
+        // This is a one-shot check at capture time, not foreground polling.
+        observeForeground(scheduleCapture = false)
         if (!isCurrent(request)) return
         // Failed eligibility checks are attempts too and must respect capture spacing.
         lastAttemptAt = SystemClock.elapsedRealtime()
-        val plan = displayPlan(request)
+        val plan = displayPlan()
         if (plan == null) {
             passiveCaptureBlocked = true
             CaptureStore.report("Capture skipped. The display is off or unavailable.")
@@ -434,14 +440,15 @@ class TypingCaptureService : AccessibilityService() {
                 var hardwareBitmap: Bitmap? = null
                 var softwareBitmap: Bitmap? = null
                 try {
+                    observeForeground(scheduleCapture = false)
                     RunMonitor.emit("screenshot_received", request.details("captureId" to captureId))
-                    if (request.warningGeneration != ScamIntervention.generation || CaptureStore.state.value.warningActive) {
+                    if (!isCurrent(request)) {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "A scam warning paused screenshot and OCR work."))
+                            "reason" to "The approved capture target or run changed."))
                         finishCapture()
                         return
                     }
-                    val currentPlan = displayPlan(request)
+                    val currentPlan = displayPlan()
                     val masks = (plan.maskedRegions + currentPlan?.maskedRegions.orEmpty()).distinct()
                     hardwareBitmap = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace)
                     softwareBitmap = hardwareBitmap?.copy(Bitmap.Config.ARGB_8888, true)
@@ -452,12 +459,8 @@ class TypingCaptureService : AccessibilityService() {
                     val canvas = Canvas(bitmap)
                     val paint = Paint().apply { color = Color.BLACK }
                     masks.forEach { canvas.drawRect(it.bounds, paint) }
-                    // Other metadata changes affect attribution only.
-                    val sourcePlan = if (currentPlan == plan) plan else plan.copy(
-                        windows = emptyList(), maskedRegions = masks,
-                    )
                     softwareBitmap = null // OCR owns the bitmap until its task completes.
-                    recognize(request, captureId, bitmap, System.currentTimeMillis(), sourcePlan)
+                    recognize(request, captureId, bitmap, System.currentTimeMillis(), plan.copy(maskedRegions = masks))
                 } catch (_: Exception) {
                     captureFailed(request, captureId, "Android could not prepare the screenshot for OCR.")
                     finishCapture()
@@ -474,6 +477,13 @@ class TypingCaptureService : AccessibilityService() {
             }
         }
         try {
+            observeForeground(scheduleCapture = false)
+            if (!isCurrent(request)) {
+                RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
+                    "reason" to "The approved capture target or run changed."))
+                finishCapture()
+                return
+            }
             takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
         } catch (_: Exception) {
             captureFailed(request, captureId, "Android rejected the screenshot request. Check accessibility access.")
@@ -496,33 +506,19 @@ class TypingCaptureService : AccessibilityService() {
         try {
             recognizer.process(InputImage.fromBitmap(bitmap, 0))
                 .addOnSuccessListener(mainExecutor) { text ->
-                    if (request.warningGeneration != ScamIntervention.generation || CaptureStore.state.value.warningActive) {
+                    observeForeground(scheduleCapture = false)
+                    if (!isCurrent(request)) {
                         RunMonitor.emit("capture_discarded", request.details("captureId" to captureId,
-                            "reason" to "A scam warning paused screenshot and OCR work."))
+                            "reason" to "The approved capture target or run changed."))
                         return@addOnSuccessListener
-                    }
-                    val regions = text.textBlocks.flatMap { block -> block.lines.map { line ->
-                        textRegion(line.text, line.boundingBox, plan)
-                    } }
-                    val uncertain = regions.isEmpty() || regions.any { it["sourceAttribution"] == "uncertain" }
-                    val distinctWindows = regions.mapNotNull { it["windowId"] as? Int }.distinct()
-                    val attribution = when {
-                        uncertain -> "uncertain"
-                        distinctWindows.size == 1 -> "single_window"
-                        else -> "mixed"
-                    }
-                    val sourceLabel = when (attribution) {
-                        "single_window" -> "${regions.first()["appLabel"] ?: "Unknown"} (window estimate)"
-                        "mixed" -> "Visible screen: multiple windows (window estimates)"
-                        else -> "Visible screen: source uncertain"
                     }
                     if (CaptureStore.state.value.runId == request.runId) {
                         CaptureStore.result(text.text, capturedAt)
                     }
                     RunMonitor.emit("ocr_completed", request.details("captureId" to captureId,
-                        "text" to text.text, "durationMs" to SystemClock.elapsedRealtime() - startedAt,
-                        "sourceAttribution" to attribution, "sourceLabel" to sourceLabel,
-                        "textRegions" to regions, "maskedRegions" to plan.maskedRegions.map { it.details() }))
+                        "characters" to text.text.length, "regionCount" to text.textBlocks.sumOf { it.lines.size },
+                        "durationMs" to SystemClock.elapsedRealtime() - startedAt,
+                        "maskedRegions" to plan.maskedRegions.map { it.details() }))
                     JevAnalysis.evaluate(text.text, captureId, request.runId)
                 }
                 .addOnFailureListener(mainExecutor) {
@@ -550,8 +546,8 @@ class TypingCaptureService : AccessibilityService() {
             "captureScope" to "display", "sourceAttribution" to "uncertain",
             "sourceLabel" to "Visible screen: source uncertain") + values
 
-    /** Only keyboard windows are masked. Other window metadata estimates text sources. */
-    private fun displayPlan(request: Request): DisplayPlan? {
+    /** Read keyboard geometry only. Do not inspect or identify other visible app windows. */
+    private fun displayPlan(): DisplayPlan? {
         if (!getSystemService(PowerManager::class.java).isInteractive) return null
         val display: Rect
         val rotation: Int
@@ -564,53 +560,20 @@ class TypingCaptureService : AccessibilityService() {
             return null
         }
         val allWindows = try { windows } catch (_: RuntimeException) { emptyList() }
-        val reported = mutableListOf<WindowRegion>()
         val masks = mutableListOf<MaskedRegion>()
         try {
-            for (window in allWindows.sortedWith(compareByDescending<AccessibilityWindowInfo> { it.layer }.thenBy { it.id })) {
-                if (window.displayId != Display.DEFAULT_DISPLAY) continue
+            for (window in allWindows) {
+                if (window.displayId != Display.DEFAULT_DISPLAY || window.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue
                 val bounds = Rect().also(window::getBoundsInScreen)
                 if (!bounds.intersect(display)) continue
-                val keyboard = window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
-                if (keyboard) masks += MaskedRegion(Rect(bounds), "Keyboard excluded.")
-                var root: AccessibilityNodeInfo? = null
-                try {
-                    val windowPackage = try {
-                        root = window.root
-                        root?.packageName?.toString()
-                    } catch (_: RuntimeException) { null }
-                    val kind = when {
-                        keyboard || window.type == AccessibilityWindowInfo.TYPE_SYSTEM -> "system"
-                        window.id == request.windowId -> "app"
-                        else -> "overlay"
-                    }
-                    reported += WindowRegion(window.id, window.layer, window.type, Rect(bounds),
-                        windowPackage, windowPackage?.let(::appLabel), kind)
-                } finally {
-                    root?.recycleCompat()
-                }
+                masks += MaskedRegion(bounds, "Keyboard excluded.")
             }
         } catch (_: RuntimeException) {
-            // A partial window list cannot establish which window owns a text region.
-            reported.clear()
+            // Keep reported keyboard masks when Android cannot return the remaining bounds.
         } finally {
             allWindows.forEach { it.recycleCompat() }
         }
-        return DisplayPlan(display, rotation, reported, masks)
-    }
-
-    private fun textRegion(text: String, bounds: Rect?, plan: DisplayPlan): Map<String, Any?> {
-        val candidates = if (bounds == null || bounds.isEmpty) emptyList() else
-            plan.windows.filter { Rect.intersects(it.bounds, bounds) }
-        // Bounds do not establish opacity. Never choose the top layer when windows overlap.
-        val source = candidates.singleOrNull()?.takeIf {
-            bounds != null && it.bounds.contains(bounds) && it.packageName != null &&
-                plan.maskedRegions.none { mask -> Rect.intersects(mask.bounds, bounds) }
-        }
-        return mapOf("text" to text, "bounds" to bounds?.details(),
-            "packageName" to source?.packageName, "appLabel" to source?.appLabel,
-            "windowId" to source?.id, "sourceKind" to (source?.sourceKind ?: "unknown"),
-            "sourceAttribution" to if (source == null) "uncertain" else "window_bounds")
+        return DisplayPlan(display, rotation, masks)
     }
 
     private fun finishCapture() {

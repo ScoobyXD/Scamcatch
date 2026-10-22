@@ -28,9 +28,9 @@ object RunMonitor {
     private var captureId = 0
     private var session: RunSession? = null
     private val sessions = mutableMapOf<String, RunSession>()
-    private var currentApp = "Unknown"
+    private var currentApp = "Not capturing"
     private var currentPackage: String? = null
-    private var lastExternalApp = "Unknown"
+    private var lastExternalApp = "Not capturing"
     private var typing = "idle"
     private var lastInteraction = "none"
     private var captureStatus = "idle"
@@ -74,6 +74,8 @@ object RunMonitor {
                         it.voiceReady, it.voiceConsentGranted, it.warningActive, it.voiceStatus)
                 }.distinctUntilChanged().collect {
                     val state = CaptureStore.state.value
+                    if (!state.consentGranted || !state.monitoringEnabled || !state.serviceConnected ||
+                        currentPackage !in state.approvedPackages) clearForeground()
                     session?.let { active ->
                         val reason = when {
                             !state.consentGranted -> "consent_removed"
@@ -116,6 +118,10 @@ object RunMonitor {
             when (type) {
                 "app_changed" -> {
                     currentPackage = payload["packageName"] as? String
+                    if (currentPackage !in CaptureStore.state.value.approvedPackages) {
+                        clearForeground()
+                        return@onMain
+                    }
                     currentApp = payload["appLabel"] as? String ?: "Unknown"
                     if (currentPackage != null && currentPackage != "com.antiscam.app") lastExternalApp = currentApp
                 }
@@ -160,6 +166,17 @@ object RunMonitor {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (session == null) return 0
         return ++captureId
+    }
+
+    /** Clear live identity without recording the app that caused capture to stop. */
+    fun clearForeground() = onMain {
+        if (currentPackage == null && currentApp == "Not capturing" && lastExternalApp == "Not capturing") return@onMain
+        currentPackage = null
+        currentApp = "Not capturing"
+        lastExternalApp = "Not capturing"
+        lastInteraction = "none"
+        typing = "idle"
+        emitNow("state_changed", emptyMap())
     }
 
     private fun command(line: String) = onMain {
@@ -208,7 +225,7 @@ object RunMonitor {
                 if (reason != null) emitNow("command_error", mapOf("reason" to reason))
             }
             "start" -> {
-                val reason = start(message.optString("runId"), RunMode.DASHBOARD, message.opt("recordOcr") == true)
+                val reason = start(message.optString("runId"), RunMode.DASHBOARD)
                 if (reason != null) emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
             }
             "stop" -> when {
@@ -247,27 +264,28 @@ object RunMonitor {
             else -> null
         }
         if (setupError != null) return setupError
-        return when (val reason = start("phone_${UUID.randomUUID()}", RunMode.STANDALONE, false)) {
+        return when (val reason = start("phone_${UUID.randomUUID()}", RunMode.STANDALONE)) {
             null -> null
             "run_already_active" -> "Stop the current run before starting another."
             "consent_required" -> "Allow screen capture and Jev analysis first."
             "capture_paused" -> "Resume monitoring before starting a run."
             "service_disconnected" -> "Enable Antiscam in Android Accessibility settings."
+            "approved_apps_required" -> "Select at least one approved app in phone setup."
             else -> "Could not start the run: $reason"
         }
     }
 
     fun stopRun() = onMain { stop("user_stopped") }
 
-    private fun start(id: String, mode: RunMode, recordOcr: Boolean): String? {
+    private fun start(id: String, mode: RunMode): String? {
         val state = CaptureStore.state.value
         val script = VoiceScripts.selected()
         val reason = when {
             session != null -> "run_already_active"
             !RUN_ID.matches(id) -> "invalid_run_id"
             id in sessions -> "run_id_already_used"
-            mode == RunMode.DASHBOARD && !recordOcr -> "ocr_recording_acknowledgment_required"
             !state.consentGranted -> "consent_required"
+            state.approvedPackages.isEmpty() -> "approved_apps_required"
             !state.monitoringEnabled -> "capture_paused"
             !state.serviceConnected -> "service_disconnected"
             script == null -> "Wait for a valid voice script to load before starting a run."
@@ -282,7 +300,8 @@ object RunMonitor {
         ocrStatus = "idle"
         session = RunSession(id, SystemClock.elapsedRealtime(), mode, requireNotNull(script)).also { sessions[id] = it }
         CaptureStore.setRunId(id, mode)
-        emitNow("run_started", mapOf("recordOcr" to recordOcr, "runMode" to mode.wireName, "voiceScript" to scriptRecord(script)))
+        emitNow("run_started", mapOf("recordingPolicy" to "metadata_only", "runMode" to mode.wireName,
+            "voiceScript" to scriptRecord(script)))
         return null
     }
 
@@ -335,6 +354,8 @@ object RunMonitor {
             })
             put("counters", JSONObject(counters.toMap()))
             put("captureScope", "display")
+            put("recordingPolicy", "metadata_only")
+            put("approvedAppCount", config.approvedPackages.size)
             put("consentGranted", config.consentGranted)
             put("monitoringEnabled", config.monitoringEnabled)
             put("serviceConnected", config.serviceConnected)
@@ -344,7 +365,7 @@ object RunMonitor {
     }
 
     private fun emitNow(type: String, details: Map<String, Any?>, eventSession: RunSession? = session) {
-        // Phone runs expose live status only. A desktop run must explicitly allow OCR recording.
+        // Phone runs expose live status only. Desktop records contain approved metadata only.
         val phoneEvent = eventSession?.mode == RunMode.STANDALONE
         val event = JSONObject().apply {
             put("protocol", 1)
@@ -354,7 +375,9 @@ object RunMonitor {
             put("runId", eventSession?.id ?: JSONObject.NULL)
             put("type", if (phoneEvent && type != "snapshot" && type != "command_error") "state_changed" else type)
             put("data", JSONObject().apply {
-                if (!phoneEvent || type == "command_error") details.forEach { (key, value) -> put(key, JSONObject.wrap(value)) }
+                if (!phoneEvent || type == "command_error") details.forEach { (key, value) ->
+                    if (key in EVENT_FIELDS) put(key, JSONObject.wrap(value))
+                }
             })
             put("state", snapshot())
         }
@@ -368,6 +391,19 @@ object RunMonitor {
     }
 
     private val RUN_ID = Regex("[A-Za-z0-9_-]{1,96}")
+    // Keep raw OCR, region contents, warning evidence, and provider messages inside the phone.
+    private val EVENT_FIELDS = setOf(
+        "captureId", "trigger", "packageName", "appLabel", "windowId", "captureScope",
+        "sourceAttribution", "sourceLabel", "maskedRegions", "characters", "regionCount",
+        "durationMs", "delayMs", "reason", "kind", "eventType", "value", "status",
+        "model", "questionSetVersion", "threshold", "questions", "answers", "flagged",
+        "runMode", "recordingPolicy", "voiceScript", "command", "phase", "elapsedMs",
+        "httpStatus", "code", "errorType", "param", "voice", "scriptId", "scriptRevision", "transport",
+        "finalizationConfirmed", "usageSeconds", "rtpBytesReceived", "rtpBytesSent",
+        "rtpPacketsReceived", "rtpPacketsLost", "rtpJitterSeconds", "jitterBufferDelaySeconds",
+        "jitterBufferEmittedCount", "concealedSamples", "totalSamplesReceived",
+        "remoteAudioEnergy", "remoteAudioDurationSeconds",
+    )
     private val CAPTURE_RESULT_EVENTS = setOf(
         "screenshot_received", "capture_failed", "capture_discarded",
         "ocr_started", "ocr_completed", "ocr_failed",

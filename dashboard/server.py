@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -35,6 +36,170 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
 LATE_RESULTS = {"screenshot_received", "capture_failed", "capture_discarded", "ocr_started", "ocr_completed", "ocr_failed", "voice_audio_summary"} | JEV_EVENTS
 KEY_COMMANDS = {"/api/jev-key": "jev_key", "/api/openai-key": "openai_key"}
+RECORDING_POLICY = "metadata_only"
+COUNTER_FIELDS = ("requests", "screenshots", "failed", "ocrCompleted", "ocrFailed", "skipped")
+EVENT_FIELDS = (
+    "captureId", "windowId", "packageName", "appLabel", "captureScope", "sourceAttribution",
+    "trigger", "kind", "eventType", "value", "status", "durationMs", "delayMs", "characters",
+    "regionCount", "maskedRegionCount", "model", "questionSetVersion", "threshold", "flagged", "runMode", "phase",
+    "voice", "scriptId", "scriptRevision", "transport", "httpStatus", "finalizationConfirmed",
+    "usageSeconds", "rtpBytesReceived", "rtpBytesSent", "rtpPacketsReceived", "rtpPacketsLost",
+    "rtpJitterSeconds", "jitterBufferDelaySeconds", "jitterBufferEmittedCount", "concealedSamples",
+    "totalSamplesReceived", "remoteAudioEnergy", "remoteAudioDurationSeconds",
+)
+STATE_FIELDS = (
+    "runId", "runMode", "dashboardConnected", "currentApp", "currentPackage", "lastExternalApp",
+    "typing", "lastInteraction", "captureStatus", "ocrStatus", "voiceReady", "voiceConsentGranted",
+    "warningActive", "voiceStatus", "jevReady", "jevStatus", "jevFlagged", "jevCaptureId",
+    "captureScope", "consentGranted", "monitoringEnabled", "serviceConnected", "appVersion",
+    "androidApi", "approvedAppCount",
+)
+SAFE_REASONS = {
+    "Android needs more time between screenshots.",
+    "Screenshot access is unavailable. Check Android accessibility settings.",
+    "The display is unavailable.", "The target window is no longer available.",
+    "This app protects its screen. Antiscam cannot capture it.",
+    "Android could not prepare the screenshot for OCR.",
+    "Android rejected the screenshot request. Check accessibility access.",
+    "The local text model could not read this screenshot.", "The local text model could not start.",
+    "No development API key is loaded.", "OCR returned no text.",
+    "OCR text exceeds the development request limit.", "The Jev request timed out.",
+    "The Jev request could not reach the service.", "Jev returned an unreadable or invalid response.",
+    "TypeSafe rejected the development API key or its access.", "TypeSafe rate-limited this request.",
+    "TypeSafe returned a redirect. The request was not forwarded.", "TypeSafe is temporarily unavailable.",
+    "Jev returned an empty response.", "Jev returned an oversized response.",
+    "Jev returned an unexpected model version.", "Jev did not return the configured Noul answers.",
+    "Jev returned an unexpected number of Noul answers.", "Jev returned a missing or invalid Noul answer.",
+    "Android blocked microphone access. Check microphone permission.",
+    "This phone could not load the voice audio engine.", "Voice could not continue its audio connection.",
+    "Voice could not use the phone's microphone.", "Voice could not use the phone's speaker.",
+    "Stop the phone run in Antiscam.", "Stop the current run before changing voice scripts.",
+    "Wait for the phone to finish saving voice scripts.", "Wait for a valid voice script to load before starting a run.",
+}
+EVENT_REASONS = {
+    "capture_failed": "Capture failed. Check accessibility access and the app's screen restrictions.",
+    "capture_skipped": "The screen or selected app did not pass the capture checks.",
+    "capture_discarded": "Capture stopped because permission or the active screen changed.",
+    "ocr_failed": "Local text recognition failed.",
+    "jev_failed": "Jev analysis failed. Check the API key and Internet connection.",
+    "voice_failed": "Voice failed. Check microphone permission, Internet access, and the provider error code.",
+    "command_error": "The phone rejected the command. Check phone setup, run state, and the selected voice script.",
+}
+
+
+def safe_reason(value, event_type=None):
+    if isinstance(value, str) and (value in SAFE_REASONS or re.fullmatch(r"[a-z][a-z0-9_]{0,95}", value)):
+        return value
+    return EVENT_REASONS.get(event_type)
+
+
+def scalar_fields(value, fields):
+    """Only named scalar metadata can cross the dashboard recording boundary."""
+    if not isinstance(value, dict):
+        return {}
+    return {key: item for key in fields if key in value
+            and ((item := value[key]) is None or isinstance(item, (str, int, float, bool)))
+            and (not isinstance(item, float) or math.isfinite(item))}
+
+
+def numeric_fields(value, fields):
+    return {key: item for key, item in scalar_fields(value, fields).items()
+            if type(item) in (int, float)}
+
+
+def script_metadata(value, instructions=False):
+    return scalar_fields(value, ("id", "name", "revision", "instructions") if instructions
+                         else ("id", "name", "revision"))
+
+
+def jev_metadata(value):
+    result = scalar_fields(value, ("status", "model", "questionSetVersion", "threshold", "durationMs", "flagged"))
+    if not isinstance(value, dict):
+        return result
+    reason = safe_reason(value.get("reason"), "jev_failed" if value.get("status") == "failed" else None)
+    if reason:
+        result["reason"] = reason
+    questions = value.get("questions")
+    if isinstance(questions, dict):
+        # Question configuration is static. Never retain nested context or captured evidence.
+        result["questions"] = {key: scalar_fields(question, ("type", "instructions"))
+                               for key, question in questions.items() if SAFE_ID.fullmatch(key)}
+    answers = value.get("answers")
+    if isinstance(answers, dict):
+        result["answers"] = {key: {"type": "noul", "noul": answer["noul"]}
+                             for key, answer in answers.items()
+                             if SAFE_ID.fullmatch(key) and isinstance(answer, dict)
+                             and answer.get("type") == "noul" and type(answer.get("noul")) in (int, float)
+                             and math.isfinite(answer["noul"]) and 0 <= answer["noul"] <= 1}
+    return result
+
+
+def state_metadata(value):
+    result = scalar_fields(value, STATE_FIELDS)
+    if not isinstance(value, dict):
+        return result
+    result["counters"] = numeric_fields(value.get("counters"), COUNTER_FIELDS)
+    result["voiceScript"] = script_metadata(value.get("voiceScript"))
+    scripts = value.get("voiceScripts")
+    if isinstance(scripts, dict):
+        result["voiceScripts"] = scalar_fields(scripts, ("available", "ready", "working", "error", "message", "selectedId"))
+        result["voiceScripts"]["scripts"] = [script_metadata(item) for item in scripts.get("scripts", [])
+                                              if isinstance(item, dict)]
+    keys = value.get("phoneKeys")
+    if isinstance(keys, dict):
+        result["phoneKeys"] = {provider: scalar_fields(keys.get(provider), ("working", "saved", "message", "error"))
+                               for provider in ("jev", "openai")}
+    return result
+
+
+def event_metadata(event):
+    result = scalar_fields(event, ("protocol", "seq", "timestampMs", "elapsedMs", "runId", "type"))
+    source = event.get("data")
+    if not isinstance(source, dict):
+        source = {}
+    data = scalar_fields(source, EVENT_FIELDS)
+    for key in ("code", "errorType", "param", "command"):
+        identifier = source.get(key)
+        if isinstance(identifier, str) and len(identifier) <= 96 and re.fullmatch(r"[a-z][a-z0-9_]*(?:[.\[][a-z0-9_]+\]?)*", identifier):
+            data[key] = identifier
+    # Older phones can still send raw OCR. Count it, then discard it before storage or UI delivery.
+    if "characters" not in data and isinstance(source.get("text"), str):
+        data["characters"] = len(source["text"])
+    if "regionCount" not in data and isinstance(source.get("textRegions"), list):
+        data["regionCount"] = len(source["textRegions"])
+    if isinstance(source.get("maskedRegions"), list):
+        data["maskedRegionCount"] = len(source["maskedRegions"])
+    if result.get("type") in JEV_EVENTS:
+        data.update(jev_metadata(source))
+    if isinstance(source.get("voiceScript"), dict):
+        data["voiceScript"] = script_metadata(source["voiceScript"], instructions=True)
+    # Provider and script errors can quote input. Keep known messages or safe status explanations.
+    reason = safe_reason(source.get("reason"), result.get("type"))
+    if reason:
+        data["reason"] = reason
+    result["data"] = data
+    result["state"] = state_metadata(event.get("state"))
+    return result
+
+
+def capture_metadata(value):
+    result = scalar_fields(value, ("captureId", "file", "timestampMs", "elapsedMs", "durationMs", "packageName",
+                                  "appLabel", "windowId", "characters", "regionCount", "maskedRegionCount",
+                                  "captureScope", "sourceAttribution"))
+    if isinstance(value, dict) and isinstance(value.get("jev"), dict):
+        result["jev"] = jev_metadata(value["jev"])
+    return result
+
+
+def run_metadata(value):
+    result = scalar_fields(value, ("id", "status", "startedAt", "endedAt", "device", "captureScope",
+                                  "appVersion", "androidApi", "eventCount", "reason", "jevExpected",
+                                  "folder", "recordingError", "recordingPolicy"))
+    result["counters"] = numeric_fields(value.get("counters"), COUNTER_FIELDS)
+    result["ocr"] = [capture_metadata(item) for item in value.get("ocr", []) if isinstance(item, dict)]
+    if isinstance(value.get("voiceScript"), dict):
+        result["voiceScript"] = script_metadata(value["voiceScript"], instructions=True)
+    return result
 
 
 def utc_now():
@@ -102,23 +267,18 @@ class Console:
                 continue
             try:
                 run = json.loads((folder / "run.json").read_text(encoding="utf-8"))
-                if run.get("id") != folder.name:
+                if run.get("id") != folder.name or run.get("recordingPolicy") != RECORDING_POLICY:
+                    # Historical conversation records remain untouched and are never restored or exported.
                     continue
-                self.run = run
-                self.ocr = []
-                for item in run.get("ocr", []):
-                    relative = Path(item["file"])
-                    path = folder / relative
-                    if relative.parent != Path("ocr") or path.is_symlink() or path.resolve().parent != (folder / "ocr").resolve():
-                        continue
-                    self.ocr.append({**item, "text": path.read_text(encoding="utf-8")})
+                self.run = run_metadata(run)
+                self.ocr = [capture_metadata(item) for item in self.run["ocr"]]
                 events = folder / "events.jsonl"
                 self.activity = []
                 if events.is_file() and not events.is_symlink():
                     with events.open(encoding="utf-8") as source:
                         for line in source:
                             try:
-                                event = json.loads(line)
+                                event = event_metadata(json.loads(line))
                                 if event.get("type") not in {"snapshot", "state_changed"}:
                                     self.activity.append(self.activity_entry(event))
                                 if event.get("type") in JEV_EVENTS and isinstance(event.get("data"), dict):
@@ -438,6 +598,7 @@ class Console:
         with self.lock:
             if self.recording_error:
                 return
+            event = event_metadata(event)
             state = event.get("state")
             if isinstance(state, dict):
                 reconnected = self.connection != "connected"
@@ -510,6 +671,8 @@ class Console:
                 "captureId": data.get("captureId"), "interaction": data.get("kind"),
                 "value": data.get("value"), "trigger": data.get("trigger"),
                 "durationMs": data.get("durationMs"), "phase": data.get("phase"),
+                "code": data.get("code"), "errorType": data.get("errorType"), "param": data.get("param"),
+                "command": data.get("command"), "httpStatus": data.get("httpStatus"),
                 "captureScope": data.get("captureScope"), "sourceLabel": data.get("sourceLabel"),
                 "sourceAttribution": data.get("sourceAttribution"),
                 "appLabel": data.get("appLabel") or state.get("currentApp"),
@@ -553,6 +716,10 @@ class Console:
                 raise ValueError("The device still has an active run. Wait for Stop to finish.")
             if not all(self.state.get(key) for key in ("consentGranted", "monitoringEnabled", "serviceConnected")):
                 raise ValueError("Allow capture and cloud text analysis, resume capture, and enable the accessibility service in Antiscam Dev.")
+            if type(self.state.get("approvedAppCount")) is not int:
+                raise ValueError("Update Antiscam on the phone to enable approved-app capture.")
+            if self.state["approvedAppCount"] < 1:
+                raise ValueError("Choose approved apps in Antiscam on the phone before starting a run.")
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + secrets.token_hex(4)
             folder = self.runs / run_id
             (folder / "ocr").mkdir(parents=True)
@@ -560,7 +727,7 @@ class Console:
                         "device": self.selected_device, "captureScope": self.state.get("captureScope", "foreground"),
                         "appVersion": self.state.get("appVersion"), "androidApi": self.state.get("androidApi"),
                         "counters": {}, "eventCount": 0, "ocr": [], "reason": None, "jevExpected": True,
-                        "folder": str(folder)}
+                        "folder": str(folder), "recordingPolicy": RECORDING_POLICY}
             self.ocr = []
             self.activity = []
             self.recording_run = True
@@ -569,7 +736,7 @@ class Console:
             self.write_summary()
             self.publish("snapshot", self.snapshot())
             try:
-                self.send_command({"command": "start", "runId": run_id, "recordOcr": True})
+                self.send_command({"command": "start", "runId": run_id})
             except ValueError:
                 self.finish("failed", "The Start command did not reach the device.")
                 self.publish()
@@ -600,11 +767,11 @@ class Console:
         if ocr_folder.is_symlink() or ocr_folder.resolve().parent != folder.resolve():
             return None
         run = json.loads(path.read_text(encoding="utf-8"))
-        return run if isinstance(run, dict) and run.get("id") == run_id else None
+        return run_metadata(run) if isinstance(run, dict) and run.get("id") == run_id and run.get("recordingPolicy") == RECORDING_POLICY else None
 
     def append_event(self, event, run=None):
         run = self.run if run is None else run
-        line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+        line = json.dumps(event_metadata(event), ensure_ascii=False, separators=(",", ":")) + "\n"
         if run is self.run and self.event_file:
             self.event_file.write(line)
             self.event_file.flush()
@@ -621,32 +788,25 @@ class Console:
         data = event["data"]
         capture_id = str(data.get("captureId", event.get("seq", len(run["ocr"]) + 1)))
         safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", capture_id)[:80] or "capture"
-        filename = f"ocr/{safe_id}.txt"
+        filename = f"ocr/{safe_id}.json"
         if any(item["file"] == filename for item in run["ocr"]):
-            filename = f"ocr/{safe_id}-{len(run['ocr']) + 1}.txt"
-        text = data.get("text", "")
-        if not isinstance(text, str):
-            raise ValueError("OCR text is not a string.")
-        (self.runs / run["id"] / filename).write_text(text, encoding="utf-8", newline="")
+            filename = f"ocr/{safe_id}-{len(run['ocr']) + 1}.json"
         item = {"captureId": capture_id, "file": filename, "timestampMs": event.get("timestampMs"),
                 "elapsedMs": event.get("elapsedMs"), "durationMs": data.get("durationMs"),
                 "packageName": data.get("packageName"), "appLabel": data.get("appLabel"),
-                "windowId": data.get("windowId"), "characters": len(text)}
-        # Preserve keyboard masks and mask metadata from earlier app versions.
-        for key in ("captureScope", "sourceAttribution", "sourceLabel", "textRegions", "maskedRegions"):
-            if key in data:
-                item[key] = data[key]
+                "windowId": data.get("windowId"), "characters": data.get("characters"),
+                "regionCount": data.get("regionCount"), "maskedRegionCount": data.get("maskedRegionCount"),
+                "captureScope": data.get("captureScope"), "sourceAttribution": data.get("sourceAttribution")}
         run["ocr"].append(item)
-        record = {**item, "text": text}
-        self.write_ocr_record(record, run)
+        self.write_ocr_record(item, run)
         if run is self.run:
-            self.ocr.append(record)
-            self.publish("ocr", record)
+            self.ocr.append(item)
+            self.publish("ocr", item)
 
     def write_ocr_record(self, record, run=None):
         run = self.run if run is None else run
         path = (self.runs / run["id"] / record["file"]).with_suffix(".json")
-        write_json(path, record)
+        write_json(path, capture_metadata(record))
 
     def save_jev(self, event, persist=True, run=None):
         run = self.run if run is None else run
@@ -668,11 +828,11 @@ class Console:
             path = folder / relative
             if relative.parent != Path("ocr") or path.is_symlink() or path.resolve().parent != (folder / "ocr").resolve():
                 return
-            record = {**item, "text": path.read_text(encoding="utf-8")}
+            record = item
         if record is None:
             return
         # Android owns the questions, model, probabilities, and decision rule.
-        jev = {key: value for key, value in data.items() if key != "captureId"}
+        jev = jev_metadata(data)
         item["jev"] = jev
         record["jev"] = jev
         if persist:
@@ -683,12 +843,13 @@ class Console:
     def persist_run(self, run=None):
         run = self.run if run is None else run
         if run:
-            write_json(self.runs / run["id"] / "run.json", run)
+            write_json(self.runs / run["id"] / "run.json", run_metadata(run))
 
-    def write_summary(self, run=None):
+    def summary_text(self, run=None):
         run = self.run if run is None else run
         if not run:
-            return
+            return ""
+        run = run_metadata(run)
         counters = run.get("counters", {})
         scope = {"foreground": "Current foreground app", "display": "Visible default display"}.get(
             run.get("captureScope"), run.get("targetPackage") or "Unknown")
@@ -697,7 +858,7 @@ class Console:
                  f"Device: {run.get('device') or 'Unknown'}", f"App version: {run.get('appVersion') or 'Unknown'}",
                  f"Android API: {run.get('androidApi') or 'Unknown'}",
                  f"Capture scope: {scope}",
-                 f"Events saved: {run.get('eventCount', 0)}", f"OCR files: {len(run.get('ocr', []))}"]
+                 f"Events saved: {run.get('eventCount', 0)}", f"Capture summaries: {len(run.get('ocr', []))}"]
         script = run.get("voiceScript")
         if isinstance(script, dict):
             lines += [f"Voice script: {script.get('id')} ({script.get('name')})",
@@ -712,11 +873,17 @@ class Console:
             lines.append(f"Probably scam flags: {flagged}")
             lines.append("Flags are experiment results, not proof of fraud. Failed, skipped, and canceled checks are not safe results.")
         lines += [f"Reason: {run.get('reason') or 'Run in progress'}", "",
-                  "Full OCR text and capture JSON are in ocr/. Jev questions, probabilities, model, and threshold are saved when supplied by Android.",
-                  "Events are in events.jsonl. No screenshot files or Jev API keys are saved."]
+                  "Capture metadata is in ocr/. Jev configuration and numeric decisions are saved when supplied by Android.",
+                  "Events are in events.jsonl. Conversation text, screenshot images, audio, transcripts, and API keys are not recorded."]
+        return "\n".join(lines) + "\n"
+
+    def write_summary(self, run=None):
+        run = self.run if run is None else run
+        if not run:
+            return
         summary = self.runs / run["id"] / "summary.txt"
         temporary = summary.with_suffix(".txt.tmp")
-        temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        temporary.write_text(self.summary_text(run), encoding="utf-8")
         temporary.replace(summary)
 
     def finish(self, status, reason):
@@ -778,17 +945,26 @@ class Console:
         with self.lock:
             if not self.run:
                 raise ValueError("Start a run before exporting.")
-            self.write_summary()
+            if self.run.get("recordingPolicy") != RECORDING_POLICY:
+                raise ValueError("Historical conversation records cannot be exported. Start a new metadata-only run.")
             folder = self.runs / self.run["id"]
             content = io.BytesIO()
             with zipfile.ZipFile(content, "w", zipfile.ZIP_DEFLATED) as archive:
-                names = ["summary.txt", "run.json", "events.jsonl"]
+                prefix = f"{self.run['id']}/"
+                archive.writestr(prefix + "summary.txt", self.summary_text())
+                archive.writestr(prefix + "run.json", encode(run_metadata(self.run)))
+                events = folder / "events.jsonl"
+                if events.is_file() and not events.is_symlink():
+                    with events.open(encoding="utf-8") as source, archive.open(prefix + "events.jsonl", "w") as target:
+                        for line in source:
+                            try:
+                                target.write(encode(event_metadata(json.loads(line))) + b"\n")
+                            except (ValueError, TypeError, AttributeError):
+                                continue
                 for item in self.run["ocr"]:
-                    names.extend((item["file"], str(Path(item["file"]).with_suffix(".json"))))
-                for name in names:
-                    path = folder / name
-                    if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(folder.resolve()):
-                        archive.write(path, f"{self.run['id']}/{name}")
+                    relative = Path(item["file"])
+                    if relative.parent == Path("ocr") and relative.suffix == ".json":
+                        archive.writestr(prefix + relative.as_posix(), encode(capture_metadata(item)))
             return self.run["id"], content.getvalue()
 
     def close(self):

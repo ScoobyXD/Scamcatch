@@ -15,9 +15,9 @@ enum class RunMode(val wireName: String) {
 data class CaptureState(
     val consentGranted: Boolean = false,
     val monitoringEnabled: Boolean = false,
+    val approvedPackages: Set<String> = emptySet(),
     val serviceConnected: Boolean = false,
     val status: String = "Allow capture to begin.",
-    val latestText: String = "",
     val lastCapturedAtMillis: Long? = null,
     val captureCount: Int = 0,
     val lastError: String? = null,
@@ -37,7 +37,7 @@ data class CaptureState(
     val revision: Long = 0,
 )
 
-/** Only consent and monitoring settings persist. OCR, Jev results, and the API key do not. */
+/** Only consent, approved apps, and monitoring settings persist. OCR and Jev results do not. */
 object CaptureStore {
     private const val CONSENT_VERSION = 3
     private val mutableState = MutableStateFlow(CaptureState())
@@ -55,8 +55,26 @@ object CaptureStore {
             consentGranted = consent,
             voiceConsentGranted = consent && prefs.getBoolean("voiceConsent", false),
             monitoringEnabled = enabled,
-            status = if (enabled) "Waiting for the accessibility service." else "Monitoring is paused.",
+            approvedPackages = prefs.getStringSet("approvedPackages", emptySet())?.toSet().orEmpty(),
+            status = if (enabled) "Capture waits for an approved app." else "Monitoring is paused.",
         )
+    }
+
+    fun setApprovedPackages(packages: Set<String>) {
+        val approved = packages.filter { it.isNotBlank() }.toSet()
+        mutableState.update {
+            if (it.approvedPackages == approved) it else it.copy(
+                approvedPackages = approved,
+                lastCapturedAtMillis = null,
+                lastError = null,
+                jevStatus = "idle",
+                jevCaptureId = null,
+                jevFlagged = null,
+                status = if (approved.isEmpty()) "Choose an app to allow capture." else "Approved apps updated.",
+                revision = it.revision + 1,
+            )
+        }
+        saveSettings()
     }
 
     fun setConsent(granted: Boolean) {
@@ -65,7 +83,6 @@ object CaptureStore {
                 consentGranted = granted,
                 voiceConsentGranted = granted && it.voiceConsentGranted,
                 monitoringEnabled = granted && it.monitoringEnabled,
-                latestText = if (granted) it.latestText else "",
                 lastCapturedAtMillis = if (granted) it.lastCapturedAtMillis else null,
                 captureCount = if (granted) it.captureCount else 0,
                 status = if (granted) "Capture is allowed. Enable monitoring to begin." else "Consent removed. Capture is off.",
@@ -84,9 +101,10 @@ object CaptureStore {
                 status = when {
                     !it.consentGranted -> "Allow capture before enabling monitoring."
                     !active -> "Monitoring is paused."
+                    it.approvedPackages.isEmpty() -> "Choose an app to allow capture."
                     !it.serviceConnected -> "Enable Antiscam in Android accessibility settings."
                     it.runId == null -> "Ready. Start a run here or in the desktop dashboard."
-                    else -> "Run active. Capture follows the current app."
+                    else -> "Run active. Capture waits for an approved app."
                 },
                 lastError = null,
                 revision = it.revision + 1,
@@ -98,7 +116,6 @@ object CaptureStore {
     fun clearResult() {
         mutableState.update {
             it.copy(
-                latestText = "",
                 lastCapturedAtMillis = null,
                 captureCount = 0,
                 lastError = null,
@@ -129,8 +146,9 @@ object CaptureStore {
                     !connected -> "Accessibility service is disconnected."
                     !it.consentGranted -> "Allow capture to begin."
                     !it.monitoringEnabled -> "Monitoring is paused."
+                    it.approvedPackages.isEmpty() -> "Choose an app to allow capture."
                     it.runId == null -> "Ready. Start a run here or in the desktop dashboard."
-                    else -> "Run active. Capture follows the current app."
+                    else -> "Run active. Capture waits for an approved app."
                 },
             )
         }
@@ -148,10 +166,9 @@ object CaptureStore {
                 jevStatus = "idle",
                 jevCaptureId = null,
                 jevFlagged = null,
-                latestText = if (runId != null) "" else it.latestText,
                 lastCapturedAtMillis = if (runId != null) null else it.lastCapturedAtMillis,
                 captureCount = if (runId != null) 0 else it.captureCount,
-                status = if (runId != null) "Run active. Use another app to start screen checks." else "Run stopped.",
+                status = if (runId != null) "Run active. Open an approved app to start screen checks." else "Run stopped.",
                 lastError = null,
                 revision = it.revision + 1,
             )
@@ -196,7 +213,6 @@ object CaptureStore {
     internal fun result(text: String, capturedAt: Long) {
         mutableState.update {
             it.copy(
-                latestText = text,
                 lastCapturedAtMillis = capturedAt,
                 captureCount = it.captureCount + 1,
                 status = if (text.isBlank()) "Capture complete. OCR found no text." else "Capture complete. OCR text is ready.",
@@ -212,6 +228,7 @@ object CaptureStore {
             ?.putInt("consentVersion", CONSENT_VERSION)
             ?.putBoolean("enabled", current.monitoringEnabled)
             ?.putBoolean("voiceConsent", current.voiceConsentGranted)
+            ?.putStringSet("approvedPackages", current.approvedPackages)
             ?.remove("target")
             ?.apply()
     }

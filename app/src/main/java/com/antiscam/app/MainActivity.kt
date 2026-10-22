@@ -111,6 +111,7 @@ private fun SetupScreen(
         ) {
             Text("Antiscam", style = MaterialTheme.typography.titleLarge)
             RunControlsCard(state)
+            ApprovedAppsCard(state)
             VoiceScriptsCard(state)
             Text(
                 if (state.serviceConnected) "Accessibility: connected" else "Accessibility: not connected",
@@ -144,6 +145,7 @@ private fun SetupScreen(
 private fun RunControlsCard(state: CaptureState) {
     var startError by remember(
         state.consentGranted,
+        state.approvedPackages,
         state.serviceConnected,
         state.jevReady,
         state.voiceReady,
@@ -171,12 +173,13 @@ private fun RunControlsCard(state: CaptureState) {
                     onClick = { RunMonitor.stopRun() },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Stop Run") }
-                Text("You can leave this app and use your phone. Antiscam checks the visible screen while the run is active.")
+                Text("Open an approved app to start screen checks. Antiscam pauses capture when another app is in the foreground.")
                 Text("Captures: ${state.captureCount}")
                 Text("Jev: ${state.jevStatus}")
                 Text("Voice: ${state.voiceStatus}")
             } else {
                 if (!state.consentGranted) Text("Allow screen capture below.")
+                if (state.approvedPackages.isEmpty()) Text("Choose at least one app in Approved apps below.")
                 if (!state.serviceConnected) Text("Enable Antiscam in Accessibility settings.")
                 if (!state.jevReady || !state.voiceReady) Text("Set both API keys in Phone keys below.")
                 if (!state.voiceConsentGranted) Text("Allow automatic voice warnings below.")
@@ -190,7 +193,7 @@ private fun RunControlsCard(state: CaptureState) {
             startError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             state.lastError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text(if (state.dashboardConnected) "Desktop console: connected" else "Desktop console: not connected")
-            Text("To save outputs on your laptop, connect the desktop console and start a run there. Phone runs do not save a desktop record.")
+            Text("Desktop runs send summaries and detection results to your connected computer. Raw screen text and voice conversation text are not logged. Phone runs do not save a desktop record.")
         }
     }
 }
@@ -225,7 +228,7 @@ private fun VoiceConsentCard(state: CaptureState) {
                     "With your permission, an OpenAI voice assistant starts automatically and explains the concern. " +
                     "OpenAI receives the flagged screen text, the Jev results, and microphone audio during the conversation.",
             )
-            Text("The red X stops the voice conversation and microphone, closes the warning, and resumes screen checks. You can withdraw voice consent here.")
+            Text("The microphone runs only during the voice conversation. The red X stops the conversation and microphone, closes the warning, and resumes checks in approved apps. You can withdraw voice consent here.")
             Text(if (state.voiceReady) "The OpenAI key is ready." else "Set the OpenAI API key in Phone keys or the desktop console.")
             if (!state.voiceConsentGranted) {
                 if (!state.consentGranted) Text("Allow screen capture above before you enable automatic voice warnings.")
@@ -272,8 +275,9 @@ private fun ConsentCard() {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Allow screen capture", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Antiscam uses Android Accessibility to observe app changes, typing, taps, and scrolling. " +
-                    "During a phone or desktop run, it captures the visible screen, including overlapping windows, " +
+                "Antiscam uses Android Accessibility events to check which app is in the foreground. " +
+                    "During a phone or desktop run, it responds to typing, taps, and scrolling only in apps you approve. " +
+                    "It captures the visible screen only while an approved app is in the foreground, including overlapping windows, " +
                     "and extracts text with ML Kit on this device. " +
                     "Antiscam masks keyboard windows before OCR. It does not mask sensitive fields. " +
                     "Android capture restrictions still apply.",
@@ -281,7 +285,8 @@ private fun ConsentCard() {
             Text(
                 "Captured text can include private messages and visible passwords. " +
                     "Screenshot images stay in device memory. " +
-                    "During a desktop run, your connected computer saves extracted text, Jev questions, answers, and event records. " +
+                    "During a desktop run, your connected computer receives summaries and detection results. " +
+                    "Raw screen text and voice conversation text are not logged. " +
                     "Phone runs keep these results in app memory and do not save a desktop record. " +
                     "With a TypeSafe key configured, the app sends extracted text to TypeSafe's Jev service over the Internet. " +
                     "Jev checks the text for the configured topics.",
@@ -290,7 +295,7 @@ private fun ConsentCard() {
             Row {
                 Checkbox(checked = accepted, onCheckedChange = { accepted = it })
                 Text(
-                    "I allow screen capture, text extraction, and sending extracted text to TypeSafe for Jev analysis during phone or desktop runs.",
+                    "I allow screen capture while an approved app is in the foreground, text extraction, and sending extracted text to TypeSafe for Jev analysis during phone or desktop runs.",
                     modifier = Modifier.weight(1f).padding(top = 12.dp),
                 )
             }

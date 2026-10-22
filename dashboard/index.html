@@ -52,19 +52,19 @@
     <div id="notice" class="notice" role="status" hidden></div>
     <div class="content-grid">
       <section class="pane jev-panel" aria-labelledby="jev-title">
-        <header class="pane-heading"><h2 id="jev-title">Jev questions <span id="jev-count" class="count-badge">0</span></h2><button id="jev-latest" class="text-button" aria-label="Go to the latest Jev analysis">Latest ↑</button></header>
+        <header class="pane-heading"><h2 id="jev-title">Jev results <span id="jev-count" class="count-badge">0</span></h2><button id="jev-latest" class="text-button" aria-label="Go to the latest Jev analysis">Latest ↑</button></header>
         <div id="jev-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Jev questions and results, newest capture first">
-          <p id="jev-empty" class="empty-state">Each OCR capture appears here with its Jev questions and results. Use Jev key above to send the API key to the phone.</p>
+          <p id="jev-empty" class="empty-state">Each capture appears here with its Jev configuration and numeric results. Conversation text stays out of the console.</p>
           <ol id="jev-results" class="results-list" role="list" aria-label="Jev results by capture, newest to oldest"></ol>
         </div>
       </section>
       <section class="pane results-panel" aria-labelledby="results-title">
-        <header class="pane-heading"><h2 id="results-title">Extracted text <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button" aria-label="Go to the latest extracted text">Latest ↑</button></header>
-        <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Extracted text, newest first">
-          <p id="empty" class="empty-state">Start a run, then type, tap, or scroll in any app. Extracted text appears here.</p>
+        <header class="pane-heading"><h2 id="results-title">Capture summaries <span id="result-count" class="count-badge">0</span></h2><button id="text-latest" class="text-button" aria-label="Go to the latest capture summary">Latest ↑</button></header>
+        <div id="text-scroll" class="pane-scroll" tabindex="0" role="region" aria-label="Capture summaries, newest first">
+          <p id="empty" class="empty-state">Start a run and use an app you approved on the phone. Capture counts and timings appear here. Conversation text is not displayed or saved.</p>
           <ol id="results" class="results-list" role="list" aria-label="Captures, newest to oldest"></ol>
         </div>
-        <footer class="save-footer"><span id="save-status">Runs save locally.</span><span id="save-folder"></span></footer>
+        <footer class="save-footer"><span id="save-status">Only metadata saves locally.</span><span id="save-folder"></span></footer>
       </section>
       <aside class="pane activity-panel" aria-labelledby="activity-title">
         <header class="pane-heading"><h2 id="activity-title">Activity log <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button" aria-label="Go to the latest activity">Latest ↑</button></header>

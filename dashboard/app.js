@@ -17,11 +17,7 @@ const keyProviders = {
   jev: { label: "Jev", endpoint: "/api/jev-key" },
   openai: { label: "OpenAI", endpoint: "/api/openai-key" },
 };
-const expandedCaptures = new Set();
 const jevCards = new Map();
-const textResizeObserver = new ResizeObserver((entries) => {
-  for (const { target } of entries) updateTextToggle(target);
-});
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3, hour12: false });
 const labels = {run_started:"Run started",run_stopped:"Run stopped",app_changed:"App changed",interaction:"Interaction",typing_state:"Typing changed",capture_waiting:"Capture waiting",capture_requested:"Capture requested",screenshot_received:"Screenshot received",capture_failed:"Capture failed",capture_discarded:"Capture discarded",capture_skipped:"Capture skipped",ocr_started:"OCR started",ocr_completed:"OCR completed",ocr_failed:"OCR failed",jev_started:"Jev started",jev_completed:"Jev completed",jev_failed:"Jev failed",jev_skipped:"Jev skipped",jev_canceled:"Jev canceled",pending_canceled:"Pending work canceled",command_error:"Command rejected"};
 
@@ -74,7 +70,7 @@ function renderStatus() {
   const dot = document.createElement("span");
   dot.className = "dot";
   connection.append(dot, document.createTextNode(connected ? "Device connected" : title(model.connection, "Disconnected")));
-  byId("start").disabled = commandBusy || !connected || differentDevice || Boolean(active) || Boolean(state.runId) || !state.consentGranted || !state.monitoringEnabled || !state.serviceConnected;
+  byId("start").disabled = commandBusy || !connected || differentDevice || Boolean(active) || Boolean(state.runId) || !state.consentGranted || !state.monitoringEnabled || !state.serviceConnected || !(state.approvedAppCount > 0);
   byId("stop").disabled = commandBusy || !connected || !active || run.status === "stopping";
   byId("start").textContent = run?.status === "starting" ? "Starting…" : "Start run";
   byId("stop").textContent = run?.status === "stopping" ? "Stopping…" : "Stop";
@@ -139,7 +135,7 @@ function renderStatus() {
   const runBadge = byId("run-status");
   runBadge.textContent = run ? title(run.status) : "No run";
   runBadge.className = `badge ${run?.status === "active" ? "good" : ["failed", "interrupted"].includes(run?.status) ? "warning" : "neutral"}`;
-  byId("run-id").textContent = run?.id || "Any foreground app";
+  byId("run-id").textContent = run?.id || `${state.approvedAppCount ?? 0} approved apps`;
   renderElapsed();
   setCheck("check-bridge", connected);
   setCheck("check-consent", state.consentGranted);
@@ -147,9 +143,11 @@ function renderStatus() {
   setCheck("check-monitoring", state.monitoringEnabled && !state.warningActive);
   setCheck("check-jev", state.jevReady);
   setCheck("check-voice", state.voiceReady);
-  byId("export").classList.toggle("disabled", !run);
-  byId("export").setAttribute("aria-disabled", String(!run));
-  byId("save-status").textContent = run ? active ? "Recording locally" : run.status === "interrupted" ? "Partial run saved" : "Run saved" : "Runs save locally.";
+  const exportAllowed = run?.recordingPolicy === "metadata_only";
+  byId("export").classList.toggle("disabled", !exportAllowed);
+  byId("export").setAttribute("aria-disabled", String(!exportAllowed));
+  byId("export").title = exportAllowed ? "Export capture metadata and numeric decisions" : "Start a new metadata-only run. Historical conversation records cannot be exported.";
+  byId("save-status").textContent = run ? active ? "Recording metadata" : run.status === "interrupted" ? "Partial metadata saved" : "Metadata saved" : "Only metadata saves locally.";
   byId("save-folder").textContent = run?.folder || "";
   renderVoiceScripts();
   if (!streamReady) notice("Dashboard connection lost. Reconnecting…", "warning");
@@ -159,6 +157,8 @@ function renderStatus() {
   else if (run?.status === "failed") notice(run.reason || "The run could not start.", "error");
   else if (!state.consentGranted) notice("Open Antiscam on the selected device and review capture and cloud consent.", "warning");
   else if (!state.serviceConnected) notice("Enable Antiscam interaction capture in Android Accessibility settings.", "warning");
+  else if (!Number.isInteger(state.approvedAppCount)) notice("Update Antiscam on the phone to enable approved-app capture.", "warning");
+  else if (!(state.approvedAppCount > 0)) notice("Choose approved apps in Antiscam on the phone.", "warning");
   else if (state.warningActive) notice("Scam warning open on the phone. Screenshots and OCR are paused. Close it with the red X to resume.", "warning");
   else if (!state.monitoringEnabled) notice("Capture paused. Select Resume, then Start run.", "warning");
   else notice(run?.status === "stopping" ? "Waiting for Stop confirmation…" : "");
@@ -284,27 +284,12 @@ function restoreScroll(pane, position) {
   else pane.scrollTop = position.top + pane.scrollHeight - position.height;
 }
 
-function updateTextToggle(text) {
-  const result = text.closest(".result");
-  const expanded = result.classList.contains("result-expanded");
-  result.querySelector(".result-toggle").hidden = !expanded && text.scrollHeight <= text.clientHeight;
-}
-
-function regionSourceLabel(region) {
-  if (region.sourceAttribution !== "window_bounds") return "Source uncertain";
-  const source = region.appLabel || region.packageName;
-  if (!source) return "Source uncertain";
-  const kind = region.sourceKind === "overlay" ? "Overlay · " : region.sourceKind === "system" ? "System · " : "";
-  return `${kind}${source} (estimated)`;
-}
-
 function prependOcr(item, index, preserveScroll = true) {
   const pane = byId("text-scroll");
   const position = preserveScroll ? scrollPosition(pane) : null;
   const result = document.createElement("li");
   result.className = "result";
   result.dataset.scrollKey = String(item.captureId);
-  result.classList.toggle("result-expanded", expandedCaptures.has(item.captureId));
   const heading = document.createElement("div");
   heading.className = "result-heading";
   const label = document.createElement("span");
@@ -312,85 +297,27 @@ function prependOcr(item, index, preserveScroll = true) {
   label.textContent = `Capture ${item.captureId}`;
   const app = document.createElement("span");
   app.className = "result-app";
-  const displayCapture = item.captureScope === "display";
-  app.textContent = displayCapture ? item.sourceLabel || "Visible screen · source uncertain" : item.appLabel || item.packageName || item.targetPackage || "Unknown app";
+  app.textContent = item.appLabel || item.packageName || "Approved app";
   const meta = document.createElement("span");
   meta.className = "result-meta";
   meta.textContent = `${timestamp(item.timestampMs)}${item.durationMs != null ? ` · ${item.durationMs} ms OCR` : ""}`;
   heading.append(label, app, meta);
-  const text = document.createElement("pre");
-  text.id = `capture-text-${index}`;
-  // Captured text is untrusted. It is never interpreted as HTML.
-  const completeRegions = Array.isArray(item.textRegions) && item.textRegions.length &&
-    item.textRegions.map((region) => region.text).join("\n") === item.text;
-  if (displayCapture && completeRegions) {
-    let previousSource = "";
-    for (const region of item.textRegions) {
-      const source = regionSourceLabel(region);
-      if (source !== previousSource) {
-        const attribution = document.createElement("span");
-        attribution.className = "result-source";
-        attribution.textContent = source;
-        text.append(attribution);
-        previousSource = source;
-      }
-      text.append(document.createTextNode(`${region.text || ""}\n`));
-    }
-  } else {
-    text.textContent = item.text || "No text found in this capture.";
-  }
   const footer = document.createElement("div");
   footer.className = "result-footer";
   const detail = document.createElement("span");
-  const context = displayCapture ? `Trigger: ${item.appLabel || item.packageName || "Unknown app"}` : item.packageName || item.targetPackage || "Unknown package";
-  const maskCount = Array.isArray(item.maskedRegions) ? item.maskedRegions.length : 0;
-  detail.textContent = `${item.characters ?? item.text.length} characters · ${context}${maskCount ? ` · ${maskCount} regions excluded` : ""}`;
-  const actions = document.createElement("div");
-  actions.className = "result-actions";
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "result-toggle";
-  toggle.setAttribute("aria-controls", text.id);
-  const updateExpanded = () => {
-    const expanded = result.classList.contains("result-expanded");
-    toggle.textContent = expanded ? "Collapse text" : "Expand text";
-    toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.setAttribute("aria-label", `${toggle.textContent} for capture ${item.captureId}`);
-  };
-  updateExpanded();
-  toggle.addEventListener("click", () => {
-    const expanded = result.classList.toggle("result-expanded");
-    if (expanded) expandedCaptures.add(item.captureId);
-    else expandedCaptures.delete(item.captureId);
-    updateExpanded();
-    updateTextToggle(text);
-    if (!expanded) result.scrollIntoView({ block: "nearest" });
-  });
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.textContent = "Copy text";
-  copy.setAttribute("aria-label", `Copy text from capture ${item.captureId}`);
-  copy.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(item.text);
-      copy.textContent = "Copied";
-    } catch {
-      copy.textContent = "Select text to copy";
-    }
-  });
-  actions.append(toggle, copy);
-  footer.append(detail, actions);
-  result.append(heading, text, footer);
+  const counts = [Number.isFinite(item.characters) ? `${item.characters} characters read` : "Character count unavailable"];
+  if (Number.isFinite(item.regionCount)) counts.push(`${item.regionCount} text regions`);
+  if (item.maskedRegionCount > 0) counts.push(`${item.maskedRegionCount} keyboard regions excluded`);
+  detail.textContent = `${counts.join(" · ")} · Text is not recorded`;
+  footer.append(detail);
+  result.append(heading, footer);
   byId("results").prepend(result);
   byId("empty").hidden = true;
   byId("result-count").textContent = String(index + 1);
-  updateTextToggle(text);
-  textResizeObserver.observe(text);
   if (position) restoreScroll(pane, position);
 }
 
 function renderOcr() {
-  textResizeObserver.disconnect();
   byId("results").replaceChildren();
   byId("empty").hidden = model.ocr.length > 0;
   byId("result-count").textContent = String(model.ocr.length);
@@ -518,7 +445,7 @@ function prependActivity(entry, preserveScroll = true) {
   const detail = document.createElement("span");
   detail.className = "activity-detail";
   const source = entry.captureScope === "display" ? entry.sourceLabel || "Visible screen" : entry.appLabel || entry.packageName;
-  detail.textContent = [source, entry.trigger && title(entry.trigger), entry.reason && title(entry.reason), entry.phase && title(entry.phase), entry.durationMs != null && `${entry.durationMs} ms`].filter(Boolean).join(" · ");
+  detail.textContent = [source, entry.trigger && title(entry.trigger), entry.reason && title(entry.reason), entry.phase && title(entry.phase), entry.code || entry.errorType, entry.param, entry.command, entry.httpStatus != null && `HTTP ${entry.httpStatus}`, entry.durationMs != null && `${entry.durationMs} ms`].filter(Boolean).join(" · ");
   description.append(eventName, detail);
   item.append(time, description);
   byId("activity").prepend(item);
@@ -536,7 +463,6 @@ function renderActivity() {
 function applySnapshot(snapshot) {
   const sameRun = model.run?.id === snapshot.run?.id;
   const deviceChanged = model.selectedDevice !== snapshot.selectedDevice;
-  if (!sameRun) expandedCaptures.clear();
   const positions = ["jev-scroll", "text-scroll", "activity-scroll"].map((id) => ({ id, ...scrollPosition(byId(id)) }));
   if (snapshot.token) token = snapshot.token;
   model = { ...model, ...snapshot };
@@ -666,7 +592,7 @@ byId("pause").addEventListener("click", () => request("/api/command", { command:
 byId("refresh").addEventListener("click", () => request("/api/devices", {}));
 byId("connect").addEventListener("click", () => request("/api/connect", { serial: byId("device").value }));
 byId("device").addEventListener("change", renderStatus);
-byId("export").addEventListener("click", (event) => { if (!model.run) event.preventDefault(); });
+byId("export").addEventListener("click", (event) => { if (model.run?.recordingPolicy !== "metadata_only") event.preventDefault(); });
 byId("text-latest").addEventListener("click", () => { byId("text-scroll").scrollTop = 0; });
 byId("jev-latest").addEventListener("click", () => { byId("jev-scroll").scrollTop = 0; });
 byId("activity-latest").addEventListener("click", () => { byId("activity-scroll").scrollTop = 0; });

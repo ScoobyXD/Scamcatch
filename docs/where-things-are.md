@@ -30,7 +30,10 @@ Voice script library
 19. Website startup and voice deployment load both demo scripts from Markdown into `VOICE_SCRIPTS`. Demo requests select through `context.scriptId`. Section explanations still use `context.page`.
 
 Rest of the repository
-20. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers runs, capture rules, and keys.
-21. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved run records. scripts/voice_scripts.py reads the shared script file.
+20. app/ is the Android app (Antiscam). scripts/build.ps1 and scripts/install.ps1 build and install it. The top-level README.md covers setup and runs.
+21. dashboard/ is the desktop run console (Start Dashboard.cmd). runs/ holds saved diagnostic metadata and legacy runs. scripts/voice_scripts.py reads the shared script file.
 22. application/scamcatch holds application answers, company and domain evidence, and video material.
 23. User preferences for agents are in AGENTS.md.
+
+
+24. [docs/privacy.md](privacy.md) is the canonical source for approved apps, capture gates, keyboard masks, raw-data limits, microphone use, credentials, and California research.
