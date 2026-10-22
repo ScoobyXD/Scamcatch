@@ -17,8 +17,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.UUID
 
-/** One event model serves the live dashboard and its saved run record. No events go to Logcat. */
+/** Live diagnostics serve the dashboard UI and are never persisted by the dashboard. No events go to Logcat. */
 object RunMonitor {
+    private const val RECORDING_POLICY = "incident_fields_only_v1"
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var initialized = false
@@ -42,7 +43,7 @@ object RunMonitor {
     fun activeVoiceScript(): VoiceScripts.VoiceScript? = session?.voiceScript
 
     private fun scriptRecord(script: VoiceScripts.VoiceScript) = mapOf(
-        "id" to script.id, "name" to script.name, "revision" to script.revision, "instructions" to script.instructions,
+        "id" to script.id, "name" to script.name, "revision" to script.revision,
     )
 
     fun initialize(context: Context) {
@@ -300,7 +301,7 @@ object RunMonitor {
         ocrStatus = "idle"
         session = RunSession(id, SystemClock.elapsedRealtime(), mode, requireNotNull(script)).also { sessions[id] = it }
         CaptureStore.setRunId(id, mode)
-        emitNow("run_started", mapOf("recordingPolicy" to "metadata_only", "runMode" to mode.wireName,
+        emitNow("run_started", mapOf("recordingPolicy" to RECORDING_POLICY, "runMode" to mode.wireName,
             "voiceScript" to scriptRecord(script)))
         return null
     }
@@ -354,7 +355,7 @@ object RunMonitor {
             })
             put("counters", JSONObject(counters.toMap()))
             put("captureScope", "display")
-            put("recordingPolicy", "metadata_only")
+            put("recordingPolicy", RECORDING_POLICY)
             put("approvedAppCount", config.approvedPackages.size)
             put("consentGranted", config.consentGranted)
             put("monitoringEnabled", config.monitoringEnabled)
@@ -365,7 +366,7 @@ object RunMonitor {
     }
 
     private fun emitNow(type: String, details: Map<String, Any?>, eventSession: RunSession? = session) {
-        // Phone runs expose live status only. Desktop records contain approved metadata only.
+        // Live diagnostics are transient. The dashboard persists only separately validated incident fields.
         val phoneEvent = eventSession?.mode == RunMode.STANDALONE
         val event = JSONObject().apply {
             put("protocol", 1)

@@ -53,7 +53,7 @@ _key = None
 
 
 class VoiceError(Exception):
-    """public goes to the browser; detail goes to CloudWatch. Neither may contain the key."""
+    """public goes to the browser; detail is for deployment checks. Neither may contain the key."""
 
     def __init__(self, status, public, detail=None):
         super().__init__(public)
@@ -310,10 +310,7 @@ def handler(event, _context):
             raise ValueError
         answer = start(body, headers["origin"])   # the visitor's site, already checked against ALLOWED_ORIGINS
     except VoiceError as error:
-        if error.detail:
-            print(f"Voice: {error.detail}", flush=True)
         return respond(error.status, {"error": error.public})
     except (ValueError, UnicodeDecodeError):
         return respond(400, {"error": "Send a small JSON request."})
-    print("Voice: session created.", flush=True)
     return respond(200, answer)

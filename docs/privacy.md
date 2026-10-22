@@ -2,15 +2,74 @@
 
 ## How to read this file
 
-1. The rules below are the existing approved privacy requirements.
-2. The [data inventory](#personal-data-inventory--october-22-2026) records current handling, recipients, retention, and deletion limits.
-3. The [HIPAA assessment](#hipaa-and-health-data--october-22-2026) records conditional legal requirements and unresolved facts. It does not establish compliance.
-4. The October 22 inventory adds documentation only. It does not change capture, logging, permissions, providers, or retention settings.
+1. This file is the canonical source for privacy rules and known limits.
+2. The [incident fields](#allowed-incident-fields--october-22-2026) replace the earlier permission to save diagnostic metadata.
+3. The [data inventory](#personal-data-inventory--october-22-2026) records source behavior, recipients, and unresolved external retention.
+4. The [HIPAA assessment](#hipaa-and-health-data--october-22-2026) remains conditional. This implementation does not establish compliance.
+5. Source changes take effect after restarting the desktop server and installing the updated app. Hosted voice changes need deployment.
+
+## Allowed incident fields — October 22, 2026
+
+1. **Default:** Store no captured personal data unless its exact field appears below. Unknown or invalid fields reject the whole record.
+2. **`involvedAccount`:** Only `platform` and `id`. Each is a nonblank, single-line string. Limits are 64 and 256 characters respectively.
+3. **`flaggedAccount`:** The same exact account shape. A flagged account is not proof of the real person's identity or wrongdoing.
+4. **`occurredAt`:** Optional ISO timestamp with date, time, and timezone. Omit it when unknown. Never substitute a run or export time.
+5. **`scamMessage`:** The identified scam message only, up to 4,096 characters. This does not approve full OCR, a conversation, nearby text, audio, or transcripts.
+6. **`scamType`:** A single-line scam category label, up to 80 characters. It is not an explanation, technical error, or general details field.
+7. **`scamCount`:** Optional integer from 0 to 1,000,000, with `involvedAccount` present. Supply a confirmed count. Never count screenshots or detector flags as completed scams.
+8. All fields are optional, but a record must contain at least one. Omit unknown values instead of storing nulls, placeholders, or guesses.
+9. No names, user profiles, device serials, app activity, window IDs, run IDs, probabilities, instructions, or diagnostics belong in the retained record.
+10. Do not truncate invalid values into compliance. Reject invalid types, extra account properties, control characters, oversized values, and unsupported record shapes.
+11. Account provenance, scam confirmation, duplicate handling, and automatic classification remain unresolved. The schema validates structure, not truth or semantic privacy.
+12. A permitted message can itself contain health or financial information. Field validation does not remove that content or resolve HIPAA duties.
+
+### Implemented storage boundary
+
+1. [incident_records.py](../dashboard/incident_records.py) is the single captured-data file boundary. Its policy is `incident_fields_only_v1`.
+2. A structured `scam_incident` bridge event can supply only the six fields above. It must match an active desktop run with capture prerequisites still enabled.
+3. The current Android app does not produce structured incidents. It does not identify the two accounts, isolate a scam message, classify scam types, or confirm scam counts.
+4. Ordinary runs therefore save no new incident records. Never map full OCR, Jev results, or live snapshots into an incident as a fallback.
+5. Valid records use `runs/incidents-v1.json`, or the configured runs directory. The file is an array of validated records with no diagnostic wrapper.
+6. Validate before any file creation. Atomic temporary files contain only validated records. Remove the temporary file after success or a handled failure.
+7. Validate the entire existing incident file before append or export. Invalid stored records block the operation; do not salvage or export their contents.
+8. Exports contain only `incidents.json` in `scamcatch-incidents.zip`. Use no run folders, diagnostic files, summaries, or generated event timestamps.
+9. Do not load legacy run directories. Do not create `run.json`, `events.jsonl`, `summary.txt`, or per-capture files. No error fallback may save diagnostics.
+10. Keep live device status, capture summaries, model results, and activity in process/browser memory only. A new run resets history; server exit discards it.
+11. Suppress dashboard HTTP access and exception logs. Keep HTTP responses uncached. Do not place rejected incident content in errors or status.
+12. Website source suppresses custom per-request success/error logs and local HTTP exception logs. Existing cloud records and platform logging remain separate.
+13. Preserve existing operational configuration: app choices, consent flags/version, monitoring state, selected/imported voice scripts, and explicitly saved credentials. These stores must not hold captured conversations.
+14. Preserve the website's global quota fields: `day`, `calls`, `last_start`, and `expires_at`. They prevent excess service use and contain no user/account identifier.
+15. Configuration, operator deployment logs, OS/SDK telemetry, and vendor storage are separate from this captured-data schema. This change does not prove that those systems retain only six fields.
+16. Do not erase existing files or external copies without a separate cleanup decision. No automatic incident expiry is set; decide a retention schedule before enabling incident production.
+17. The launcher rejects reuse of an older dashboard server. Stop the old run and restart that server before relying on the new boundary.
+18. No new Jev questions, extraction feature, healthcare workflow, provider setting, or cloud deployment is included.
+
+### Evidence for academics and care organizations
+
+1. State a bounded claim for a named build and configuration, such as which fields the desktop persists. Do not claim that all personal information is excluded everywhere or that foreground checks isolate every captured pixel.
+2. Maintain a source-to-destination register with each data category, transformation, recipient, writer, lifetime, deletion route, and unresolved dependency. Include SDK, platform, provider, support, and backup paths.
+3. Supply the approved schema, source revision, build hash, configuration, dependency versions, and relevant deployed settings. A source-code rule alone does not prove the installed system follows it.
+4. Propose reproducible end-to-end inspections using controlled synthetic data to check storage, exports, network traffic, errors, retries, stop/restart, upgrades, and deletion. Check backups and provider settings separately. Use integration checks, not unit tests. Record their scope and result below.
+5. Give an independent reviewer the method, results, expected outcomes, and known limits for that exact build. Use synthetic or redacted evidence; do not create a real-conversation archive to prove privacy.
+6. Keep detection-quality evidence separate from privacy evidence. A future evaluation needs defined ground truth, duplicate handling, false positives, missed scams, confirmation quality, and stated uncertainty. Production alert counts alone cannot establish these.
+7. Research or care-provider reports need separate disclosure rules. A small group, a linked identifier, or a rare incident can identify a person even without a name. Permission to keep scam counts does not grant research access to residents' data.
+8. Record who reviewed the claim, what they inspected, the date, and what remains unverified. An independent review is evidence within its scope, not a blanket guarantee or HIPAA certification.
+
+### Verification — October 22, 2026
+
+1. `python -B scripts/verify-privacy-flow.py` exercises real loopback HTTP, bridge sockets, files, and ZIP export. Only ADB and credential access use synthetic substitutes.
+2. The check passed: live events, numeric Jev results, and late callbacks created no diagnostic files. Legacy files stayed unchanged and were not restored.
+3. The check passed: only the six supplied incident fields persisted and exported. Unknown fields, extra nested fields, wrong types, invalid dates, and oversized messages were rejected.
+4. The check passed: a stored record with an added diagnostic field blocked export. Rejected content did not appear in the response. Restart restored no diagnostic history.
+5. The check creates synthetic artifacts under ignored `tmp/privacy-flow-*`. It does not connect to a real phone, provider, account, or credential store. No unit tests ran.
+6. Python, dashboard JavaScript, and launcher PowerShell syntax checks passed. Android `:app:assembleDebug` passed.
+7. APK SHA-256: `432cc9304c9d6804af58b5024f159cd128818b571a0a6c04130412ba3715930f`. Rebuilds can change the hash.
+8. Device behavior, independent review, deployed AWS settings, provider retention, crash/memory dumps, and backup deletion were not verified. The APK was not installed and hosted code was not deployed.
 
 ## Scope and app selection
 
 1. This file is the canonical source for privacy rules. Update it when capture, storage, cloud transfer, microphone, or credential behavior changes.
-2. These rules describe the approved development scope as of October 21, 2026. They do not claim legal compliance or Google Play approval.
+2. These rules describe the approved development scope as of October 22, 2026. They do not claim legal compliance or Google Play approval.
 3. Capture only after the user explicitly selects approved apps. Persist that selection across app restarts.
 4. Start the approved-app list empty on new and existing installations. Never infer approval from earlier monitoring or consent.
 5. Require an active run, current capture/cloud consent, enabled monitoring, and a connected accessibility service before capture.
@@ -35,7 +94,7 @@
 7. Missing or incorrect keyboard bounds can prevent complete keyboard masking. Do not claim guaranteed exclusion.
 8. Overlapping windows alone do not reject an otherwise approved capture. Missing foreground approval still blocks capture.
 9. Keep keyboard-mask calculations transient. Remove per-region source attribution and traversal of unapproved window roots.
-10. Summarize OCR with character and region counts and the approved triggering app. Do not retain region text, bounds, or other source identities.
+10. Show OCR character/region counts and the triggering app only in live memory. Do not persist those diagnostics or region text/bounds.
 11. Do not restore the former sensitive-node scan or add a replacement traversal. The foreground gate must run before any permitted content access.
 12. Screenshot images stay in device memory. Do not save or export screenshots.
 13. Foreground checks and asynchronous screenshots are not atomic. Checks before capture, on callback, and after OCR reduce risk, but Android delays and intervening app switches can leave a race. The gate cannot guarantee each frame's foreground identity or exclusive approved-app pixels.
@@ -46,16 +105,16 @@
 2. With the required consent and key, send approved OCR text to TypeSafe over HTTPS. The desktop recorder does not call Jev.
 3. With separate voice consent and microphone permission, send approved warning evidence and active-session audio to OpenAI.
 4. Treat captured text as untrusted evidence. It must not change system instructions or authorize app actions.
-5. Do not retain raw OCR, message text, focused text, warning evidence, audio, or transcripts in logs, desktop events, saved runs, or exports.
-6. Do not send raw OCR or warning evidence to the desktop dashboard. Show safe capture summaries and numeric detection results.
-7. Allow run and capture IDs, timestamps, durations, counts, controlled status/error codes, and numeric Jev probabilities and thresholds.
-8. Allow validated static app configuration, including exact Jev question definitions, models, thresholds, and voice-script instructions, IDs, and revisions.
+5. Do not retain raw OCR, focused text, warning evidence, audio, or transcripts. Only a separately identified `scamMessage` may enter the incident schema.
+6. Do not send raw OCR or warning evidence to the desktop dashboard. Live summaries and numeric results are transient, not saved records.
+7. Do not persist run/capture IDs, timestamps, durations, capture counts, error codes, probabilities, or thresholds. They may support transient live status only.
+8. Keep static questions and scripts in their configuration stores. Do not copy instructions, models, thresholds, or script identifiers into incident files.
 9. Static configuration must not contain captured conversations or provider-generated free text.
 10. Do not record raw provider responses, free-text failure details, SDP, network addresses, or complete WebRTC statistics.
-11. Apply the same safe record format to live events, snapshots, saved files, and new ZIP exports.
+11. Apply the incident validator to saved records and exports. Live events and snapshots have no disk writer.
 12. Existing saved raw runs are not erased by this change. The new dashboard must not load or export those legacy raw runs.
 13. Stop and consent withdrawal do not erase existing records or recall content already sent to a provider.
-14. Already submitted cloud requests can finish. Keep any later diagnostics content-free and associate them with the original run and capture.
+14. Already submitted cloud requests can finish. Later diagnostics stay transient and cannot append to old run files.
 15. Phone runs keep transient analysis in app memory. A connected dashboard receives phone-run status only.
 16. Keep run folders and dashboard runtime files out of Git. Never commit or publish private run content.
 17. Cloud transfer is not local-only processing. Provider retention and use depend on the applicable service terms and account settings.
@@ -68,7 +127,7 @@
 4. The red X, Android Back, warning backgrounding, and session shutdown stop microphone capture and playback.
 5. Stop, capture-consent withdrawal, and service loss close the warning and its voice session.
 6. Release local microphone and playback resources before warning dismissal permits capture to resume.
-7. Do not save audio or transcripts. Keep only safe timing, status, and numeric audio metrics.
+7. Do not save audio, transcripts, timing, status, or numeric audio metrics as records. Live voice metrics remain transient.
 8. These rules do not authorize recording third-party calls. Microphone audio can include nearby people or speakerphone sound.
 9. Website microphone use remains limited to an active call. Ending a call, leaving the page, hiding the tab, or reaching the call limit stops input and playback.
 10. Website captions can show transient output text. Do not retain transcripts in logs or exports.
@@ -100,7 +159,7 @@
 19. Website voice reads its OpenAI secret through AWS Secrets Manager and keeps it in server memory. Never return it to the browser or errors.
 20. A secret can contain a raw key or JSON. JSON uses the configured field, or its first sk- value when no field is configured.
 21. A provider key rejection causes the next website call to read the secret again.
-22. Website voice responses contain the needed session response and configured commentary. Diagnostics contain safe identifiers only.
+22. Website voice responses contain the needed session response and configured commentary. Do not log per-request session identifiers or errors.
 
 ## California research — October 21, 2026
 
@@ -115,7 +174,7 @@
 
 ## Personal data inventory — October 22, 2026
 
-1. Scope: Android, the desktop console, the public website, and website voice infrastructure in this repository at commit `9bae837`.
+1. Scope: Android, the desktop console, the public website, and website voice infrastructure. Baseline commit `9bae837`; source changes below reflect the incident-only implementation.
 2. Evidence: source code, infrastructure templates, and the linked provider documentation. Live cloud settings, contracts, private records, and network traffic were not inspected.
 3. Business scope: the owner answered “Both, or not decided yet” for independent consumer use and healthcare relationships. Neither model is excluded.
 4. Current facts, documented vendor behavior, and unresolved items are separate. A written rule does not prove every runtime or vendor follows it.
@@ -123,7 +182,7 @@
 6. Possible content: names, handles, addresses, email, phone numbers, messages, drafts, relationships, photographs, and other visible personal details.
 7. Possible sensitive content: financial accounts, transactions, passwords, identity documents, health conditions, prescriptions, care payments, sexual information, and information about children.
 8. App approval does not classify content. A selected messaging app can contain any of these categories, including another person's information.
-9. Metadata includes app use, timestamps, device identifiers, network information, and scam scores. Removing raw text does not make these records anonymous.
+9. Live metadata includes app use, timestamps, device identifiers, network information, and scam scores. Earlier files can retain it; removing raw text did not anonymize them.
 10. No customer account, billing, contact-import, GPS, or health-record integration was found in the scoped product code. Visible or spoken equivalents can still enter capture.
 11. No browser-extension package was found in this repository. Installed extensions, separate repositories, support systems, and company records outside this scope remain unaccounted for.
 
@@ -140,7 +199,7 @@
 9. **OCR and drafts:** ML Kit produces text in memory. Captured unsent drafts receive the same processing as delivered text. No health-content filter exists.
 10. **Jev submission:** Eligible OCR text, static questions, and the model go to TypeSafe over HTTPS, with a 64-KiB text limit. Raw OCR bypasses the desktop.
 11. **Pending requests:** OCR text remains in request/callback memory until processing releases it. Stop and key clearing do not recall an already submitted request.
-12. **Results and inferences:** Numeric probabilities, threshold decisions, capture IDs, and status stay in phone state and can enter desktop records.
+12. **Results and inferences:** Numeric probabilities, threshold decisions, capture IDs, and status stay in phone state and transient desktop memory. They cannot enter incident files.
 13. **Warning evidence:** A flagged result combines the captured text and relevant scores in memory. Voice can send that evidence to OpenAI.
 14. **Warning display:** The warning UI and fallback notification reveal a scam concern. They do not intentionally display the raw conversation in the notification.
 15. **Memory limits:** Object release and bitmap recycling do not establish secure erasure of every runtime, OS, native-library, or provider copy.
@@ -151,32 +210,30 @@
 1. **Android voice:** The active session sends microphone audio, instructions, connection data, and up to 6,000 characters of warning evidence to OpenAI. Nearby speech can enter.
 2. **Voice output:** Generated speech and provider events return through WebRTC. The app processes them transiently without an intentional audio or transcript file writer.
 3. **Connection data:** SDP, ICE/network candidates, and session identifiers pass through connection setup. The application record excludes SDP and complete WebRTC statistics.
-4. **Voice diagnostics:** Timings, byte/packet counts, jitter, audio energy, duration, usage, finalization status, and bounded error identifiers can enter desktop records.
+4. **Voice diagnostics:** Timings, byte/packet counts, jitter, audio energy, usage, and status can enter transient desktop memory. The incident writer cannot retain them.
 5. **Stopping voice:** Closing the session releases local audio resources. It does not request deletion of provider abuse-monitoring records or other provider data.
 6. **API keys:** Active keys exist in memory. Optional phone copies use Android Keystore encryption. Optional PC copies use Windows Credential Manager.
 7. **Key transport:** Desktop key entry passes through the loopback server and ADB bridge to the phone. Each provider receives its own key for authentication.
 8. **Credential linkage:** Windows credential names use a hash of the phone serial, scoped to provider and Windows user. Browser status excludes key values.
-9. **Scripts and questions:** Exact instructions, names/IDs/revisions, models, and questions can persist in Git, records, and exports. Phone scripts use plaintext `noBackupFilesDir/voice-scripts.json`.
+9. **Scripts and questions:** Instructions, names/IDs/revisions, models, and questions persist as configuration in Git and phone storage, not new incident records. Phone scripts use plaintext `noBackupFilesDir/voice-scripts.json`.
 10. **Configuration content:** The no-conversation rule applies to scripts too. Static-field selection does not detect personal information pasted into an instruction or name.
 11. **Deletion:** Key Clear removes managed copies, but does not revoke the provider-issued key. Capture Reset leaves the script library, desktop files, and provider copies unchanged.
 12. Sources: [LiveVoice](../app/src/debug/java/com/antiscam/app/capture/LiveVoice.kt), [PhoneCredentials](../app/src/main/java/com/antiscam/app/capture/PhoneCredentials.kt), [credential_store.py](../dashboard/credential_store.py), [VoiceScripts](../app/src/main/java/com/antiscam/app/capture/VoiceScripts.kt), and [voice-scripts.md](../app/src/main/assets/voice-scripts.md).
 
 ### Desktop records, exports, and local diagnostics
 
-1. **Connection identity:** ADB supplies device serial, model/status, and connection state. The selected serial enters a desktop run record and credential lookup.
-2. **New run contents:** `run.json`, `events.jsonl`, `summary.txt`, and `ocr/*.json` contain permitted metadata, static configuration, and numeric Jev results.
-3. **Linkable fields:** IDs, precise times, app activity, versions, and device serial can link records to someone. Absolute run-folder paths can reveal a computer username.
-4. **Raw-content boundary:** New capture records exclude raw OCR, text regions, warning evidence, audio, and transcripts. The dashboard uses permitted fields before storage and UI delivery.
-5. **Legacy records:** Earlier folders can contain raw conversations. Discovery parses `run.json` into memory before rejecting restoration/export. Old inbound events can also exist briefly before sanitization.
-6. **ZIP files:** New exports contain permitted metadata and configuration. A downloaded or shared ZIP is an independent copy beyond the application's deletion controls.
-7. **Retention:** No age-based run/ZIP deletion exists. Temporary write files can remain after interruption. Late results can append after Stop. Starting another run does not erase files.
-8. **Access:** The console binds to loopback and uses existing browser-origin/token checks for commands. These are not per-person access roles or a healthcare audit system.
-9. **Disk protection:** Run JSON/text files are not encrypted by the application. Windows permissions, disk encryption, backups, sync tools, and administrator access remain external controls.
-10. **Other local state:** Launcher files contain connection/process information without documented expiration. Android retains run-session metadata for late callbacks until process exit, without map pruning.
-11. **Error handling:** Product code uses controlled messages and bounded provider identifiers. SDK diagnostics, OS crash reports, debugging tools, and memory dumps remain separate exposure paths.
-12. **Backups:** Android declares `allowBackup=false`, and phone key ciphertext uses `noBackupFilesDir`. PC backups, downloaded ZIPs, and third-party copies remain unverified.
-13. **Development tools:** Git ignores run folders and common runtime outputs. This does not remove old commits, manual copies, screenshots, support attachments, or AI-tool uploads.
-14. Sources: [RunMonitor](../app/src/main/java/com/antiscam/app/capture/RunMonitor.kt), [RunBridge](../app/src/debug/java/com/antiscam/app/capture/RunBridge.kt), [dashboard/server.py](../dashboard/server.py), [dashboard launcher](../scripts/dashboard.ps1), [manifest](../app/src/main/AndroidManifest.xml), and [.gitignore](../.gitignore).
+1. **Connection identity:** ADB supplies device serial and connection state for live use and credential lookup. The incident writer excludes these fields.
+2. **New records:** Only the validated incident schema reaches the incident file or export. Normal Android events currently produce no such records.
+3. **Live data:** App activity, precise times, scores, counts, and configuration remain transient. HTTP responses use `no-store`; no browser storage is added.
+4. **Legacy records:** Existing metadata and raw-content folders remain untouched. The console no longer enumerates or parses old run files.
+5. **Export:** Revalidate every record. Export no metadata, summaries, scripts, events, or per-capture files. A downloaded ZIP remains an independent copy.
+6. **Retention:** No automatic incident expiry exists. No producer is enabled. Decide the required lifetime before enabling one. OS interruption can leave a validated temporary file.
+7. **Access:** The console binds to loopback and checks command origin/token. These controls are not per-person healthcare access roles.
+8. **Disk protection:** Incident JSON is not encrypted by the application. Windows permissions, disk encryption, backups, sync, and administrator access remain external controls.
+9. **Errors:** Validation failures use fixed messages without input. Disk failure stops capture without writing diagnostic fallback files. HTTP request tracebacks are suppressed.
+10. **Backups:** Android declares `allowBackup=false`. Phone key ciphertext uses `noBackupFilesDir`. PC backups and exported copies remain outside application deletion controls.
+11. **Development tools:** Git ignores runtime data. This does not erase old commits, manual copies, support attachments, memory dumps, or AI-tool uploads.
+12. Sources: [RunMonitor](../app/src/main/java/com/antiscam/app/capture/RunMonitor.kt), [RunBridge](../app/src/debug/java/com/antiscam/app/capture/RunBridge.kt), [incident records](../dashboard/incident_records.py), [desktop server](../dashboard/server.py), and [dashboard launcher](../scripts/dashboard.ps1).
 
 ### Website and hosted voice
 
@@ -190,7 +247,7 @@
 8. **Captions:** Assistant output transcripts remain in browser memory/DOM for captions. Input-transcript events help track turns. No transcript-file writer was found.
 9. **Storage setting:** Android, hosted website voice, and local website voice request `store:false`. This does not establish zero provider retention.
 10. **Call ending:** End, page hiding/exit, failure, and the three-minute timer stop local capture. Session closing is not provider-data deletion.
-11. **Lambda logs:** Explicit logs record session creation and selected errors. They do not intentionally print request bodies, SDP, conversations, or audio. The template sets 14-day retention.
+11. **Lambda logs:** Updated source removes custom session/error prints. Deployment is still required. Lambda platform/exception logs and existing records remain; the template sets 14-day retention.
 12. **Rate-limit data:** DynamoDB stores aggregate UTC day, call count, last start, and expiration. The template enables TTL with a seven-day expiration target.
 13. **TTL limit:** An expiration target is not proof of exact deletion time. Actual DynamoDB deletion and backup settings were not inspected.
 14. **Cloud telemetry:** CloudFront/S3 access logs, CloudTrail, WAF, tracing, managed forwarding policies, platform errors, and actual retention remain unverified.
@@ -198,7 +255,7 @@
 16. **Caches:** Public assets have short cache lifetimes. Voice responses use `no-store`. Public caching rules do not govern provider records or browser debugging captures.
 17. **Old public objects:** Publishing omits S3 deletion, and the bucket has a Retain policy. Removing a local asset does not erase every hosted copy.
 18. **Secrets:** Secrets Manager supplies the hosted OpenAI key. An origin token also exists in service configuration. Neither is customer conversation content.
-19. **Local website mode:** The loopback server uses equivalent context/voice processing and suppresses ordinary HTTP request logs. Selected operational messages still reach the console.
+19. **Local website mode:** The loopback server uses equivalent context/voice processing and suppresses request logs, tracebacks, and custom session/error prints. Startup configuration messages remain.
 20. **Notices:** Public HTML has no privacy-policy link or separate cloud-voice disclosure. Browser microphone permission is not a complete data-handling notice.
 21. **Reporting:** Animated bank, authority, and trusted-contact reports are demonstrations. No corresponding production reporting integration was found in this scope.
 22. Sources: [website app](../website/scamcatch/public/app.js), [voice client](../website/scamcatch/public/live.js), [Lambda handler](../website/scamcatch/infra/voice/handler.py), [voice template](../website/scamcatch/infra/voice.json), [site template](../website/scamcatch/infra/site.json), [local server](../website/scamcatch/server.py), and [publish workflow](../.github/workflows/publish-website.yml).
@@ -253,4 +310,7 @@
 12. **Outside this repository:** Support email, CRM, billing, crash tooling, business documents, browser extensions, separate prototypes, and staff/AI tools that may receive personal information.
 13. **Data subjects:** Treatment of minors, third-party senders, bystanders, healthcare staff, and patients whose information the user can see or speak.
 14. **Claims:** Evidence for any future claim of local-only processing, zero retention, anonymization, HIPAA compliance, or guaranteed app isolation.
-15. These are open decisions and evidence gaps. This inventory does not authorize new collection, deletion, filtering, vendor configuration, or application changes.
+15. **Incident record:** The six fields are approved. Their reliable sources, confirmation criteria, scam taxonomy, counting period, and duplicate handling remain undecided.
+16. **Operational exceptions:** Existing configuration and global quota fields remain as listed above. Access, lifetimes, security audit needs, and any legal retention duties need further decisions.
+17. **Proof and evaluation:** The bounded privacy claim, independent inspection method, detection-quality protocol, report audience, and disclosure limits for small groups.
+18. These are open decisions and evidence gaps. Further extraction, cleanup, provider configuration, research disclosure, and healthcare changes require separate scope.

@@ -1,7 +1,7 @@
 # Scamcatch run console
 
 1. Android runs capture, Jev analysis, and automatic voice warnings with or without a connected laptop.
-2. Desktop runs add a dashboard and saved diagnostic summaries.
+2. Desktop runs add a live dashboard. Diagnostic summaries are not saved.
 3. The agreed task scope is in [current-task/requirements.txt](current-task/requirements.txt).
 4. All privacy rules are in [docs/privacy.md](docs/privacy.md), including approved apps, capture gates, microphone use, cloud transfer, and saved keys.
 
@@ -43,8 +43,8 @@
 13. Use an approved app on the selected phone or emulator. Type, pause, tap, scroll, or switch apps.
 14. Read Jev results on the left, capture summaries in the middle, and activity on the right. Each list shows newest entries first.
 15. A flagged check opens a centered warning and starts voice automatically when setup is complete. The red X closes it and resumes capture.
-16. Select **Stop**. The saved folder under `runs` contains diagnostic metadata.
-17. Select **Export ZIP** to share a current metadata-only run.
+16. Select **Stop**. Live diagnostics remain in memory until another run starts or the server closes.
+17. **Export incidents** supports approved incident records only. The current Android app does not produce these records yet.
 
 ```powershell
 .\scripts\build.ps1
@@ -65,14 +65,14 @@
 9. The red X stops voice and resumes screen checks. Select **Stop Run** in Antiscam to end the phone run.
 10. Connecting or disconnecting a laptop does not stop a phone run. See [privacy rules](docs/privacy.md) for desktop data limits.
 11. A phone run ends when the app process ends or the phone restarts. Saved keys restore, but you must start another run.
-12. Stop the phone run before starting a desktop run. Only desktop runs save records under `runs`.
+12. Stop the phone run before starting a desktop run. Live diagnostics are not saved. See [incident storage rules](docs/privacy.md#allowed-incident-fields--october-22-2026).
 
 ## Connected phone
 
 1. Connect the configured Galaxy S10+ by USB and accept the USB debugging prompt.
 2. Open **Start Phone Dashboard.cmd** to connect the original console at `http://127.0.0.1:8765/` to the phone.
 3. To change devices in that console, stop the run, select **Device**, choose the target, and select **Switch device**.
-4. Both shortcuts reuse one console. Desktop-started phone and emulator runs save under `runs`, with the selected device recorded in each run.
+4. Both shortcuts reuse one current console. The launcher rejects an older server with a different storage policy. Stop its run and restart that server.
 5. Earlier phone records remain under `runs/phone-R58N83XN7BE`.
 6. Stop the current run before building and installing an app update with the existing scripts.
 7. The launcher connects the console. It does not watch source files or install app updates.
@@ -104,13 +104,13 @@
 
 ## Run records
 
-1. Each desktop run has an ID, timestamps, status, counters, and capture IDs.
-2. `events.jsonl` preserves safe ordered events. `summary.txt` and `run.json` describe the run and its outcome.
-3. The dashboard shows capture summaries and numeric Jev results. Record contents follow [docs/privacy.md](docs/privacy.md).
-4. Desktop events save as they arrive. A lost desktop connection stops its run and marks the record interrupted.
-5. Starting another run resets the dashboard history.
-6. **Export ZIP** supports current metadata-only runs. Legacy raw runs remain on disk but are not loaded or exported by the new dashboard.
-7. Late safe results retain their original run and capture IDs. They cannot restart a stopped run or its warning.
+1. Run IDs, times, status, counters, capture summaries, and numeric Jev results stay in live memory only.
+2. The dashboard creates no run folders, event logs, per-capture files, or summaries. It does not read legacy run folders.
+3. Only the exact [incident fields](docs/privacy.md#allowed-incident-fields--october-22-2026) can enter `runs/incidents-v1.json`.
+4. The current Android app supplies no structured incident records. Normal runs save nothing; full OCR is never used as a fallback.
+5. **Export incidents** is available only when valid incident records exist. The ZIP contains no live diagnostics or legacy records.
+6. Starting another run resets live history. Closing the server discards it. A lost desktop connection stops its run.
+7. Late results remain transient. They cannot restart a stopped run, reopen its warning, or append to old files.
 
 ## Jev experiment rules
 

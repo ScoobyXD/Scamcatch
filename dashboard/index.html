@@ -18,7 +18,7 @@
         <button id="start" class="button primary" disabled>Start run</button>
         <button id="stop" class="button" disabled>Stop</button>
         <button id="pause" class="button" disabled>Pause</button>
-        <a id="export" class="button disabled" aria-disabled="true" href="/api/export" download>Export ZIP</a>
+        <a id="export" class="button disabled" aria-disabled="true" href="/api/export" download>Export incidents</a>
       </div>
       <div class="run-progress"><span id="run-status" class="badge neutral">No run</span><span id="run-elapsed">00:00</span></div>
       <div class="device-controls">
@@ -64,10 +64,10 @@
           <p id="empty" class="empty-state">Start a run and use an app you approved on the phone. Capture counts and timings appear here. Conversation text is not displayed or saved.</p>
           <ol id="results" class="results-list" role="list" aria-label="Captures, newest to oldest"></ol>
         </div>
-        <footer class="save-footer"><span id="save-status">Only metadata saves locally.</span><span id="save-folder"></span></footer>
+        <footer class="save-footer"><span id="save-status">Live diagnostics are not saved.</span><span id="save-folder">No incident records saved.</span></footer>
       </section>
       <aside class="pane activity-panel" aria-labelledby="activity-title">
-        <header class="pane-heading"><h2 id="activity-title">Activity log <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button" aria-label="Go to the latest activity">Latest ↑</button></header>
+        <header class="pane-heading"><h2 id="activity-title">Live activity <span id="activity-count" class="count-badge">0</span></h2><button id="activity-latest" class="text-button" aria-label="Go to the latest activity">Latest ↑</button></header>
         <ul class="readiness" aria-label="Device readiness" role="list">
           <li><span id="check-bridge" class="check">○</span> Device</li>
           <li><span id="check-consent" class="check">○</span> Consent</li>

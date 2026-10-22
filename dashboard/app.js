@@ -143,17 +143,17 @@ function renderStatus() {
   setCheck("check-monitoring", state.monitoringEnabled && !state.warningActive);
   setCheck("check-jev", state.jevReady);
   setCheck("check-voice", state.voiceReady);
-  const exportAllowed = run?.recordingPolicy === "metadata_only";
+  const exportAllowed = model.recordingPolicy === "incident_fields_only_v1" && model.incidentCount > 0 && !model.incidentError;
   byId("export").classList.toggle("disabled", !exportAllowed);
   byId("export").setAttribute("aria-disabled", String(!exportAllowed));
-  byId("export").title = exportAllowed ? "Export capture metadata and numeric decisions" : "Start a new metadata-only run. Historical conversation records cannot be exported.";
-  byId("save-status").textContent = run ? active ? "Recording metadata" : run.status === "interrupted" ? "Partial metadata saved" : "Metadata saved" : "Only metadata saves locally.";
-  byId("save-folder").textContent = run?.folder || "";
+  byId("export").title = exportAllowed ? "Export approved incident fields only" : "No approved incident records to export. Live diagnostics are not saved.";
+  byId("save-status").textContent = "Live diagnostics are not saved.";
+  byId("save-folder").textContent = model.incidentError || (model.incidentCount > 0 ? `${model.incidentCount} incident records saved` : "No incident records saved.");
   renderVoiceScripts();
   if (!streamReady) notice("Dashboard connection lost. Reconnecting…", "warning");
   else if (!connected) notice(model.message || "Connect a phone or emulator to begin.", "warning");
   else if (differentDevice) notice("Select Switch device to connect to the selected device.");
-  else if (run?.status === "interrupted") notice("Run interrupted. Received events are saved. Start a new run to continue.", "warning");
+  else if (run?.status === "interrupted") notice("Run interrupted. Live diagnostics were not saved. Start a new run to continue.", "warning");
   else if (run?.status === "failed") notice(run.reason || "The run could not start.", "error");
   else if (!state.consentGranted) notice("Open Antiscam on the selected device and review capture and cloud consent.", "warning");
   else if (!state.serviceConnected) notice("Enable Antiscam interaction capture in Android Accessibility settings.", "warning");
@@ -592,7 +592,9 @@ byId("pause").addEventListener("click", () => request("/api/command", { command:
 byId("refresh").addEventListener("click", () => request("/api/devices", {}));
 byId("connect").addEventListener("click", () => request("/api/connect", { serial: byId("device").value }));
 byId("device").addEventListener("change", renderStatus);
-byId("export").addEventListener("click", (event) => { if (model.run?.recordingPolicy !== "metadata_only") event.preventDefault(); });
+byId("export").addEventListener("click", (event) => {
+  if (model.recordingPolicy !== "incident_fields_only_v1" || !(model.incidentCount > 0) || model.incidentError) event.preventDefault();
+});
 byId("text-latest").addEventListener("click", () => { byId("text-scroll").scrollTop = 0; });
 byId("jev-latest").addEventListener("click", () => { byId("jev-scroll").scrollTop = 0; });
 byId("activity-latest").addEventListener("click", () => { byId("activity-scroll").scrollTop = 0; });

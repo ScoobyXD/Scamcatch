@@ -22,7 +22,7 @@
 8. Phone **Choose script** and **Save selection** change the saved selection without editing the source file.
 9. Wait for phone save confirmation before disconnecting. The library and selection persist across app restarts and phone reboots.
 10. A saved phone library takes priority over the bundled file after an app update. Copy the edited file explicitly to update it.
-11. Desktop `run.json` saves `voiceScript` with the exact instructions, ID, name, and revision used for that run.
+11. The desktop does not save script snapshots or voice diagnostics. See the [incident storage rules](privacy.md#allowed-incident-fields--october-22-2026).
 12. Revisions are SHA-256 hashes of the script instructions. Selection is manual. There is no automatic rotation or A/B assignment.
 13. Keep `baseline` and `uses_scam_language` in the file for the website. Website script selection is independent of the phone selection and `ACTIVE_VOICE_SCRIPT`.
 14. Scripts contain configured instructions only. Apply [privacy rules](privacy.md) to all content and credentials.

@@ -25,6 +25,9 @@ try {
     $existing = Invoke-RestMethod -Uri "${dashboardUrl}api/session" -TimeoutSec 2
 } catch { }
 if ($existing.token) {
+    if ($existing.recordingPolicy -ne 'incident_fields_only_v1') {
+        throw 'An older dashboard server is running. Stop its run and restart that server before using the new incident-only storage policy.'
+    }
     if ($Serial -and ($existing.selectedDevice -ne $Serial -or $existing.connection -eq 'disconnected')) {
         if ($existing.run.status -in @('starting', 'active', 'stopping')) {
             throw 'Stop the current run before changing devices.'

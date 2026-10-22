@@ -298,6 +298,10 @@ class Server(ThreadingHTTPServer):
     allow_reuse_address = os.name != "nt"
     daemon_threads = True
 
+    def handle_error(self, request, client_address):
+        # Do not print client addresses or per-request exception tracebacks.
+        pass
+
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -381,14 +385,11 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError
             answer = self.server.voice.start(body)
         except VoiceError as error:
-            if error.detail:
-                print(f"Voice: {error.detail}", flush=True)
             self.respond(error.status, {"error": error.public})
             return
         except (ValueError, UnicodeDecodeError):
             self.respond(400, {"error": "Send a small JSON request."})
             return
-        print("Voice: session created.", flush=True)
         self.respond(200, answer)
 
 

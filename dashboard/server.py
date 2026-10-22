@@ -1,4 +1,4 @@
-"""Local Antiscam run recorder. Python 3.11+, standard library only."""
+"""Local Antiscam live console. Only validated incident fields can reach disk."""
 from __future__ import annotations
 
 import argparse
@@ -23,6 +23,7 @@ import webbrowser
 import zipfile
 
 import credential_store
+from incident_records import IncidentStore, RECORDING_POLICY
 
 
 HERE = Path(__file__).resolve().parent
@@ -36,7 +37,6 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 JEV_EVENTS = {"jev_started", "jev_completed", "jev_failed", "jev_skipped", "jev_canceled"}
 LATE_RESULTS = {"screenshot_received", "capture_failed", "capture_discarded", "ocr_started", "ocr_completed", "ocr_failed", "voice_audio_summary"} | JEV_EVENTS
 KEY_COMMANDS = {"/api/jev-key": "jev_key", "/api/openai-key": "openai_key"}
-RECORDING_POLICY = "metadata_only"
 COUNTER_FIELDS = ("requests", "screenshots", "failed", "ocrCompleted", "ocrFailed", "skipped")
 EVENT_FIELDS = (
     "captureId", "windowId", "packageName", "appLabel", "captureScope", "sourceAttribution",
@@ -94,7 +94,7 @@ def safe_reason(value, event_type=None):
 
 
 def scalar_fields(value, fields):
-    """Only named scalar metadata can cross the dashboard recording boundary."""
+    """Filter transient dashboard state. This is never a persistence schema."""
     if not isinstance(value, dict):
         return {}
     return {key: item for key in fields if key in value
@@ -182,38 +182,12 @@ def event_metadata(event):
     return result
 
 
-def capture_metadata(value):
-    result = scalar_fields(value, ("captureId", "file", "timestampMs", "elapsedMs", "durationMs", "packageName",
-                                  "appLabel", "windowId", "characters", "regionCount", "maskedRegionCount",
-                                  "captureScope", "sourceAttribution"))
-    if isinstance(value, dict) and isinstance(value.get("jev"), dict):
-        result["jev"] = jev_metadata(value["jev"])
-    return result
-
-
-def run_metadata(value):
-    result = scalar_fields(value, ("id", "status", "startedAt", "endedAt", "device", "captureScope",
-                                  "appVersion", "androidApi", "eventCount", "reason", "jevExpected",
-                                  "folder", "recordingError", "recordingPolicy"))
-    result["counters"] = numeric_fields(value.get("counters"), COUNTER_FIELDS)
-    result["ocr"] = [capture_metadata(item) for item in value.get("ocr", []) if isinstance(item, dict)]
-    if isinstance(value.get("voiceScript"), dict):
-        result["voiceScript"] = script_metadata(value["voiceScript"], instructions=True)
-    return result
-
-
 def utc_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
 def encode(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-
-
-def write_json(path, value):
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8"))
-    temporary.replace(path)
 
 
 def find_adb():
@@ -233,8 +207,9 @@ def find_adb():
 
 class Console:
     def __init__(self, runs):
-        self.runs = runs.resolve()
-        self.runs.mkdir(parents=True, exist_ok=True)
+        self.incidents = IncidentStore(runs)
+        self.incident_count = 0
+        self.incident_error = None
         self.lock = threading.RLock()
         self.send_lock = threading.Lock()
         self.token = secrets.token_urlsafe(32)
@@ -247,8 +222,6 @@ class Console:
         self.run = None
         self.ocr = []
         self.activity = []
-        self.event_file = None
-        self.recording_run = False
         self.subscribers = set()
         self.bridge = None
         self.forward_port = None
@@ -257,52 +230,10 @@ class Console:
         self.closed = threading.Event()
         self.recording_error = None
         self.key_storage = {"available": credential_store.AVAILABLE, "saved": {}, "error": None}
-        self.load_latest()
-
-    def load_latest(self):
-        # Only generated run folders may be read. Never follow a user-supplied path.
-        candidates = sorted((p for p in self.runs.iterdir() if p.is_dir() and SAFE_ID.fullmatch(p.name)), reverse=True)
-        for folder in candidates:
-            if folder.is_symlink() or folder.resolve().parent != self.runs:
-                continue
-            try:
-                run = json.loads((folder / "run.json").read_text(encoding="utf-8"))
-                if run.get("id") != folder.name or run.get("recordingPolicy") != RECORDING_POLICY:
-                    # Historical conversation records remain untouched and are never restored or exported.
-                    continue
-                self.run = run_metadata(run)
-                self.ocr = [capture_metadata(item) for item in self.run["ocr"]]
-                events = folder / "events.jsonl"
-                self.activity = []
-                if events.is_file() and not events.is_symlink():
-                    with events.open(encoding="utf-8") as source:
-                        for line in source:
-                            try:
-                                event = event_metadata(json.loads(line))
-                                if event.get("type") not in {"snapshot", "state_changed"}:
-                                    self.activity.append(self.activity_entry(event))
-                                if event.get("type") in JEV_EVENTS and isinstance(event.get("data"), dict):
-                                    # An event can reach disk before its joined run metadata.
-                                    self.save_jev(event, persist=False)
-                            except (ValueError, TypeError, AttributeError):
-                                # A partial final line does not hide the rest of a saved run.
-                                continue
-                if run.get("status") in ACTIVE:
-                    self.recording_run = True
-                    try:
-                        for record in self.ocr:
-                            if record.get("jev"):
-                                self.write_ocr_record(record)
-                        if not events.is_symlink():
-                            self.event_file = events.open("a", encoding="utf-8", newline="\n")
-                        self.finish("interrupted", "The recorder closed before Stop was confirmed.")
-                    except OSError:
-                        self.recording_failed()
-                return
-            except (OSError, ValueError, KeyError, TypeError):
-                self.run = None
-                self.ocr = []
-                self.activity = []
+        try:
+            self.incident_count = len(self.incidents.read())
+        except (OSError, ValueError):
+            self.incident_error = "Saved incidents are unavailable. No data was loaded."
 
     def snapshot(self):
         with self.lock:
@@ -313,6 +244,8 @@ class Console:
                 "state": self.state, "run": self.run, "ocr": self.ocr,
                 "activity": self.activity,
                 "keyStorage": self.key_storage,
+                "recordingPolicy": RECORDING_POLICY, "incidentCount": self.incident_count,
+                "incidentError": self.incident_error,
             }
 
     def publish(self, kind="status", data=None):
@@ -320,7 +253,9 @@ class Console:
             if data is None:
                 data = {"connection": self.connection, "message": self.message,
                         "devices": self.devices, "selectedDevice": self.selected_device,
-                        "state": self.state, "run": self.run, "keyStorage": self.key_storage}
+                        "state": self.state, "run": self.run, "keyStorage": self.key_storage,
+                        "recordingPolicy": RECORDING_POLICY, "incidentCount": self.incident_count,
+                        "incidentError": self.incident_error}
             # Freeze each update before the mutable run receives another event.
             message = encode({"kind": kind, "data": data})
             for subscriber in tuple(self.subscribers):
@@ -598,13 +533,25 @@ class Console:
         with self.lock:
             if self.recording_error:
                 return
+            if event.get("type") == "scam_incident":
+                if (not self.run or self.run["status"] != "active"
+                        or event.get("runId") != self.run["id"]
+                        or not all(self.state.get(key) for key in ("consentGranted", "monitoringEnabled", "serviceConnected"))):
+                    return
+                try:
+                    self.incident_count = self.incidents.append(event.get("data"))
+                    self.incident_error = None
+                except ValueError:
+                    self.incident_error = "Incident rejected. No data was saved."
+                self.publish()
+                return
             event = event_metadata(event)
             state = event.get("state")
             if isinstance(state, dict):
                 reconnected = self.connection != "connected"
                 self.state = state
                 self.connection = "connected"
-                self.message = ("Phone run active. Stop it in Antiscam before starting a recorded desktop run."
+                self.message = ("Phone run active. Stop it in Antiscam before starting a desktop run."
                                 if state.get("runMode") == "standalone"
                                 else "Device connected. Start a run when the setup checks are complete.")
                 if reconnected:
@@ -617,19 +564,16 @@ class Console:
             matching = self.run and event.get("runId") == self.run["id"] and (
                 self.run["status"] in ACTIVE or kind in LATE_RESULTS)
             run = self.run if matching else None
-            if run is None and kind in LATE_RESULTS:
-                run = self.saved_run(event.get("runId"))
             if run:
                 active = run is self.run and run["status"] in ACTIVE
-                self.append_event(event, run)
                 if kind == "run_started":
                     run["status"] = "active"
                     if isinstance(data.get("voiceScript"), dict):
                         run["voiceScript"] = data["voiceScript"]
                 if kind == "ocr_completed":
-                    self.save_ocr(event, run)
+                    self.receive_ocr(event, run)
                 if kind in JEV_EVENTS:
-                    self.save_jev(event, run=run)
+                    self.receive_jev(event, run)
                 if kind == "run_stopped":
                     self.finish("stopped", data.get("reason") or "Stop confirmed by the device.")
                 else:
@@ -641,16 +585,12 @@ class Console:
                         if counter:
                             counters = run.setdefault("counters", {})
                             counters[counter] = counters.get(counter, 0) + 1
-                    self.persist_run(run)
-                    if kind in JEV_EVENTS or not active:
-                        self.write_summary(run)
             if kind == "command_error":
                 self.message = str(data.get("reason") or "The device rejected the command.")
                 if self.run and self.run["status"] == "starting":
                     self.finish("failed", self.message)
                 elif self.run and self.run["status"] == "stopping":
                     self.run["status"] = "active"
-                    self.persist_run()
             # A reconnect can reveal an orphaned desktop run. Phone runs keep their local owner.
             if (kind == "snapshot" and self.state.get("runId") and self.state.get("runMode") != "standalone"
                     and not (self.run and self.run["status"] in ACTIVE)):
@@ -712,7 +652,7 @@ class Console:
                 raise ValueError("A run is already active.")
             if self.state.get("runId"):
                 if self.state.get("runMode") == "standalone":
-                    raise ValueError("Stop the phone run in Antiscam before starting a recorded desktop run.")
+                    raise ValueError("Stop the phone run in Antiscam before starting a desktop run.")
                 raise ValueError("The device still has an active run. Wait for Stop to finish.")
             if not all(self.state.get(key) for key in ("consentGranted", "monitoringEnabled", "serviceConnected")):
                 raise ValueError("Allow capture and cloud text analysis, resume capture, and enable the accessibility service in Antiscam Dev.")
@@ -721,19 +661,13 @@ class Console:
             if self.state["approvedAppCount"] < 1:
                 raise ValueError("Choose approved apps in Antiscam on the phone before starting a run.")
             run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + secrets.token_hex(4)
-            folder = self.runs / run_id
-            (folder / "ocr").mkdir(parents=True)
             self.run = {"id": run_id, "status": "starting", "startedAt": utc_now(), "endedAt": None,
                         "device": self.selected_device, "captureScope": self.state.get("captureScope", "foreground"),
                         "appVersion": self.state.get("appVersion"), "androidApi": self.state.get("androidApi"),
-                        "counters": {}, "eventCount": 0, "ocr": [], "reason": None, "jevExpected": True,
-                        "folder": str(folder), "recordingPolicy": RECORDING_POLICY}
+                        "counters": {}, "ocr": [], "reason": None, "jevExpected": True,
+                        "recordingPolicy": RECORDING_POLICY}
             self.ocr = []
             self.activity = []
-            self.recording_run = True
-            self.event_file = (folder / "events.jsonl").open("a", encoding="utf-8", newline="\n")
-            self.persist_run()
-            self.write_summary()
             self.publish("snapshot", self.snapshot())
             try:
                 self.send_command({"command": "start", "runId": run_id})
@@ -747,7 +681,6 @@ class Console:
             if not self.run or self.run["status"] not in {"active", "starting"}:
                 raise ValueError("There is no active run to stop.")
             self.run["status"] = "stopping"
-            self.persist_run()
             self.publish()
             try:
                 self.send_command({"command": "stop"})
@@ -756,135 +689,31 @@ class Console:
                 self.publish()
                 raise
 
-    def saved_run(self, run_id):
-        if not isinstance(run_id, str) or not SAFE_ID.fullmatch(run_id):
-            return None
-        folder = self.runs / run_id
-        path = folder / "run.json"
-        if folder.is_symlink() or folder.resolve().parent != self.runs or path.is_symlink() or not path.is_file():
-            return None
-        ocr_folder = folder / "ocr"
-        if ocr_folder.is_symlink() or ocr_folder.resolve().parent != folder.resolve():
-            return None
-        run = json.loads(path.read_text(encoding="utf-8"))
-        return run_metadata(run) if isinstance(run, dict) and run.get("id") == run_id and run.get("recordingPolicy") == RECORDING_POLICY else None
-
-    def append_event(self, event, run=None):
-        run = self.run if run is None else run
-        line = json.dumps(event_metadata(event), ensure_ascii=False, separators=(",", ":")) + "\n"
-        if run is self.run and self.event_file:
-            self.event_file.write(line)
-            self.event_file.flush()
-        else:
-            path = self.runs / run["id"] / "events.jsonl"
-            if path.is_symlink():
-                raise OSError("The run event file is a symbolic link.")
-            with path.open("a", encoding="utf-8", newline="\n") as output:
-                output.write(line)
-        run["eventCount"] += 1
-
-    def save_ocr(self, event, run=None):
-        run = self.run if run is None else run
+    def receive_ocr(self, event, run):
+        # Live summaries stay in memory. They are not incident records.
         data = event["data"]
         capture_id = str(data.get("captureId", event.get("seq", len(run["ocr"]) + 1)))
-        safe_id = re.sub(r"[^A-Za-z0-9_-]", "_", capture_id)[:80] or "capture"
-        filename = f"ocr/{safe_id}.json"
-        if any(item["file"] == filename for item in run["ocr"]):
-            filename = f"ocr/{safe_id}-{len(run['ocr']) + 1}.json"
-        item = {"captureId": capture_id, "file": filename, "timestampMs": event.get("timestampMs"),
+        item = {"captureId": capture_id, "timestampMs": event.get("timestampMs"),
                 "elapsedMs": event.get("elapsedMs"), "durationMs": data.get("durationMs"),
                 "packageName": data.get("packageName"), "appLabel": data.get("appLabel"),
                 "windowId": data.get("windowId"), "characters": data.get("characters"),
                 "regionCount": data.get("regionCount"), "maskedRegionCount": data.get("maskedRegionCount"),
                 "captureScope": data.get("captureScope"), "sourceAttribution": data.get("sourceAttribution")}
         run["ocr"].append(item)
-        self.write_ocr_record(item, run)
         if run is self.run:
             self.ocr.append(item)
             self.publish("ocr", item)
 
-    def write_ocr_record(self, record, run=None):
-        run = self.run if run is None else run
-        path = (self.runs / run["id"] / record["file"]).with_suffix(".json")
-        write_json(path, capture_metadata(record))
-
-    def save_jev(self, event, persist=True, run=None):
-        run = self.run if run is None else run
-        if not run or event.get("runId") != run["id"]:
-            return
-        data = event["data"]
-        capture_id = str(data.get("captureId", ""))
-        item = next((item for item in run["ocr"] if item["captureId"] == capture_id), None)
+    def receive_jev(self, event, run):
+        item = next((item for item in run["ocr"] if item["captureId"] == str(event["data"].get("captureId", ""))), None)
         if item is None:
             return
         previous = item.get("jev")
         if previous and previous.get("status") not in {"pending", "canceled"}:
             return
-        if run is self.run:
-            record = next((record for record in self.ocr if record["file"] == item["file"]), None)
-        else:
-            folder = self.runs / run["id"]
-            relative = Path(item["file"])
-            path = folder / relative
-            if relative.parent != Path("ocr") or path.is_symlink() or path.resolve().parent != (folder / "ocr").resolve():
-                return
-            record = item
-        if record is None:
-            return
-        # Android owns the questions, model, probabilities, and decision rule.
-        jev = jev_metadata(data)
-        item["jev"] = jev
-        record["jev"] = jev
-        if persist:
-            self.write_ocr_record(record, run)
-        if run is self.run:
-            self.publish("jev", {"captureId": capture_id, "jev": jev})
-
-    def persist_run(self, run=None):
-        run = self.run if run is None else run
-        if run:
-            write_json(self.runs / run["id"] / "run.json", run_metadata(run))
-
-    def summary_text(self, run=None):
-        run = self.run if run is None else run
-        if not run:
-            return ""
-        run = run_metadata(run)
-        counters = run.get("counters", {})
-        scope = {"foreground": "Current foreground app", "display": "Visible default display"}.get(
-            run.get("captureScope"), run.get("targetPackage") or "Unknown")
-        lines = ["Antiscam run", f"Run: {run['id']}", f"Status: {run['status']}",
-                 f"Started: {run['startedAt']}", f"Ended: {run.get('endedAt') or 'Not ended'}",
-                 f"Device: {run.get('device') or 'Unknown'}", f"App version: {run.get('appVersion') or 'Unknown'}",
-                 f"Android API: {run.get('androidApi') or 'Unknown'}",
-                 f"Capture scope: {scope}",
-                 f"Events saved: {run.get('eventCount', 0)}", f"Capture summaries: {len(run.get('ocr', []))}"]
-        script = run.get("voiceScript")
-        if isinstance(script, dict):
-            lines += [f"Voice script: {script.get('id')} ({script.get('name')})",
-                      f"Voice script revision: {script.get('revision')}",
-                      "The exact voice script text is saved in run.json."]
-        lines += [f"{label}: {counters.get(key, 0)}" for key, label in [("requests", "Capture requests"), ("screenshots", "Screenshots received"), ("failed", "Screenshot failures"), ("ocrCompleted", "OCR completed"), ("ocrFailed", "OCR failures"), ("skipped", "Captures skipped")]]
-        analyses = [item["jev"] for item in run.get("ocr", []) if item.get("jev")]
-        if analyses or run.get("jevExpected"):
-            lines += [f"Jev {status}: {sum(analysis.get('status') == status for analysis in analyses)}"
-                      for status in ("pending", "completed", "failed", "skipped", "canceled")]
-            flagged = sum(analysis.get("status") == "completed" and analysis.get("flagged") is True for analysis in analyses)
-            lines.append(f"Probably scam flags: {flagged}")
-            lines.append("Flags are experiment results, not proof of fraud. Failed, skipped, and canceled checks are not safe results.")
-        lines += [f"Reason: {run.get('reason') or 'Run in progress'}", "",
-                  "Capture metadata is in ocr/. Jev configuration and numeric decisions are saved when supplied by Android.",
-                  "Events are in events.jsonl. Conversation text, screenshot images, audio, transcripts, and API keys are not recorded."]
-        return "\n".join(lines) + "\n"
-
-    def write_summary(self, run=None):
-        run = self.run if run is None else run
-        if not run:
-            return
-        summary = self.runs / run["id"] / "summary.txt"
-        temporary = summary.with_suffix(".txt.tmp")
-        temporary.write_text(self.summary_text(run), encoding="utf-8")
-        temporary.replace(summary)
+        # Numeric detector output is live status, never a confirmed scam count or type.
+        item["jev"] = jev_metadata(event["data"])
+        self.publish("jev", {"captureId": item["captureId"], "jev": item["jev"]})
 
     def finish(self, status, reason):
         self.run["status"] = status
@@ -892,18 +721,11 @@ class Console:
         self.run["reason"] = reason
         if self.state.get("counters"):
             self.run["counters"] = self.state["counters"]
-        if self.event_file:
-            self.event_file.flush()
-            self.event_file.close()
-            self.event_file = None
-        self.persist_run()
-        self.write_summary()
-        self.recording_run = False
 
     def recording_failed(self):
-        """Stop capture even when the disk cannot accept the final run metadata."""
+        """Stop capture after an incident-storage failure. Never save diagnostic fallback files."""
         with self.lock:
-            self.recording_error = "Recording failed. Check disk space and run-folder access, then reconnect. Partial files may be incomplete."
+            self.recording_error = "Incident storage failed. Check disk access, then reconnect. Live diagnostics were not saved."
             self.connection = "disconnected"
             self.message = self.recording_error
             try:
@@ -920,52 +742,27 @@ class Console:
                 except OSError:
                     pass
                 self.bridge = None
-            if self.run and self.recording_run:
+            if self.run and self.run["status"] in ACTIVE:
                 self.run["status"] = "interrupted"
                 self.run["endedAt"] = utc_now()
                 self.run["reason"] = self.recording_error
                 self.run["recordingError"] = True
                 self.run["counters"] = self.state.get("counters") or self.run.get("counters", {})
-            if self.event_file:
-                try:
-                    self.event_file.close()
-                except OSError:
-                    pass
-                self.event_file = None
-            # One file can remain writable when another file fails. Keep each best effort separate.
-            for save in (self.persist_run, self.write_summary):
-                try:
-                    save()
-                except OSError:
-                    pass
-            self.recording_run = False
             self.publish()
 
     def export(self):
         with self.lock:
-            if not self.run:
-                raise ValueError("Start a run before exporting.")
-            if self.run.get("recordingPolicy") != RECORDING_POLICY:
-                raise ValueError("Historical conversation records cannot be exported. Start a new metadata-only run.")
-            folder = self.runs / self.run["id"]
+            # Revalidate the file, including nested fields, before any bytes leave the server.
+            records = self.incidents.read()
+            if not records:
+                raise ValueError("No approved incident records are available to export.")
             content = io.BytesIO()
             with zipfile.ZipFile(content, "w", zipfile.ZIP_DEFLATED) as archive:
-                prefix = f"{self.run['id']}/"
-                archive.writestr(prefix + "summary.txt", self.summary_text())
-                archive.writestr(prefix + "run.json", encode(run_metadata(self.run)))
-                events = folder / "events.jsonl"
-                if events.is_file() and not events.is_symlink():
-                    with events.open(encoding="utf-8") as source, archive.open(prefix + "events.jsonl", "w") as target:
-                        for line in source:
-                            try:
-                                target.write(encode(event_metadata(json.loads(line))) + b"\n")
-                            except (ValueError, TypeError, AttributeError):
-                                continue
-                for item in self.run["ocr"]:
-                    relative = Path(item["file"])
-                    if relative.parent == Path("ocr") and relative.suffix == ".json":
-                        archive.writestr(prefix + relative.as_posix(), encode(capture_metadata(item)))
-            return self.run["id"], content.getvalue()
+                # A fixed member date avoids adding the export time to the retained record.
+                member = zipfile.ZipInfo("incidents.json", date_time=(1980, 1, 1, 0, 0, 0))
+                member.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(member, encode(records))
+            return content.getvalue()
 
     def close(self):
         self.closed.set()
@@ -987,6 +784,13 @@ class Console:
                     pass
                 self.bridge.close()
                 self.bridge = None
+
+
+class ConsoleServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # The default handler prints client addresses and exception values to stderr.
+        # A failing request must not create an unvalidated diagnostic record.
+        pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1047,9 +851,9 @@ class Handler(BaseHTTPRequestHandler):
             self.stream()
         elif path == "/api/export":
             try:
-                run_id, payload = self.console.export()
+                payload = self.console.export()
                 self.send_headers(200, "application/zip", len(payload))
-                self.send_header("Content-Disposition", f'attachment; filename="antiscam-{run_id}.zip"')
+                self.send_header("Content-Disposition", 'attachment; filename="scamcatch-incidents.zip"')
                 self.end_headers()
                 self.wfile.write(payload)
             except ValueError as error:
@@ -1155,7 +959,7 @@ def main():
     parser = argparse.ArgumentParser(description="Antiscam local run console")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--serial")
-    parser.add_argument("--runs-directory", type=Path, default=ROOT / "runs", help="Directory for saved run records.")
+    parser.add_argument("--runs-directory", type=Path, default=ROOT / "runs", help="Directory for validated incident records. Legacy run files are never read.")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--open-only", action="store_true", help="Open an existing dashboard in its own browser window.")
     args = parser.parse_args()
@@ -1163,7 +967,7 @@ def main():
         open_browser(f"http://127.0.0.1:{args.port}/")
         return
     console = Console(args.runs_directory)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server = ConsoleServer(("127.0.0.1", args.port), Handler)
     server.daemon_threads = True
     server.console = console
     url = f"http://127.0.0.1:{server.server_port}/"
