@@ -37,3 +37,4 @@ Rest of the repository
 
 
 24. [docs/privacy.md](privacy.md) is the canonical source for approved apps, capture gates, keyboard masks, raw-data limits, microphone use, credentials, and California research.
+25. [docs/permission-requirements.md](permission-requirements.md) summarizes Android permissions, ScamCatch consent, current run prerequisites, and planned guided setup.

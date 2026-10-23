@@ -61,7 +61,7 @@ object VoiceScripts {
     /** Null means the import is queued. State reports its final result. */
     fun importMarkdown(value: String): String? {
         checkMainThread()
-        if (appContext == null) return fail("Reopen Antiscam before importing voice scripts.")
+        if (appContext == null) return fail("Reopen ScamCatch before importing voice scripts.")
         if (mutableState.value.working) return fail("Wait for the current voice script operation.", keepWorking = true)
         if (CaptureStore.state.value.runId != null) return fail("Stop the current run before changing voice scripts.")
         mutableState.value = mutableState.value.copy(working = true, error = false, message = "Saving voice scripts…")

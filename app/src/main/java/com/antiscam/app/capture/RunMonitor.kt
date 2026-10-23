@@ -230,14 +230,14 @@ object RunMonitor {
                 if (reason != null) emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
             }
             "stop" -> when {
-                session?.mode == RunMode.STANDALONE -> emitNow("command_error", mapOf("reason" to "Stop the phone run in Antiscam."))
+                session?.mode == RunMode.STANDALONE -> emitNow("command_error", mapOf("reason" to "Stop the phone run in ScamCatch."))
                 session == null -> emitNow("command_error", mapOf("reason" to "no_active_run"))
                 else -> stop("user_stopped")
             }
             "snapshot" -> emitNow("snapshot", emptyMap())
             "pause" -> {
                 if (session?.mode == RunMode.STANDALONE) {
-                    emitNow("command_error", mapOf("reason" to "Stop the phone run in Antiscam."))
+                    emitNow("command_error", mapOf("reason" to "Stop the phone run in ScamCatch."))
                 } else {
                     stop("capture_paused")
                     CaptureStore.setEnabled(false)
@@ -253,10 +253,10 @@ object RunMonitor {
 
     fun startStandalone(): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
-        if (!initialized) return "Reopen Antiscam before starting a run."
+        if (!initialized) return "Reopen ScamCatch before starting a run."
         val state = CaptureStore.state.value
         val setupError = when {
-            !JevAnalysis.available || !LiveVoice.available -> "Install Antiscam Dev to use Jev and voice."
+            !JevAnalysis.available || !LiveVoice.available -> "Install ScamCatch to use Jev and voice."
             !state.jevReady -> "Set the Jev API key in phone setup."
             !state.voiceReady -> "Set the OpenAI API key in phone setup."
             !state.voiceConsentGranted -> "Allow automatic voice warnings in phone setup."
@@ -270,7 +270,7 @@ object RunMonitor {
             "run_already_active" -> "Stop the current run before starting another."
             "consent_required" -> "Allow screen capture and Jev analysis first."
             "capture_paused" -> "Resume monitoring before starting a run."
-            "service_disconnected" -> "Enable Antiscam in Android Accessibility settings."
+            "service_disconnected" -> "Enable ScamCatch in Android Accessibility settings."
             "approved_apps_required" -> "Select at least one approved app in phone setup."
             else -> "Could not start the run: $reason"
         }

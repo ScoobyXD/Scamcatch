@@ -58,7 +58,7 @@ fun ApprovedAppsCard(state: CaptureState) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Approved apps", style = MaterialTheme.typography.titleMedium)
-            Text("Choose the apps Antiscam can check. Capture runs only while an approved app is in the foreground.")
+            Text("Choose the apps ScamCatch can check. Capture runs only while an approved app is in the foreground.")
             Text("No apps are selected by default. Your choices stay on this phone.")
             if (state.approvedPackages.isEmpty()) Text("No apps approved. Screen capture is off.")
             if (loading) Text("Loading installed apps…")

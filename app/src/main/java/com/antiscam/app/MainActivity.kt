@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         try {
                             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                         } catch (_: ActivityNotFoundException) {
-                            settingsError = "Open Android Settings, then Accessibility, and enable Antiscam."
+                            settingsError = "Open Android Settings, then Accessibility, and enable ScamCatch."
                         }
                     },
                 )
@@ -109,7 +109,7 @@ private fun SetupScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Antiscam", style = MaterialTheme.typography.titleLarge)
+            Text("ScamCatch", style = MaterialTheme.typography.titleLarge)
             RunControlsCard(state)
             ApprovedAppsCard(state)
             VoiceScriptsCard(state)
@@ -173,14 +173,14 @@ private fun RunControlsCard(state: CaptureState) {
                     onClick = { RunMonitor.stopRun() },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Stop Run") }
-                Text("Open an approved app to start screen checks. Antiscam pauses capture when another app is in the foreground.")
+                Text("Open an approved app to start screen checks. ScamCatch pauses capture when another app is in the foreground.")
                 Text("Captures: ${state.captureCount}")
                 Text("Jev: ${state.jevStatus}")
                 Text("Voice: ${state.voiceStatus}")
             } else {
                 if (!state.consentGranted) Text("Allow screen capture below.")
                 if (state.approvedPackages.isEmpty()) Text("Choose at least one app in Approved apps below.")
-                if (!state.serviceConnected) Text("Enable Antiscam in Accessibility settings.")
+                if (!state.serviceConnected) Text("Enable ScamCatch in Accessibility settings.")
                 if (!state.jevReady || !state.voiceReady) Text("Set both API keys in Phone keys below.")
                 if (!state.voiceConsentGranted) Text("Allow automatic voice warnings below.")
                 if (state.consentGranted && !state.monitoringEnabled) {
@@ -224,7 +224,7 @@ private fun VoiceConsentCard(state: CaptureState) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Automatic voice warnings", style = MaterialTheme.typography.titleMedium)
             Text(
-                "When Jev flags a capture, Antiscam pauses screen capture and OCR, vibrates twice, and opens a centered warning. " +
+                "When Jev flags a capture, ScamCatch pauses screen capture and OCR, vibrates twice, and opens a centered warning. " +
                     "With your permission, an OpenAI voice assistant starts automatically and explains the concern. " +
                     "OpenAI receives the flagged screen text, the Jev results, and microphone audio during the conversation.",
             )
@@ -275,11 +275,11 @@ private fun ConsentCard() {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Allow screen capture", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Antiscam uses Android Accessibility events to check which app is in the foreground. " +
+                "ScamCatch uses Android Accessibility events to check which app is in the foreground. " +
                     "During a phone or desktop run, it responds to typing, taps, and scrolling only in apps you approve. " +
                     "It captures the visible screen only while an approved app is in the foreground, including overlapping windows, " +
                     "and extracts text with ML Kit on this device. " +
-                    "Antiscam masks keyboard windows before OCR. It does not mask sensitive fields. " +
+                    "ScamCatch masks keyboard windows before OCR. It does not mask sensitive fields. " +
                     "Android capture restrictions still apply.",
             )
             Text(
@@ -318,7 +318,7 @@ private fun JevStatusCard(state: CaptureState) {
     val context = LocalContext.current
     var notificationMessage by remember { mutableStateOf<String?>(null) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. Antiscam still attempts to open the warning on your phone."
+        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. ScamCatch still attempts to open the warning on your phone."
         if (granted) JevWarning.update(context, ScamIntervention.incident.value?.captureId)
     }
     Card(modifier = Modifier.fillMaxWidth()) {

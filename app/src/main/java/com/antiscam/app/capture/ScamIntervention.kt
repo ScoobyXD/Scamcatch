@@ -100,12 +100,12 @@ object ScamIntervention {
             // Android can reject a background launch without throwing. Keep an actionable fallback.
             launchTimeout = Runnable {
                 if (!attempted && incident.value != null) {
-                    status("Open Antiscam and select Return to scam warning.")
+                    status("Open ScamCatch and select Return to scam warning.")
                     JevWarning.update(owner, captureId)
                 }
             }.also { handler.postDelayed(it, 2500) }
         } catch (_: RuntimeException) {
-            status("Open Antiscam and select Return to scam warning.")
+            status("Open ScamCatch and select Return to scam warning.")
             JevWarning.update(owner, captureId)
         }
     }
@@ -121,10 +121,10 @@ object ScamIntervention {
         attempted = true
         val state = CaptureStore.state.value
         val unavailable = when {
-            !state.voiceConsentGranted -> "Allow automatic voice in Antiscam setup for future warnings."
-            !LiveVoice.ready -> "Set the OpenAI key in Antiscam setup for future voice warnings."
+            !state.voiceConsentGranted -> "Allow automatic voice in ScamCatch setup for future warnings."
+            !LiveVoice.ready -> "Set the OpenAI key in ScamCatch setup for future voice warnings."
             context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
-                "Allow microphone access in Antiscam setup for future voice warnings."
+                "Allow microphone access in ScamCatch setup for future voice warnings."
             else -> null
         }
         if (unavailable != null) {

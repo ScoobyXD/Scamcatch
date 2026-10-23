@@ -602,7 +602,7 @@ class TypingCaptureService : AccessibilityService() {
         ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "Screenshot access is unavailable. Check Android accessibility settings."
         ERROR_TAKE_SCREENSHOT_INVALID_DISPLAY -> "The display is unavailable."
         ERROR_TAKE_SCREENSHOT_INVALID_WINDOW -> "The target window is no longer available."
-        ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "This app protects its screen. Antiscam cannot capture it."
+        ERROR_TAKE_SCREENSHOT_SECURE_WINDOW -> "This app protects its screen. ScamCatch cannot capture it."
         else -> "Android could not capture this screen (error $code)."
     }
 

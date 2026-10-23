@@ -102,7 +102,7 @@ object CaptureStore {
                     !it.consentGranted -> "Allow capture before enabling monitoring."
                     !active -> "Monitoring is paused."
                     it.approvedPackages.isEmpty() -> "Choose an app to allow capture."
-                    !it.serviceConnected -> "Enable Antiscam in Android accessibility settings."
+                    !it.serviceConnected -> "Enable ScamCatch in Android accessibility settings."
                     it.runId == null -> "Ready. Start a run here or in the desktop dashboard."
                     else -> "Run active. Capture waits for an approved app."
                 },
