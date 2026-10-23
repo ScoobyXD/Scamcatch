@@ -1,7 +1,10 @@
 package com.antiscam.app.capture
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.SharedPreferences
+import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,20 +32,22 @@ data class CaptureState(
     val voiceConsentGranted: Boolean = false,
     val warningActive: Boolean = false,
     val voiceStatus: String = "idle",
-    // Runs live in this process. Only dashboard runs require the local connection.
+    // Run IDs and results stay in memory. Only standalone user intent can survive this process.
     val runId: String? = null,
     val runMode: RunMode? = null,
+    val standaloneRunRequested: Boolean = false,
     val dashboardConnected: Boolean = false,
     // Every change that invalidates a pending capture increments this value.
     val revision: Long = 0,
 )
 
-/** Only consent, approved apps, and monitoring settings persist. OCR and Jev results do not. */
+/** Only setup and same-boot standalone intent persist. Run IDs, OCR and Jev results do not. */
 object CaptureStore {
     private const val CONSENT_VERSION = 3
     private val mutableState = MutableStateFlow(CaptureState())
     val state: StateFlow<CaptureState> = mutableState.asStateFlow()
     private var preferences: SharedPreferences? = null
+    private var bootCount = -1
 
     @Synchronized
     fun initialize(context: Context) {
@@ -51,17 +56,30 @@ object CaptureStore {
         preferences = prefs
         val consent = prefs.getBoolean("consent", false) && prefs.getInt("consentVersion", 0) == CONSENT_VERSION
         val enabled = consent && prefs.getBoolean("enabled", false)
+        bootCount = try {
+            Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
+        } catch (_: RuntimeException) {
+            -1
+        }
+        val requested = prefs.getBoolean("standaloneRunRequested", false)
+        val restoreRequested = requested && consent && enabled &&
+            prefs.getBoolean("voiceConsent", false) && bootCount >= 0 &&
+            prefs.getInt("standaloneBootCount", -1) == bootCount &&
+            !wasExplicitlyStopped(context, prefs.getLong("standaloneRequestedAt", 0L))
         mutableState.value = CaptureState(
             consentGranted = consent,
             voiceConsentGranted = consent && prefs.getBoolean("voiceConsent", false),
             monitoringEnabled = enabled,
             approvedPackages = prefs.getStringSet("approvedPackages", emptySet())?.toSet().orEmpty(),
+            standaloneRunRequested = restoreRequested,
             status = if (enabled) "Capture waits for an approved app." else "Monitoring is paused.",
         )
+        if (requested && !restoreRequested) clearStandaloneRequest()
     }
 
     fun setApprovedPackages(packages: Set<String>) {
         val approved = packages.filter { it.isNotBlank() }.toSet()
+        if (approved.isEmpty()) setStandaloneRunRequested(false)
         mutableState.update {
             if (it.approvedPackages == approved) it else it.copy(
                 approvedPackages = approved,
@@ -78,6 +96,7 @@ object CaptureStore {
     }
 
     fun setConsent(granted: Boolean) {
+        if (!granted) setStandaloneRunRequested(false)
         mutableState.update {
             it.copy(
                 consentGranted = granted,
@@ -94,6 +113,7 @@ object CaptureStore {
     }
 
     fun setEnabled(enabled: Boolean) {
+        if (!enabled) setStandaloneRunRequested(false)
         mutableState.update {
             val active = enabled && it.consentGranted
             it.copy(
@@ -129,6 +149,7 @@ object CaptureStore {
     }
 
     fun reset() {
+        setStandaloneRunRequested(false)
         PhoneCredentials.clearKey(PhoneCredentials.Provider.JEV)
         PhoneCredentials.clearKey(PhoneCredentials.Provider.OPENAI)
         mutableState.update {
@@ -158,6 +179,43 @@ object CaptureStore {
         mutableState.update { it.copy(dashboardConnected = connected) }
     }
 
+    internal fun setStandaloneRunRequested(requested: Boolean): Boolean {
+        if (state.value.standaloneRunRequested == requested) return true
+        val saved = if (requested) {
+            preferences?.edit()
+                ?.putBoolean("standaloneRunRequested", true)
+                ?.putInt("standaloneBootCount", bootCount)
+                ?.putLong("standaloneRequestedAt", System.currentTimeMillis())
+                ?.commit() == true
+        } else {
+            clearStandaloneRequest()
+        }
+        if (!requested || saved) mutableState.update { it.copy(standaloneRunRequested = requested) }
+        return saved
+    }
+
+    private fun clearStandaloneRequest(): Boolean = preferences?.edit()
+        ?.remove("standaloneRunRequested")
+        ?.remove("standaloneBootCount")
+        ?.remove("standaloneRequestedAt")
+        ?.commit() == true
+
+    private fun wasExplicitlyStopped(context: Context, requestedAt: Long): Boolean {
+        if (requestedAt <= 0L) return true
+        return try {
+            val exit = context.getSystemService(ActivityManager::class.java)
+                .getHistoricalProcessExitReasons(context.packageName, 0, 1).firstOrNull()
+            exit != null && exit.timestamp >= requestedAt && exit.reason in setOf(
+                ApplicationExitInfo.REASON_USER_REQUESTED,
+                ApplicationExitInfo.REASON_USER_STOPPED,
+                ApplicationExitInfo.REASON_PERMISSION_CHANGE,
+            )
+        } catch (_: RuntimeException) {
+            // Unknown stop history must not silently undo a deliberate stop.
+            true
+        }
+    }
+
     internal fun setRunId(runId: String?, mode: RunMode? = null) {
         mutableState.update {
             if (it.runId == runId) it else it.copy(
@@ -184,6 +242,7 @@ object CaptureStore {
     }
 
     fun setVoiceConsent(granted: Boolean) {
+        if (!granted) setStandaloneRunRequested(false)
         mutableState.update { it.copy(voiceConsentGranted = granted && it.consentGranted) }
         saveSettings()
     }

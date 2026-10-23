@@ -7,7 +7,7 @@
 5. **Approved apps — ScamCatch:** Start with no approved apps. Require the user to select which apps ScamCatch may check.
 6. **Capture/cloud consent — ScamCatch:** Require explicit consent for screen capture, text extraction, and sending extracted text to TypeSafe for Jev analysis.
 7. **Automatic voice consent — ScamCatch:** Require separate consent for automatic voice sessions and sending warning context and microphone audio to OpenAI. Android microphone permission remains separate.
-8. **Notifications — Android 13+:** Request notification permission for fallback warning alerts. Notification denial does not block the current **Start Run** action.
+8. **Notifications — Android 13+:** Request notification permission for monitoring status and fallback warning alerts. Notification denial does not block **Start Run**. Android shows the foreground-service notice in Task Manager instead of the notification drawer when permission is denied. [Android notification rules](https://developer.android.com/develop/ui/compose/notifications/notification-permission#exemptions)
 9. **Current capture prerequisites:** Require capture/cloud consent, at least one approved app, enabled monitoring, connected accessibility, and a loaded voice script before starting a run.
 10. **Current phone-run prerequisites:** Also require available Jev/voice features, both loaded API keys, voice consent, and microphone permission. Making voice optional requires a code change.
 11. **API keys:** Saved or loaded keys do not prove provider access. Verify provider access through a live request when authorized.
@@ -15,5 +15,8 @@
 13. **Planned setup recovery:** Resume at the next incomplete step when users return from Android settings. Reuse existing settings and permission state. Keep each consent choice distinct.
 14. **Google Play:** This accessibility use requires clear in-app disclosure and affirmative consent. A guided setup does not remove these requirements. [Google Play requirements](https://support.google.com/googleplay/android-developer/answer/10964491?hl=en)
 15. **Current build limit:** Jev, voice, and phone-key setup are development features. Release builds disable provider access. Customer service access requires separate work.
-16. **Run lifetime:** Current phone runs end when the app process ends or the phone restarts. Saved setup does not automatically start another run.
-17. See [voice rules](voice.md) for warning behavior and session shutdown. See [the README](../README.md) for current installation and setup steps.
+16. **Run lifetime:** Select **Start Run** once after setup. The foreground service continues when the setup card is removed from Recents. Its notification shows monitoring status when notifications are enabled.
+17. **Stop controls:** **Stop Run** or notification **Stop monitoring** ends monitoring. A reboot or Android **Force stop** requires another manual **Start Run**.
+18. **Recovery limits:** An Android service restart can recover a requested phone run during the same boot after all prerequisites are ready. Follow the [phone-run lifetime rules](privacy.md#phone-run-lifetime). Do not promise uninterrupted monitoring.
+19. **Foreground service — Android 14+:** The monitoring service declares `specialUse` and its purpose. Google Play reviews that use case. This declaration does not approve distribution or enable customer provider access. [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use)
+20. See [voice rules](voice.md) for warning behavior and session shutdown. See [the README](../README.md) for current installation and setup steps.

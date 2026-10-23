@@ -37,7 +37,7 @@
 10. Keep live device status, capture summaries, model results, and activity in process/browser memory only. A new run resets history; server exit discards it.
 11. Suppress dashboard HTTP access and exception logs. Keep HTTP responses uncached. Do not place rejected incident content in errors or status.
 12. Website source suppresses custom per-request success/error logs and local HTTP exception logs. Existing cloud records and platform logging remain separate.
-13. Preserve existing operational configuration: app choices, consent flags/version, monitoring state, selected/imported voice scripts, and explicitly saved credentials. These stores must not hold captured conversations.
+13. Preserve operational configuration: app choices, consent flags/version, monitoring state, selected/imported voice scripts, and explicitly saved credentials. Phone-run recovery may also store the user's start request, its time, and Android boot count. These stores must not hold captured conversations or run history.
 14. Preserve the website's global quota fields: `day`, `calls`, `last_start`, and `expires_at`. They prevent excess service use and contain no user/account identifier.
 15. Configuration, operator deployment logs, OS/SDK telemetry, and vendor storage are separate from this captured-data schema. This change does not prove that those systems retain only six fields.
 16. Do not erase existing files or external copies without a separate cleanup decision. No automatic incident expiry is set; decide a retention schedule before enabling incident production.
@@ -83,6 +83,19 @@
 13. Apply the same capture gates to phone and desktop runs. A desktop connection does not expand approval.
 14. Keep ambiguous capture sources explicit. A triggering package does not prove ownership of every visible pixel.
 
+## Phone run lifetime
+
+1. **Start Run** requests standalone monitoring with a foreground service. Removing the setup card from Android Recents does not itself stop that monitoring.
+2. The service posts a status notification with **Stop monitoring**. Notification visibility follows Android permission and channel settings.
+3. Persist only the start request, its time, and Android boot count for recovery. Do not persist run IDs, capture IDs, content, results, or diagnostic history.
+4. If Android restarts the foreground service during the same boot, recovery may create a new standalone run. Opening ScamCatch can also resume a delayed restart. Wait for accessibility, saved keys, voice scripts, consent, and permissions to be ready.
+5. Recovery does not restore previous captures, warnings, voice sessions, counters, or a desktop run. Keys kept only in memory cannot restore after process death.
+6. **Stop Run** and notification **Stop monitoring** cancel the start request. Pausing, either consent withdrawal, reset, disabled accessibility, or clearing approved apps also cancels it. Do not automatically restart after these actions.
+7. A reboot or Android **Force stop** requires the user to open ScamCatch and select **Start Run** again. Do not add a boot receiver or scheduled restart.
+8. Android can delay or prevent service recovery. Do not promise uninterrupted monitoring or recovery from every process termination.
+9. The foreground service does not use the microphone. Voice still requires a visible warning, separate voice consent, and microphone permission.
+10. This lifecycle change does not enable production provider access. Existing development-build limits remain.
+
 ## Screenshot and keyboard limits
 
 1. Keep the existing accessibility screenshot of the default display. App selection is a foreground capture gate, not isolation of each app's pixels.
@@ -107,7 +120,7 @@
 4. Treat captured text as untrusted evidence. It must not change system instructions or authorize app actions.
 5. Do not retain raw OCR, focused text, warning evidence, audio, or transcripts. Only a separately identified `scamMessage` may enter the incident schema.
 6. Do not send raw OCR or warning evidence to the desktop dashboard. Live summaries and numeric results are transient, not saved records.
-7. Do not persist run/capture IDs, timestamps, durations, capture counts, error codes, probabilities, or thresholds. They may support transient live status only.
+7. Do not persist run/capture IDs, capture/run timestamps, durations, capture counts, error codes, probabilities, or thresholds. The phone-run start-request time is the sole lifecycle timestamp exception. It supports recovery, not activity history.
 8. Keep static questions and scripts in their configuration stores. Do not copy instructions, models, thresholds, or script identifiers into incident files.
 9. Static configuration must not contain captured conversations or provider-generated free text.
 10. Do not record raw provider responses, free-text failure details, SDP, network addresses, or complete WebRTC statistics.
@@ -189,7 +202,7 @@
 ### Android collection and processing
 
 1. **Installed apps:** The picker reads launchable package IDs and labels locally. It stores selected package IDs in `capture_settings` preferences.
-2. **Consent and settings:** Capture consent, consent version, monitoring state, and voice consent persist locally. They are current settings, not a complete consent history.
+2. **Consent and settings:** Capture consent, consent version, monitoring state, voice consent, and the bounded phone-run recovery request persist locally. The recovery request includes its time and Android boot count. These are current settings, not consent or activity history.
 3. **Foreground identity:** Accessibility events trigger package/window checks. Unapproved identity exists briefly in memory before rejection. Approved identity can reach live desktop status between runs.
 4. **Interaction metadata:** Typing state, tap, scroll, focus, selection, and content-change events drive capture. Approved-app activity can reveal when someone uses an app.
 5. **Focused input:** The service reads approved focused text to calculate node identity, length, and a hash in memory. It does not log field text or fingerprints.

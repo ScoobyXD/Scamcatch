@@ -58,6 +58,11 @@ import com.antiscam.app.capture.RunMode
 import com.antiscam.app.capture.RunMonitor
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        RunMonitor.resumeRequestedProtection()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -152,23 +157,26 @@ private fun RunControlsCard(state: CaptureState) {
         state.voiceConsentGranted,
     ) { mutableStateOf<String?>(null) }
     val active = state.runId != null
+    val requested = state.standaloneRunRequested
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 when (state.runMode) {
                     RunMode.STANDALONE -> "Phone run active"
                     RunMode.DASHBOARD -> "Desktop run active"
-                    null -> "Start a phone run"
+                    null -> if (requested) "Restoring phone run" else "Start a phone run"
                 },
                 style = MaterialTheme.typography.titleMedium,
             )
             Text("A phone run works without a laptop. Jev and voice warnings still need an Internet connection.")
+            Text("After Start Run, you can remove ScamCatch from Recents. Use Stop Run or the monitoring notification to stop checks.")
+            NotificationSettingsButton()
             Button(
                 onClick = { startError = RunMonitor.startStandalone() },
-                enabled = !active,
+                enabled = !active && !requested,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Start Run") }
-            if (active) {
+            if (active || requested) {
                 OutlinedButton(
                     onClick = { RunMonitor.stopRun() },
                     modifier = Modifier.fillMaxWidth(),
@@ -315,12 +323,6 @@ private fun ConsentCard() {
 
 @Composable
 private fun JevStatusCard(state: CaptureState) {
-    val context = LocalContext.current
-    var notificationMessage by remember { mutableStateOf<String?>(null) }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        notificationMessage = if (granted) "Scam flag notifications are allowed." else "Notifications are off. ScamCatch still attempts to open the warning on your phone."
-        if (granted) JevWarning.update(context, ScamIntervention.incident.value?.captureId)
-    }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Jev analysis", style = MaterialTheme.typography.titleMedium)
@@ -335,14 +337,25 @@ private fun JevStatusCard(state: CaptureState) {
                 style = MaterialTheme.typography.titleMedium,
             )
             Text("Any of the five checks at 0.7 or higher flags the capture and opens a phone warning. Desktop runs also show results in the console.")
-            OutlinedButton(onClick = {
-                if (Build.VERSION.SDK_INT >= 33 && !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
-                }
-            }) { Text("Scam flag notifications") }
-            notificationMessage?.let { Text(it) }
         }
     }
+}
+
+@Composable
+private fun NotificationSettingsButton() {
+    val context = LocalContext.current
+    var notificationMessage by remember { mutableStateOf<String?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationMessage = if (granted) "Monitoring and warning notifications are allowed." else
+            "Notifications are off. Use Stop Run here or Android's Active apps control to stop monitoring."
+        if (granted) JevWarning.update(context, ScamIntervention.incident.value?.captureId)
+    }
+    OutlinedButton(onClick = {
+        if (Build.VERSION.SDK_INT >= 33 && !context.getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+        }
+    }) { Text("Monitoring and warning notifications") }
+    notificationMessage?.let { Text(it) }
 }

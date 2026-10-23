@@ -63,7 +63,8 @@ object VoiceScripts {
         checkMainThread()
         if (appContext == null) return fail("Reopen ScamCatch before importing voice scripts.")
         if (mutableState.value.working) return fail("Wait for the current voice script operation.", keepWorking = true)
-        if (CaptureStore.state.value.runId != null) return fail("Stop the current run before changing voice scripts.")
+        if (CaptureStore.state.value.runId != null || CaptureStore.state.value.standaloneRunRequested)
+            return fail("Stop the current run before changing voice scripts.")
         mutableState.value = mutableState.value.copy(working = true, error = false, message = "Saving voice scripts…")
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -90,7 +91,8 @@ object VoiceScripts {
         checkMainThread()
         val current = mutableState.value
         if (current.working) return fail("Wait for the current voice script operation.", keepWorking = true)
-        if (CaptureStore.state.value.runId != null) return fail("Stop the current run before changing voice scripts.")
+        if (CaptureStore.state.value.runId != null || CaptureStore.state.value.standaloneRunRequested)
+            return fail("Stop the current run before changing voice scripts.")
         if (!current.ready || markdown == null) return fail("Load voice scripts before selecting a script.")
         if (current.scripts.none { it.id == id }) return fail("Select a script from this phone's library.")
         val savedMarkdown = checkNotNull(markdown)

@@ -37,7 +37,7 @@ fun VoiceScriptsCard(state: CaptureState) {
     var draftId by remember { mutableStateOf<String?>(null) }
     var selectionError by remember { mutableStateOf<String?>(null) }
     val selected = scriptState.scripts.firstOrNull { it.id == scriptState.selectedId }
-    val canChange = state.runId == null && scriptState.ready && !scriptState.working
+    val canChange = state.runId == null && !state.standaloneRunRequested && scriptState.ready && !scriptState.working
 
     LaunchedEffect(canChange) {
         if (!canChange) showSelector = false

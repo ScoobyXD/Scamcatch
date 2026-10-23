@@ -52,7 +52,7 @@ STATE_FIELDS = (
     "typing", "lastInteraction", "captureStatus", "ocrStatus", "voiceReady", "voiceConsentGranted",
     "warningActive", "voiceStatus", "jevReady", "jevStatus", "jevFlagged", "jevCaptureId",
     "captureScope", "consentGranted", "monitoringEnabled", "serviceConnected", "appVersion",
-    "androidApi", "approvedAppCount",
+    "androidApi", "approvedAppCount", "standaloneRunRequested", "protectionServiceConnected",
 )
 SAFE_REASONS = {
     "Android needs more time between screenshots.",

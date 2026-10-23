@@ -4,6 +4,8 @@
     <!-- Only the debug manifest enables Jev and native WebRTC networking. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -34,6 +36,15 @@
             android:launchMode="singleTask"
             android:taskAffinity="com.antiscam.app.warning"
             android:theme="@style/Theme.Antiscam.Warning" />
+        <service
+            android:name=".capture.ProtectionService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started scam monitoring in explicitly approved apps. Keeps the accessibility OCR and scam-analysis run available after the setup task is removed. Shows an ongoing notification with a Stop action. Does not record microphone audio." />
+        </service>
         <service
             android:name=".capture.TypingCaptureService"
             android:exported="true"

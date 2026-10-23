@@ -30,9 +30,9 @@
 
 1. Start the Android emulator or connect a debugging-enabled Android device.
 2. Build with `scripts\build.ps1`.
-3. Install Antiscam with `scripts\install.ps1`.
-4. Open **Antiscam Dev**. Read the current disclosure, grant capture/cloud consent, and select the apps to approve.
-5. Open Android Accessibility settings. Enable **Antiscam interaction capture**.
+3. Install ScamCatch with `scripts\install.ps1`.
+4. Open **ScamCatch**. Read the current disclosure, grant capture/cloud consent, and select the apps to approve.
+5. Open Android Accessibility settings. Enable **ScamCatch interaction capture**.
 6. Double-click **Start Dashboard.cmd**, or run `scripts\dashboard.ps1`.
 7. Select the device and choose **Connect** or **Switch device**.
 8. Select **Jev key** in the desktop toolbar. Enter the TypeSafe key if no Windows copy is saved.
@@ -54,18 +54,21 @@
 
 ## Start without the laptop
 
-1. Install the current **Antiscam Dev** build with the build and install scripts above.
-2. Open Antiscam. Accept the current capture/cloud disclosure and select the apps to approve.
-3. Enable **Antiscam interaction capture** in Android Accessibility settings. Enable monitoring in Antiscam.
+1. Install the current **ScamCatch** development build with the build and install scripts above.
+2. Open ScamCatch. Accept the current capture/cloud disclosure and select the apps to approve.
+3. Enable **ScamCatch interaction capture** in Android Accessibility settings. Enable monitoring in ScamCatch.
 4. Keys saved from the desktop restore automatically. If either key is missing, enter it under **Phone keys**.
 5. The phone's **Remember on this phone** checkbox starts cleared. Select it before saving to retain encrypted keys across app restarts.
-6. Allow automatic voice warnings and microphone access. Allow notifications for the fallback if Android cannot open a warning.
-7. Keep the phone connected to the Internet. Select **Start Run**, then use approved apps.
+6. Allow automatic voice warnings and microphone access. Allow notifications to show monitoring status and fallback warnings.
+7. Keep the phone connected to the Internet. Select **Start Run** once, then use approved apps. The status notification indicates monitoring.
 8. A flagged check vibrates the phone and opens the warning. Voice starts automatically when the warning opens and setup remains complete.
-9. The red X stops voice and resumes screen checks. Select **Stop Run** in Antiscam to end the phone run.
+9. The red X stops voice and resumes screen checks. Select **Stop Run** in ScamCatch or notification **Stop monitoring** to end monitoring.
 10. Connecting or disconnecting a laptop does not stop a phone run. See [privacy rules](docs/privacy.md) for desktop data limits.
-11. A phone run ends when the app process ends or the phone restarts. Saved keys restore, but you must start another run.
+11. You can remove the ScamCatch setup card from Recents while monitoring continues. Reopen ScamCatch and select **Start Run** after reboot or Android **Force stop**.
 12. Stop the phone run before starting a desktop run. Live diagnostics are not saved. See [incident storage rules](docs/privacy.md#allowed-incident-fields--october-22-2026).
+13. Android service recovery can start a fresh phone run during the same boot when saved setup is ready. It does not restore previous captures or voice sessions.
+14. Android can delay or prevent recovery. See the [phone-run lifetime rules](docs/privacy.md#phone-run-lifetime) and [permission requirements](docs/permission-requirements.md) for limits.
+15. On Android 13+, denied notification permission hides the status notification from the drawer. Monitoring can still run, and **Stop Run** remains available in ScamCatch.
 
 ## Connected phone
 

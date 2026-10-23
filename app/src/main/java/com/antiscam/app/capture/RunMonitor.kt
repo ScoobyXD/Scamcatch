@@ -1,12 +1,15 @@
 package com.antiscam.app.capture
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +26,7 @@ object RunMonitor {
     private val handler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var initialized = false
+    private var protectionServiceConnected = false
     private lateinit var appContext: Context
     private var appVersion = "unknown"
     private var sequence = 0L
@@ -52,6 +56,24 @@ object RunMonitor {
             if (initialized) return@onMain
             initialized = true
             appContext = context.applicationContext
+            val accessibilityObserver = object : ContentObserver(handler) {
+                override fun onChange(selfChange: Boolean) {
+                    if (CaptureStore.state.value.standaloneRunRequested && !accessibilityEnabled()) {
+                        stop("accessibility_disabled")
+                    }
+                }
+            }
+            appContext.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES),
+                false, accessibilityObserver,
+            )
+            appContext.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED),
+                false, accessibilityObserver,
+            )
+            if (CaptureStore.state.value.standaloneRunRequested && !accessibilityEnabled()) {
+                CaptureStore.setStandaloneRunRequested(false)
+            }
             PhoneCredentials.initialize(appContext)
             VoiceScripts.initialize(appContext)
             @Suppress("DEPRECATION")
@@ -72,7 +94,8 @@ object RunMonitor {
                 CaptureStore.state.map {
                     listOf(it.consentGranted, it.monitoringEnabled, it.serviceConnected, it.revision,
                         it.jevReady, it.jevStatus, it.jevFlagged, it.jevCaptureId,
-                        it.voiceReady, it.voiceConsentGranted, it.warningActive, it.voiceStatus)
+                        it.voiceReady, it.voiceConsentGranted, it.warningActive, it.voiceStatus,
+                        it.standaloneRunRequested)
                 }.distinctUntilChanged().collect {
                     val state = CaptureStore.state.value
                     if (!state.consentGranted || !state.monitoringEnabled || !state.serviceConnected ||
@@ -81,22 +104,29 @@ object RunMonitor {
                         val reason = when {
                             !state.consentGranted -> "consent_removed"
                             !state.monitoringEnabled -> "capture_paused"
+                            active.mode == RunMode.STANDALONE && !state.standaloneRunRequested -> "user_stopped"
                             !state.serviceConnected -> "service_disconnected"
                             state.runId != active.id -> "settings_reset"
                             else -> null
                         }
-                        if (reason != null) stop(reason)
+                        if (reason != null) stop(reason, preserveStandaloneRequest =
+                            reason == "service_disconnected" && accessibilityEnabled())
                     }
+                    restoreStandaloneIfReady()
                     emitNow("state_changed", emptyMap())
                 }
             }
             scope.launch {
                 PhoneCredentials.status.collect {
+                    restoreStandaloneIfReady()
                     emitNow("state_changed", emptyMap())
                 }
             }
             scope.launch {
-                VoiceScripts.state.collect { emitNow("state_changed", emptyMap()) }
+                VoiceScripts.state.collect {
+                    restoreStandaloneIfReady()
+                    emitNow("state_changed", emptyMap())
+                }
             }
         }
     }
@@ -210,7 +240,8 @@ object RunMonitor {
             }
             "voice_scripts", "voice_script_select" -> {
                 val reason = when {
-                    session != null -> "Stop the current run before changing voice scripts."
+                    session != null || CaptureStore.state.value.standaloneRunRequested ->
+                        "Stop the current run before changing voice scripts."
                     message.optString("command") == "voice_scripts" -> {
                         val markdown = message.opt("markdown") as? String
                         if (markdown == null) "Send a Markdown script file." else VoiceScripts.importMarkdown(markdown)
@@ -230,13 +261,13 @@ object RunMonitor {
                 if (reason != null) emitNow("command_error", mapOf("reason" to reason, "command" to "start"))
             }
             "stop" -> when {
-                session?.mode == RunMode.STANDALONE -> emitNow("command_error", mapOf("reason" to "Stop the phone run in ScamCatch."))
+                CaptureStore.state.value.standaloneRunRequested -> emitNow("command_error", mapOf("reason" to "Stop the phone run in ScamCatch."))
                 session == null -> emitNow("command_error", mapOf("reason" to "no_active_run"))
                 else -> stop("user_stopped")
             }
             "snapshot" -> emitNow("snapshot", emptyMap())
             "pause" -> {
-                if (session?.mode == RunMode.STANDALONE) {
+                if (CaptureStore.state.value.standaloneRunRequested) {
                     emitNow("command_error", mapOf("reason" to "Stop the phone run in ScamCatch."))
                 } else {
                     stop("capture_paused")
@@ -254,8 +285,33 @@ object RunMonitor {
     fun startStandalone(): String? {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (!initialized) return "Reopen ScamCatch before starting a run."
+        if (session != null || CaptureStore.state.value.standaloneRunRequested) {
+            return "Stop the current run before starting another."
+        }
+        val error = standaloneSetupError() ?: captureSetupError()?.let(::phoneStartError)
+        if (error != null) return error
+        if (!CaptureStore.setStandaloneRunRequested(true)) return "Could not save the phone run request. Try again."
+        return resumeRequestedProtection()
+    }
+
+    /** Reopening setup can resume a delayed system restart, while the activity is visible. */
+    fun resumeRequestedProtection(): String? {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (!initialized || !CaptureStore.state.value.standaloneRunRequested || protectionServiceConnected) return null
+        val serviceError = ProtectionService.start(appContext)
+        if (serviceError != null) {
+            CaptureStore.setStandaloneRunRequested(false)
+            CaptureStore.report("Monitoring stopped.", serviceError)
+            return serviceError
+        }
+        if (session == null) CaptureStore.report("Starting phone protection…")
+        restoreStandaloneIfReady()
+        return null
+    }
+
+    private fun standaloneSetupError(): String? {
         val state = CaptureStore.state.value
-        val setupError = when {
+        return when {
             !JevAnalysis.available || !LiveVoice.available -> "Install ScamCatch to use Jev and voice."
             !state.jevReady -> "Set the Jev API key in phone setup."
             !state.voiceReady -> "Set the OpenAI API key in phone setup."
@@ -264,33 +320,75 @@ object RunMonitor {
                 "Allow microphone access in phone setup."
             else -> null
         }
-        if (setupError != null) return setupError
-        return when (val reason = start("phone_${UUID.randomUUID()}", RunMode.STANDALONE)) {
-            null -> null
-            "run_already_active" -> "Stop the current run before starting another."
-            "consent_required" -> "Allow screen capture and Jev analysis first."
-            "capture_paused" -> "Resume monitoring before starting a run."
-            "service_disconnected" -> "Enable ScamCatch in Android Accessibility settings."
-            "approved_apps_required" -> "Select at least one approved app in phone setup."
-            else -> "Could not start the run: $reason"
+    }
+
+    private fun phoneStartError(reason: String): String = when (reason) {
+        "run_already_active" -> "Stop the current run before starting another."
+        "consent_required" -> "Allow screen capture and Jev analysis first."
+        "capture_paused" -> "Resume monitoring before starting a run."
+        "service_disconnected" -> "Enable ScamCatch in Android Accessibility settings."
+        "approved_apps_required" -> "Select at least one approved app in phone setup."
+        else -> reason
+    }
+
+    fun setProtectionServiceConnected(connected: Boolean) = onMain {
+        protectionServiceConnected = connected
+        if (connected) restoreStandaloneIfReady()
+        else if (session?.mode == RunMode.STANDALONE) {
+            stop("protection_service_stopped", preserveStandaloneRequest = true)
         }
+        emitNow("state_changed", emptyMap())
+    }
+
+    private fun restoreStandaloneIfReady() {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (!initialized || !protectionServiceConnected || session != null ||
+            !CaptureStore.state.value.standaloneRunRequested) return
+        if (!accessibilityEnabled()) {
+            stop("accessibility_disabled")
+            return
+        }
+        val scripts = VoiceScripts.state.value
+        if (PhoneCredentials.status.value.values.any { it.working } || scripts.working) return
+        val setupError = standaloneSetupError()
+        if (setupError != null || !scripts.ready) {
+            stop("phone_setup_unavailable")
+            CaptureStore.report("Phone protection stopped.", setupError ?: "Load a valid voice script before starting another run.")
+            return
+        }
+        if (captureSetupError() != null) return
+        start("phone_${UUID.randomUUID()}", RunMode.STANDALONE)
+    }
+
+    private fun accessibilityEnabled(): Boolean {
+        if (Settings.Secure.getInt(appContext.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) return false
+        val component = ComponentName(appContext, TypingCaptureService::class.java)
+        return Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            ?.split(':')?.any { ComponentName.unflattenFromString(it) == component } == true
     }
 
     fun stopRun() = onMain { stop("user_stopped") }
 
-    private fun start(id: String, mode: RunMode): String? {
+    private fun captureSetupError(): String? {
         val state = CaptureStore.state.value
+        return when {
+            !state.consentGranted -> "consent_required"
+            state.approvedPackages.isEmpty() -> "approved_apps_required"
+            !state.monitoringEnabled -> "capture_paused"
+            !state.serviceConnected -> "service_disconnected"
+            VoiceScripts.selected() == null -> "Wait for a valid voice script to load before starting a run."
+            else -> null
+        }
+    }
+
+    private fun start(id: String, mode: RunMode): String? {
         val script = VoiceScripts.selected()
         val reason = when {
             session != null -> "run_already_active"
             !RUN_ID.matches(id) -> "invalid_run_id"
             id in sessions -> "run_id_already_used"
-            !state.consentGranted -> "consent_required"
-            state.approvedPackages.isEmpty() -> "approved_apps_required"
-            !state.monitoringEnabled -> "capture_paused"
-            !state.serviceConnected -> "service_disconnected"
-            script == null -> "Wait for a valid voice script to load before starting a run."
-            else -> null
+            mode == RunMode.DASHBOARD && CaptureStore.state.value.standaloneRunRequested -> "run_already_active"
+            else -> captureSetupError()
         }
         if (reason != null) return reason
         captureId = 0
@@ -306,10 +404,16 @@ object RunMonitor {
         return null
     }
 
-    private fun stop(reason: String) {
-        val finished = session ?: return
-        // Stop new capture scheduling. Existing callbacks retain this run's event envelope.
+    private fun stop(reason: String, preserveStandaloneRequest: Boolean = false) {
+        val finished = session
+        val wasRequested = CaptureStore.state.value.standaloneRunRequested
         session = null
+        if (!preserveStandaloneRequest) CaptureStore.setStandaloneRunRequested(false)
+        if (finished == null) {
+            if (wasRequested && !preserveStandaloneRequest) CaptureStore.report("Run stopped.")
+            return
+        }
+        // Stop new capture scheduling. Existing callbacks retain this run's event envelope.
         CaptureStore.setRunId(null)
         typing = "idle"
         captureStatus = "stopped"
@@ -323,6 +427,8 @@ object RunMonitor {
         return JSONObject().apply {
             put("runId", config.runId ?: JSONObject.NULL)
             put("runMode", config.runMode?.wireName ?: JSONObject.NULL)
+            put("standaloneRunRequested", config.standaloneRunRequested)
+            put("protectionServiceConnected", protectionServiceConnected)
             put("voiceScripts", VoiceScripts.snapshot())
             put("voiceScript", session?.voiceScript?.let {
                 JSONObject().put("id", it.id).put("name", it.name).put("revision", it.revision)

@@ -57,10 +57,12 @@
 25. Builds and lint do not verify live voice. Check speech, interruption, closing, backgrounding, and capture resumption with the laptop disconnected.
 26. Update this document when voice behavior changes. Keep each rule consistent with `LiveVoice`, `ScamIntervention`, and `ScamWarningActivity`.
 27. Start Run on the phone uses the same capture, OCR, Jev, warning, and voice flow. The phone needs Internet access.
-28. Leaving Antiscam setup does not stop a phone run. The accessibility service continues screen checks while the user uses other apps.
-29. If Android blocks the warning, keep capture paused. Open the notification or select Return to scam warning in Antiscam.
+28. Leaving ScamCatch setup or removing its Recents card does not itself stop a phone run. The foreground service maintains monitoring under the [phone-run lifetime rules](privacy.md#phone-run-lifetime).
+29. If Android blocks the warning, keep capture paused. Open the notification or select Return to scam warning in ScamCatch.
 30. Backgrounding keeps the warning open. Returning must not start another voice session.
-31. Start another run manually after an app restart or phone reboot.
+31. Select **Stop Run** or notification **Stop monitoring** to end monitoring. Start another run manually after reboot or Android **Force stop**.
+32. Android service recovery may start a fresh phone run during the same boot when setup is ready. Do not restore an old warning or voice session.
+33. Continued monitoring does not enable background microphone use. Voice starts only with a visible warning and the existing consent and permission gates.
 
 ## Website script selection
 
