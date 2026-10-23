@@ -20,3 +20,14 @@
 18. **Recovery limits:** An Android service restart can recover a requested phone run during the same boot after all prerequisites are ready. Follow the [phone-run lifetime rules](privacy.md#phone-run-lifetime). Do not promise uninterrupted monitoring.
 19. **Foreground service — Android 14+:** The monitoring service declares `specialUse` and its purpose. Google Play reviews that use case. This declaration does not approve distribution or enable customer provider access. [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use)
 20. See [voice rules](voice.md) for warning behavior and session shutdown. See [the README](../README.md) for current installation and setup steps.
+
+## S10 Plus device check — October 22, 2026
+
+1. Checked the development build from source revision `9d67d83` on a Samsung Galaxy S10 Plus with Android 12.
+2. Started a phone run and swiped its setup card out of Recents. The card disappeared. The same process and run remained active with accessibility and the foreground service connected.
+3. After removal, OCR completed on an unsent Messages draft. Jev returned a completed, flagged result for sample crypto and WhatsApp language.
+4. The warning activity opened automatically. OpenAI reported `Voice connected. You can speak.` Android reported microphone use during that warning.
+5. Session connection does not prove audible speech or a successful spoken reply. Human confirmation remains pending.
+6. Closing the warning stopped voice. Notification **Stop monitoring** cleared the run, recovery request, and foreground service. Reopening ScamCatch did not restart monitoring.
+7. Deleted the unsent sample and temporary screen files. Started a fresh phone run and left monitoring active. No message was sent.
+8. This check does not verify reboot, Force stop, process-death recovery, extended battery restrictions, or other phone models. No unit tests ran.
